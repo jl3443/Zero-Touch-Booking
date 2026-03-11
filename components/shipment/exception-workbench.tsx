@@ -772,25 +772,23 @@ function ExceptionCard({
   const isLongDwell = s.exceptionType === "Long Dwell"
 
   return (
-    <div className={cn(
-      "bg-white rounded-lg border p-4 transition-all",
-      s.severity === "Critical" ? "border-l-4 border-l-red-500 border-r border-t border-b border-gray-200" :
-        s.severity === "High" ? "border-l-4 border-l-amber-400 border-r border-t border-b border-gray-200" :
-          "border border-gray-200",
-      allDone ? "opacity-60" : ""
-    )}>
+    <div
+      onClick={onViewDetail}
+      className={cn(
+        "bg-white rounded-lg border p-4 transition-all cursor-pointer hover:shadow-md hover:border-blue-300 group",
+        s.severity === "Critical" ? "border-l-4 border-l-red-500 border-r border-t border-b border-gray-200" :
+          s.severity === "High" ? "border-l-4 border-l-amber-400 border-r border-t border-b border-gray-200" :
+            "border border-gray-200",
+        allDone ? "opacity-60" : ""
+      )}
+    >
       <div className="flex items-start justify-between gap-4">
         {/* Left section */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-2">
             <SeverityBadge severity={s.severity} />
             <ModeBadge mode={s.mode} />
-            <button
-              onClick={onViewDetail}
-              className="font-mono font-bold text-blue-700 text-sm hover:underline hover:text-blue-900 transition-colors"
-            >
-              {s.id}
-            </button>
+            <span className="font-mono font-bold text-blue-700 text-sm group-hover:underline">{s.id}</span>
             <ExceptionBadge type={s.exceptionType} />
 
             {/* AIS Recovery badge */}
@@ -864,7 +862,7 @@ function ExceptionCard({
       </div>
 
       {/* Actions */}
-      <div className="border-t border-gray-100 mt-3 pt-3 flex items-center gap-2 flex-wrap">
+      <div className="border-t border-gray-100 mt-3 pt-3 flex items-center gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
         <WorkbenchAction
           label={actions.acknowledged ? "Acknowledged" : "Acknowledge"}
           done={actions.acknowledged}
@@ -975,7 +973,7 @@ function WorkbenchAction({ label, done, icon, onClick, variant }: {
   }
   return (
     <button
-      onClick={onClick}
+      onClick={(e) => { e.stopPropagation(); onClick() }}
       disabled={done}
       className={cn(
         "inline-flex items-center gap-1.5 px-2.5 py-1 rounded border text-[11px] font-semibold transition-colors",

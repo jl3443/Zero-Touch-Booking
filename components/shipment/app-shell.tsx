@@ -22,6 +22,7 @@ export function AppShell() {
   const [sentEmails, setSentEmails] = useState<SentEmailItem[]>([])
   const [trackingPreselect, setTrackingPreselect] = useState<string | null>(null)
   const [weatherHighlightId, setWeatherHighlightId] = useState<string | null>(null)
+  const [pendingAIQuery, setPendingAIQuery] = useState<string | null>(null)
 
   const exceptionsCount = SHIPMENTS.length
   const unreadInboxCount = INBOX_EMAILS.filter((e) => !e.read).length
@@ -55,13 +56,21 @@ export function AppShell() {
 
       {/* Main area */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <TopBar onSearch={setSearchQuery} />
+        <TopBar
+          onSearch={setSearchQuery}
+          onAIQuery={(q) => {
+            if (view !== "dashboard") setView("dashboard")
+            setPendingAIQuery(q)
+          }}
+        />
 
         {view === "dashboard" && (
           <Dashboard
             searchQuery={searchQuery}
             onViewChange={handleViewChange}
             onOpenWeather={handleOpenWeather}
+            aiQuery={pendingAIQuery}
+            onClearAIQuery={() => setPendingAIQuery(null)}
           />
         )}
 

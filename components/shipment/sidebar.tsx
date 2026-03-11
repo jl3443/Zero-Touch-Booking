@@ -5,14 +5,13 @@ import { cn } from "@/lib/utils"
 import {
   LayoutDashboard, BarChart2, Ship, AlertTriangle,
   CloudLightning, GitBranch, Mail, Inbox, Send, Brain,
-  ChevronDown, ChevronRight, FileStack, User, Award, ScanSearch,
+  ChevronDown, ChevronRight, FileStack, User, Award,
 } from "lucide-react"
 
 export type SidebarView =
   | "dashboard"
   | "analytics"
   | "carrier-scorecard"
-  | "tracking-search"
   | "exceptions"
   | "documents"
   | "weather-traffic"
@@ -67,12 +66,6 @@ export function Sidebar({ view, onViewChange, exceptionsCount = 7, unreadInboxCo
           icon={<Award size={15} />}
           active={view === "carrier-scorecard"}
           onClick={() => onViewChange("carrier-scorecard")}
-        />
-        <NavItem
-          label="Track Shipment"
-          icon={<ScanSearch size={15} />}
-          active={view === "tracking-search"}
-          onClick={() => onViewChange("tracking-search")}
         />
 
         <div className="pt-2 pb-1" />

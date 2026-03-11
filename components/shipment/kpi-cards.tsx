@@ -28,123 +28,113 @@ export function KPICards({ activeFilter, onFilterChange, onExceptionsClick, etaU
         <span className="font-semibold text-red-700">1</span> critical
       </p>
 
-      {/* Primary row — prominent */}
-      <div className="grid grid-cols-3 gap-3">
-        <PrimaryKPICard
-          label="At-Risk Shipments"
+      {/* Single compact row */}
+      <div className="grid grid-cols-6 gap-2">
+        <CompactKPICard
+          label="At-Risk"
           value={6}
-          trend="up"
-          trendLabel="+2 from yesterday"
+          trend="▲ +2"
           accent="amber"
-          icon={<AlertTriangle size={18} />}
+          icon={<AlertTriangle size={14} />}
           active={activeFilter === "at-risk"}
           onClick={() => handleClick("at-risk")}
         />
-        <PrimaryKPICard
-          label="Critical Delays"
+        <CompactKPICard
+          label="Critical"
           value={1}
-          trend="stable"
-          trendLabel="Same as yesterday"
           accent="red"
-          icon={<TrendingUp size={18} />}
+          icon={<TrendingUp size={14} />}
           active={activeFilter === "critical"}
           onClick={() => handleClick("critical")}
         />
-        <PrimaryKPICard
+        <CompactKPICard
           label="Missing Signal"
           value={1}
-          trend="up"
-          trendLabel="+1 from yesterday"
+          trend="▲ +1"
           accent="gray"
-          icon={<Radio size={18} />}
+          icon={<Radio size={14} />}
           active={activeFilter === "missing-signal"}
           onClick={() => handleClick("missing-signal")}
         />
-      </div>
-
-      {/* Secondary row */}
-      <div className="grid grid-cols-3 gap-3">
-        <SecondaryKPICard
-          label="Total Active Shipments"
+        <CompactKPICard
+          label="Total Active"
           value={7}
           icon={<Package size={14} />}
         />
-        <SecondaryKPICard
+        <CompactKPICard
           label="ETA Updated (24h)"
           value={etaUpdatedCount}
           icon={<Clock size={14} />}
         />
-        <SecondaryKPICard
+        <CompactKPICard
           label="On-Time %"
           value="14%"
-          icon={<CheckCircle2 size={14} />}
           valueColor="text-red-600"
+          icon={<CheckCircle2 size={14} />}
         />
       </div>
     </div>
   )
 }
 
-interface PrimaryKPICardProps {
-  label: string
-  value: number
-  trend: "up" | "down" | "stable"
-  trendLabel: string
-  accent: "red" | "amber" | "gray"
-  icon: React.ReactNode
-  active: boolean
-  onClick: () => void
-}
-
-function PrimaryKPICard({ label, value, trend, trendLabel, accent, icon, active, onClick }: PrimaryKPICardProps) {
-  const accentMap = {
-    red: { ring: "border-red-300 bg-red-50", icon: "text-red-500", value: "text-red-700", trend: "text-red-600", border: "border-l-red-500" },
-    amber: { ring: "border-amber-300 bg-amber-50", icon: "text-amber-500", value: "text-amber-700", trend: "text-amber-600", border: "border-l-amber-500" },
-    gray: { ring: "border-gray-300 bg-gray-50", icon: "text-gray-500", value: "text-gray-700", trend: "text-gray-600", border: "border-l-gray-400" },
-  }
-  const colors = accentMap[accent]
-
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "text-left rounded-lg border border-l-4 p-5 transition-all cursor-pointer hover:shadow-md",
-        active ? `${colors.ring} shadow-sm ring-2 ring-offset-1 ring-current ${colors.border}` : `bg-white border-gray-200 hover:border-gray-300 ${colors.border}`
-      )}
-    >
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-xs text-gray-500 font-medium mb-1">{label}</p>
-          <p className={cn("text-3xl font-bold", active ? colors.value : "text-slate-800")}>{value}</p>
-        </div>
-        <div className={cn("p-2 rounded-lg", active ? colors.ring : "bg-gray-100")}>
-          <span className={active ? colors.icon : "text-gray-400"}>{icon}</span>
-        </div>
-      </div>
-      <div className={cn("flex items-center gap-1 mt-2 text-[11px] font-medium", active ? colors.trend : "text-gray-500")}>
-        {trend === "up" && <span>▲</span>}
-        {trend === "down" && <span>▼</span>}
-        {trendLabel}
-      </div>
-    </button>
-  )
-}
-
-interface SecondaryKPICardProps {
+interface CompactKPICardProps {
   label: string
   value: number | string
+  trend?: string
+  accent?: "red" | "amber" | "gray"
   icon: React.ReactNode
+  active?: boolean
+  onClick?: () => void
   valueColor?: string
 }
 
-function SecondaryKPICard({ label, value, icon, valueColor = "text-slate-700" }: SecondaryKPICardProps) {
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 px-4 py-2.5 flex items-center justify-between">
-      <div>
-        <p className="text-[10px] text-gray-400 font-medium">{label}</p>
-        <p className={cn("text-lg font-bold mt-0.5", valueColor)}>{value}</p>
+const ACCENT_MAP = {
+  red: { ring: "border-red-300 bg-red-50", icon: "text-red-500", value: "text-red-700", trend: "text-red-600", border: "border-l-red-500" },
+  amber: { ring: "border-amber-300 bg-amber-50", icon: "text-amber-500", value: "text-amber-700", trend: "text-amber-600", border: "border-l-amber-500" },
+  gray: { ring: "border-gray-300 bg-gray-50", icon: "text-gray-500", value: "text-gray-700", trend: "text-gray-600", border: "border-l-gray-400" },
+}
+
+function CompactKPICard({ label, value, trend, accent, icon, active, onClick, valueColor }: CompactKPICardProps) {
+  const colors = accent ? ACCENT_MAP[accent] : null
+  const isClickable = !!onClick
+
+  const content = (
+    <>
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-[10px] text-gray-400 font-medium truncate">{label}</p>
+        <span className={cn("shrink-0", active && colors ? colors.icon : "text-gray-300")}>{icon}</span>
       </div>
-      <div className="text-gray-200">{icon}</div>
+      <div className="flex items-baseline gap-1.5">
+        <p className={cn("text-xl font-bold", active && colors ? colors.value : valueColor || "text-slate-800")}>{value}</p>
+        {trend && (
+          <span className={cn("text-[10px] font-medium", active && colors ? colors.trend : "text-gray-400")}>{trend}</span>
+        )}
+      </div>
+    </>
+  )
+
+  if (isClickable) {
+    return (
+      <button
+        onClick={onClick}
+        className={cn(
+          "text-left rounded-lg border px-3 py-2.5 transition-all cursor-pointer hover:shadow-sm",
+          accent ? "border-l-[3px]" : "",
+          active && colors
+            ? `${colors.ring} shadow-sm ring-1 ring-offset-1 ring-current ${colors.border}`
+            : colors
+              ? `bg-white border-gray-200 hover:border-gray-300 ${colors.border}`
+              : "bg-white border-gray-200 hover:border-gray-300"
+        )}
+      >
+        {content}
+      </button>
+    )
+  }
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 px-3 py-2.5">
+      {content}
     </div>
   )
 }

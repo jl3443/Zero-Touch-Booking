@@ -22,9 +22,10 @@ function extractShipmentId(body: string): string | null {
 
 interface EmailInboxPageProps {
   onOpenTracking?: (shipmentId: string) => void
+  onMarkRead?: (emailId: string) => void
 }
 
-export function EmailInboxPage({ onOpenTracking }: EmailInboxPageProps) {
+export function EmailInboxPage({ onOpenTracking, onMarkRead }: EmailInboxPageProps) {
   const [emails, setEmails] = useState<InboxEmail[]>(INBOX_EMAILS)
   const [selected, setSelected] = useState<InboxEmail | null>(null)
   const [analyzingEmail, setAnalyzingEmail] = useState<string | null>(null)
@@ -34,6 +35,7 @@ export function EmailInboxPage({ onOpenTracking }: EmailInboxPageProps) {
 
   const handleSelect = (email: InboxEmail) => {
     setSelected(email)
+    if (!email.read) onMarkRead?.(email.id)
     setEmails((prev) => prev.map((e) => e.id === email.id ? { ...e, read: true } : e))
   }
 

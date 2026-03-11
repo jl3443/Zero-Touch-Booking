@@ -103,8 +103,10 @@ export const SHIPMENTS: Shipment[] = [
     ],
     sources: [
       { source: "CargoSmart", status: "At Port — Awaiting Berth", timestamp: "Mar 12 10:00", freshness: "2h ago", aligned: true, fresh: true },
+      { source: "GPS / AIS", status: "Vessel at Anchor — San Pedro Bay", timestamp: "Mar 12 09:45", freshness: "2h ago", aligned: true, fresh: true },
       { source: "Carrier Portal", status: "Arrived Destination", timestamp: "Mar 12 09:30", freshness: "2.5h ago", aligned: true, fresh: true },
-      { source: "UiPath", status: "Port Congestion Detected", timestamp: "Mar 12 08:00", freshness: "4h ago", aligned: null, fresh: true },
+      { source: "UiPath", status: "Port Congestion Detected", timestamp: "Mar 12 08:00", freshness: "4h ago", aligned: true, fresh: true },
+      { source: "Weather API", status: "Clear Skies — LA Basin", timestamp: "Mar 12 10:00", freshness: "2h ago", aligned: true, fresh: true },
     ],
     exceptionReason: "ETA drift beyond 6h ocean threshold",
     exceptionTrigger: "Vessel arrived at port but no berth assigned after 6h",
@@ -151,8 +153,10 @@ export const SHIPMENTS: Shipment[] = [
     ],
     sources: [
       { source: "Carrier Portal", status: "Customs Hold — ORD", timestamp: "Mar 11 21:00", freshness: "3h ago", aligned: true, fresh: true },
+      { source: "GPS", status: "On Ground — ORD Customs Area", timestamp: "Mar 11 14:30", freshness: "9h ago", aligned: true, fresh: true },
       { source: "Email", status: "Broker Notified — Awaiting CBP Release", timestamp: "Mar 11 15:00", freshness: "9h ago", aligned: true, fresh: true },
       { source: "Flexport", status: "Arrived Destination", timestamp: "Mar 11 12:30", freshness: "11h ago", aligned: false, fresh: true },
+      { source: "Weather API", status: "Light Snow — ORD Area", timestamp: "Mar 11 20:00", freshness: "4h ago", aligned: true, fresh: true },
     ],
     exceptionReason: "Shipment held at ORD Customs for CBP physical inspection — electronics",
     exceptionTrigger: "CBP selected cargo for TSCA compliance review on entry",
@@ -195,8 +199,10 @@ export const SHIPMENTS: Shipment[] = [
     ],
     sources: [
       { source: "Maersk Portal", status: "Last Known — Arabian Sea", timestamp: "Mar 15 14:00", freshness: "9h ago", aligned: false, fresh: false },
+      { source: "GPS / AIS", status: "Signal Lost — Last: 15°N 63°E", timestamp: "Mar 15 14:00", freshness: "9h ago", aligned: false, fresh: false },
       { source: "Carrier Portal", status: "In Transit", timestamp: "Mar 14 22:00", freshness: "25h ago", aligned: false, fresh: false },
-      { source: "Email", status: "", timestamp: "", freshness: "No update", aligned: null, fresh: false },
+      { source: "Email", status: "", timestamp: "", freshness: "No update", aligned: true, fresh: false },
+      { source: "Weather API", status: "Moderate Seas — Arabian Sea", timestamp: "Mar 15 12:00", freshness: "11h ago", aligned: true, fresh: true },
     ],
     exceptionReason: "No AIS signal for 9+ hours — ocean threshold exceeded",
     exceptionTrigger: "AIS transponder offline since 14:00 Mar 15 in Arabian Sea",
@@ -242,7 +248,8 @@ export const SHIPMENTS: Shipment[] = [
     ],
     sources: [
       { source: "Carrier Portal", status: "Ground Hold — PVG Weather", timestamp: "Mar 11 21:42", freshness: "18m ago", aligned: true, fresh: true },
-      { source: "Weather API", status: "Severe Weather — PVG Ground Stop", timestamp: "Mar 11 20:00", freshness: "2h ago", aligned: null, fresh: true },
+      { source: "GPS", status: "On Ground — PVG Hub", timestamp: "Mar 11 21:00", freshness: "1h ago", aligned: true, fresh: true },
+      { source: "Weather API", status: "Severe Weather — PVG Ground Stop", timestamp: "Mar 11 20:00", freshness: "2h ago", aligned: true, fresh: true },
       { source: "Kuehne+Nagel", status: "In Transit", timestamp: "Mar 11 18:00", freshness: "4h ago", aligned: false, fresh: true },
     ],
     exceptionReason: "Revised ETA will miss plant receiving deadline by 8h — critical assembly parts",
@@ -291,6 +298,7 @@ export const SHIPMENTS: Shipment[] = [
       { source: "MSC Portal", status: "Arrived — Houston Terminal A3", timestamp: "Mar 18 09:14", freshness: "15m ago", aligned: true, fresh: true },
       { source: "GPS", status: "Vessel Docked — Houston Port", timestamp: "Mar 18 09:12", freshness: "15m ago", aligned: true, fresh: true },
       { source: "Email", status: "Vessel Arrived Houston Terminal A3 (forwarder confirmed)", timestamp: "Mar 18 09:10", freshness: "15m ago", aligned: true, fresh: true },
+      { source: "Weather API", status: "Clear — Gulf of Mexico", timestamp: "Mar 18 08:00", freshness: "1h ago", aligned: true, fresh: true },
     ],
     exceptionReason: "Email arrival notification received — agent initiated cross-source validation",
     exceptionTrigger: "Forwarder email confirmed vessel arrival at 09:10; agent validated against GPS and MSC Portal within 5 minutes",
@@ -333,7 +341,8 @@ export const SHIPMENTS: Shipment[] = [
     ],
     sources: [
       { source: "GPS", status: "Slow Moving — I-40E Flagstaff", timestamp: "Mar 11 21:30", freshness: "30m ago", aligned: true, fresh: true },
-      { source: "Traffic API", status: "Major Incident — I-40E Flagstaff", timestamp: "Mar 11 09:00", freshness: "12h ago", aligned: null, fresh: true },
+      { source: "Traffic API", status: "Major Incident — I-40E Flagstaff", timestamp: "Mar 11 09:00", freshness: "12h ago", aligned: true, fresh: true },
+      { source: "Weather API", status: "Clear — AZ / NM Corridor", timestamp: "Mar 11 20:00", freshness: "2h ago", aligned: true, fresh: true },
       { source: "Carrier Portal", status: "In Transit", timestamp: "Mar 11 16:00", freshness: "6h ago", aligned: true, fresh: true },
     ],
     exceptionReason: "ETA drift beyond 2h road threshold",
@@ -381,8 +390,10 @@ export const SHIPMENTS: Shipment[] = [
     ],
     sources: [
       { source: "Carrier Portal", status: "At DXB Hub — Awaiting Outbound", timestamp: "Mar 12 13:00", freshness: "1h ago", aligned: true, fresh: true },
+      { source: "GPS", status: "At DXB Cargo Terminal 2", timestamp: "Mar 12 12:30", freshness: "1.5h ago", aligned: true, fresh: true },
       { source: "Kuehne+Nagel", status: "In Transit", timestamp: "Mar 12 10:00", freshness: "4h ago", aligned: false, fresh: true },
-      { source: "Email", status: "No broker update", timestamp: "", freshness: "No update", aligned: null, fresh: false },
+      { source: "Email", status: "No broker update", timestamp: "", freshness: "No update", aligned: true, fresh: false },
+      { source: "Weather API", status: "Clear — DXB to LAX Route", timestamp: "Mar 12 12:00", freshness: "2h ago", aligned: true, fresh: true },
     ],
     exceptionReason: "Cargo has dwelled at DXB for 24h without being loaded — threshold exceeded",
     exceptionTrigger: "24h dwell at Emirates DXB hub without outbound booking confirmed",
@@ -427,7 +438,8 @@ export const SHIPMENTS: Shipment[] = [
       { source: "OTM", status: "Order Confirmed", timestamp: "Mar 12 09:47", freshness: "30m ago", aligned: true, fresh: true },
       { source: "Carrier Portal", status: "Booking Confirmed", timestamp: "Mar 12 09:50", freshness: "26m ago", aligned: true, fresh: true },
       { source: "Customs Broker", status: "Pre-filing Submitted", timestamp: "Mar 12 10:15", freshness: "1m ago", aligned: true, fresh: true },
-      { source: "GPS / AIS", status: "No signal — not yet departed", timestamp: "", freshness: "Awaiting departure", aligned: null, fresh: false },
+      { source: "GPS / AIS", status: "No signal — not yet departed", timestamp: "", freshness: "Awaiting departure", aligned: true, fresh: false },
+      { source: "Weather API", status: "Clear — Chennai Region", timestamp: "Mar 12 10:00", freshness: "15m ago", aligned: true, fresh: true },
       { source: "Email", status: "PO received from shipper", timestamp: "Mar 12 09:30", freshness: "47m ago", aligned: true, fresh: true },
     ],
     exceptionReason: "No exceptions — order on schedule",
@@ -461,14 +473,14 @@ export const LANE_INSIGHTS = [
 ]
 
 export const EXCEPTION_DISTRIBUTION = [
-  { type: "Schedule Slippage", count: 1, color: "#DC2626" },
-  { type: "Missing Signal", count: 1, color: "#9CA3AF" },
-  { type: "Long Dwell", count: 1, color: "#6366F1" },
-  { type: "Route Deviation", count: 0, color: "#F97316" },
-  { type: "Weather Disruption", count: 1, color: "#3B82F6" },
-  { type: "Traffic Disruption", count: 1, color: "#F59E0B" },
-  { type: "Customs Hold", count: 1, color: "#D97706" },
-  { type: "Conflicting Sources", count: 1, color: "#6B7280" },
+  { type: "Schedule Slippage", count: 8, color: "#DC2626" },
+  { type: "Missing Signal", count: 3, color: "#9CA3AF" },
+  { type: "Long Dwell", count: 5, color: "#6366F1" },
+  { type: "Route Deviation", count: 2, color: "#F97316" },
+  { type: "Weather Disruption", count: 6, color: "#3B82F6" },
+  { type: "Traffic Disruption", count: 4, color: "#F59E0B" },
+  { type: "Customs Hold", count: 7, color: "#D97706" },
+  { type: "Conflicting Sources", count: 3, color: "#6B7280" },
 ]
 
 // ─── Agent Activity Log ──────────────────────────────────────────────────────

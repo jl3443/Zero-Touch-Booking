@@ -205,9 +205,11 @@ function getTimestamp(): string {
 interface ExceptionWorkbenchProps {
   onSendNotification?: (email: SentEmailItem) => void
   onOpenWeather?: (shipmentId: string) => void
+  onExceptionResolved?: (shipmentId: string) => void
 }
 
-export function ExceptionWorkbench({ onSendNotification, onOpenWeather }: ExceptionWorkbenchProps) {
+export function ExceptionWorkbench({ onSendNotification, onOpenWeather, onExceptionResolved }: ExceptionWorkbenchProps) {
+  const [resolvedIds, setResolvedIds] = useState<Set<string>>(new Set())
   const [modeFilter, setModeFilter] = useState<TransportMode | "All">("All")
   const [severityFilter, setSeverityFilter] = useState<Severity | "All">("All")
   const [exceptionFilter, setExceptionFilter] = useState<ExceptionType | "All">("All")
@@ -237,6 +239,7 @@ export function ExceptionWorkbench({ onSendNotification, onOpenWeather }: Except
 
   const filtered = SHIPMENTS
     .filter((s) => {
+      if (resolvedIds.has(s.id)) return false
       if (modeFilter !== "All" && s.mode !== modeFilter) return false
       if (severityFilter !== "All" && s.severity !== severityFilter) return false
       if (exceptionFilter !== "All" && s.exceptionType !== exceptionFilter) return false
@@ -434,6 +437,10 @@ Export Coordination Team`,
                   onReviewRoute={() => setRouteShipment(s)}
                   onConfirmETA={() => handleConfirmETA(s)}
                   onViewDetail={() => setDrawerShipment(s)}
+                  onResolve={() => {
+                    setResolvedIds((prev) => new Set([...prev, s.id]))
+                    onExceptionResolved?.(s.id)
+                  }}
                 />
               )
             })}
@@ -804,6 +811,7 @@ interface ExceptionCardProps {
   onReviewRoute: () => void
   onConfirmETA: () => void
   onViewDetail: () => void
+  onResolve: () => void
 }
 
 function ExceptionCard({
@@ -821,6 +829,7 @@ function ExceptionCard({
   onReviewRoute,
   onConfirmETA,
   onViewDetail,
+  onResolve,
 }: ExceptionCardProps) {
   const allDone = actions.acknowledged && actions.notified && actions.otmUpdated
   const aisData = AIS_RECOVERY[s.id]
@@ -1008,9 +1017,12 @@ function ExceptionCard({
           variant="danger"
         />
         {allDone && (
-          <span className="ml-auto text-[10px] text-green-600 font-semibold flex items-center gap-1">
-            <CheckCircle size={11} /> All actions complete
-          </span>
+          <button
+            onClick={onResolve}
+            className="ml-auto text-[10px] font-semibold flex items-center gap-1 text-white bg-green-600 hover:bg-green-700 rounded-md px-2.5 py-1 transition-colors"
+          >
+            <CheckCircle size={11} /> Resolve Exception
+          </button>
         )}
       </div>
     </div>

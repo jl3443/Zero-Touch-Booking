@@ -9,7 +9,7 @@ import {
 import { cn } from "@/lib/utils"
 import {
   X, Brain, CheckCircle, Send, AlertOctagon, RotateCcw, PauseCircle,
-  ArrowRight, ChevronRight, Check, Loader2, Radio, ScanSearch,
+  ArrowRight, ChevronRight, Check, Loader2, Radio, ScanSearch, Phone, PhoneCall,
 } from "lucide-react"
 import { ModeIcon } from "./shared"
 import { EmailComposer } from "./email-composer"
@@ -253,7 +253,7 @@ export function ShipmentDrawer({ shipment, onClose, onOpenWeather, onSendNotific
         {/* Tab content */}
         <div className={cn("flex-1 overflow-y-auto", isLoading && "hidden")}>
           {activeTab === "overview" && (
-            <OverviewTab shipment={shipment} actions={actions} onAction={handleAction} onOpenWeather={onOpenWeather} />
+            <OverviewTab shipment={shipment} actions={actions} onAction={handleAction} onOpenWeather={onOpenWeather} onShowEmail={() => setShowEmailModal(true)} />
           )}
           {activeTab === "signals" && (
             <SignalsTab
@@ -284,7 +284,9 @@ export function ShipmentDrawer({ shipment, onClose, onOpenWeather, onSendNotific
           onClose={() => setShowEmailModal(false)}
           onSent={() => {
             handleAction("emailSent")
+            handleAction("notified")
           }}
+          onSendNotification={onSendNotification}
         />
       )}
     </>
@@ -292,17 +294,39 @@ export function ShipmentDrawer({ shipment, onClose, onOpenWeather, onSendNotific
 }
 
 // ─── Overview Tab ──────────────────────────────────────────────────────────────
-function OverviewTab({ shipment, actions, onAction, onOpenWeather }: { shipment: Shipment; actions: ActionState; onAction: (k: keyof ActionState) => void; onOpenWeather?: (id: string) => void }) {
+function OverviewTab({ shipment, actions, onAction, onOpenWeather, onShowEmail }: { shipment: Shipment; actions: ActionState; onAction: (k: keyof ActionState) => void; onOpenWeather?: (id: string) => void; onShowEmail: () => void }) {
   const [summaryThinking, setSummaryThinking] = useState(true)
   const [extraEvents, setExtraEvents] = useState<TimelineEvent[]>([])
+  const [escalateConfirm, setEscalateConfirm] = useState(false)
+  const [escalateCalling, setEscalateCalling] = useState(false)
+  const [escalateCallStep, setEscalateCallStep] = useState(0)
 
   useEffect(() => {
     const t = setTimeout(() => setSummaryThinking(false), 1600)
     return () => clearTimeout(t)
   }, [shipment.id])
 
-  // Reset extra events when shipment changes
-  useEffect(() => { setExtraEvents([]) }, [shipment.id])
+  // Reset extra events and escalation state when shipment changes
+  useEffect(() => {
+    setExtraEvents([])
+    setEscalateConfirm(false)
+    setEscalateCalling(false)
+    setEscalateCallStep(0)
+  }, [shipment.id])
+
+  const handleEscalateCall = () => {
+    setEscalateConfirm(false)
+    setEscalateCalling(true)
+    setEscalateCallStep(0)
+    const steps = [800, 1600, 2400, 3200]
+    steps.forEach((delay, i) => {
+      setTimeout(() => setEscalateCallStep(i + 1), delay)
+    })
+    setTimeout(() => {
+      setEscalateCalling(false)
+      onAction("escalated")
+    }, 4000)
+  }
 
   // Add dark-green event when ETA is approved
   useEffect(() => {
@@ -514,14 +538,14 @@ function OverviewTab({ shipment, actions, onAction, onOpenWeather }: { shipment:
               variant="primary"
               done={actions.notified}
               icon={<Send size={12} />}
-              onClick={() => onAction("notified")}
+              onClick={() => { if (!actions.notified) onShowEmail() }}
             />
             <ActionButton
               label={actions.escalated ? "Escalated" : "Escalate"}
               variant="secondary"
               done={actions.escalated}
               icon={<AlertOctagon size={12} />}
-              onClick={() => onAction("escalated")}
+              onClick={() => { if (!actions.escalated && !escalateCalling) setEscalateConfirm(true) }}
             />
             <ActionButton
               label="Override ETA"
@@ -536,6 +560,74 @@ function OverviewTab({ shipment, actions, onAction, onOpenWeather }: { shipment:
               onClick={() => {}}
             />
           </div>
+
+          {/* Escalation Confirmation Card */}
+          {escalateConfirm && !actions.escalated && (
+            <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Phone size={14} className="text-red-600" />
+                <span className="text-xs font-semibold text-red-800">Escalate to VP Operations?</span>
+              </div>
+              <p className="text-[11px] text-red-700 mb-3 leading-relaxed">
+                AI agent will place a notification call to VP Operations regarding {shipment.id} — {shipment.severity} severity {shipment.exceptionType} ({shipment.delayHours > 0 ? `+${shipment.delayHours}h delay` : "no delay"}).
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleEscalateCall}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors"
+                >
+                  <PhoneCall size={11} /> Yes, Escalate Now
+                </button>
+                <button
+                  onClick={() => setEscalateConfirm(false)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border border-gray-300 text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Escalation Call Animation */}
+          {escalateCalling && (
+            <div className="mt-3 rounded-lg border border-indigo-200 bg-indigo-50 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <PhoneCall size={14} className="text-indigo-600 animate-pulse" />
+                <span className="text-xs font-semibold text-indigo-800">AI Agent — Escalation Call in Progress</span>
+              </div>
+              <div className="space-y-2">
+                {[
+                  { step: 1, text: "Connecting to VP Operations..." },
+                  { step: 2, text: `Relaying shipment ${shipment.id} status — ${shipment.severity} ${shipment.exceptionType}` },
+                  { step: 3, text: `Informing of +${shipment.delayHours}h delay impact on ${shipment.plant}` },
+                  { step: 4, text: "Call complete — Escalation acknowledged by VP Operations" },
+                ].map(({ step, text }) => (
+                  <div key={step} className="flex items-center gap-2">
+                    {escalateCallStep >= step ? (
+                      <CheckCircle size={12} className={step === 4 ? "text-green-600" : "text-indigo-600"} />
+                    ) : (
+                      <div className="w-3 h-3 rounded-full border-2 border-indigo-300" />
+                    )}
+                    <span className={cn(
+                      "text-[11px]",
+                      escalateCallStep >= step
+                        ? step === 4 ? "text-green-700 font-semibold" : "text-indigo-700"
+                        : "text-indigo-400"
+                    )}>
+                      {text}
+                    </span>
+                    {escalateCallStep === step - 1 && step <= 3 && (
+                      <span className="inline-flex items-end gap-[2px] ml-1">
+                        {[0, 150, 300].map((d) => (
+                          <span key={d} className="w-1 h-1 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: `${d}ms`, animationDuration: "900ms" }} />
+                        ))}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -627,7 +719,7 @@ function SignalsTab({ shipment, reconciling, resolvedSource, onReconcile }: Sign
                   <td className="px-3 py-2.5">
                     {src.aligned === true && <span className="text-green-600 font-semibold">Yes</span>}
                     {src.aligned === false && <span className="text-red-600 font-semibold">Conflict</span>}
-                    {src.aligned === null && <span className="text-gray-400">N/A</span>}
+                    {src.aligned === null && <span className="text-gray-400">—</span>}
                   </td>
                 </tr>
               ))}

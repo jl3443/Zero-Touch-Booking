@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import type { Shipment } from "@/lib/mock-data"
+import { type SentEmailItem } from "./email-sent-page"
 import { cn } from "@/lib/utils"
 import {
   X, Send, Copy, Check, Loader2, AlertCircle,
@@ -14,6 +15,7 @@ interface EmailComposerProps {
   shipment: Shipment
   onClose: () => void
   onSent: () => void
+  onSendNotification?: (email: SentEmailItem) => void
 }
 
 type SendStatus = "idle" | "sending" | "sent" | "error"
@@ -120,7 +122,7 @@ function htmlToPlainPreview(html: string): string {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function EmailComposer({ shipment, onClose, onSent }: EmailComposerProps) {
+export function EmailComposer({ shipment, onClose, onSent, onSendNotification }: EmailComposerProps) {
   const [to, setTo] = useState(getDefaultRecipients(shipment.severity))
   const [cc, setCc] = useState("logistics-ops@company.com")
   const [bcc, setBcc] = useState("")
@@ -168,27 +170,25 @@ export function EmailComposer({ shipment, onClose, onSent }: EmailComposerProps)
   const handleSend = async () => {
     setSendStatus("sending")
     setErrorMsg("")
-    try {
-      const res = await fetch("/api/send-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          to,
-          cc: cc || undefined,
-          bcc: bcc || undefined,
-          subject,
-          body: htmlBody.current,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Failed to send")
-      setSendStatus("sent")
-      setSentAt(new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }))
-      onSent()
-    } catch (err) {
-      setSendStatus("error")
-      setErrorMsg(err instanceof Error ? err.message : "Unknown error")
+    // Simulate sending (no external email service required)
+    await new Promise((resolve) => setTimeout(resolve, 1200))
+    const now = new Date()
+    const timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })
+    setSendStatus("sent")
+    setSentAt(timeStr)
+    // Register in Sent page
+    const email: SentEmailItem = {
+      id: `SE-${Date.now()}`,
+      to: to.split(",")[0]?.trim() || to,
+      toName: to.split(",")[0]?.trim() || "Recipient",
+      subject,
+      body: plainBody,
+      timestamp: now.toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }),
+      shipmentId: shipment.id,
+      tag: "delay",
     }
+    onSendNotification?.(email)
+    onSent()
   }
 
   const isSent = sendStatus === "sent"

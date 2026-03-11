@@ -29,11 +29,21 @@ export function AppShell({ persona }: { persona?: Persona }) {
   const [weatherHighlightId, setWeatherHighlightId] = useState<string | null>(null)
   const [aiChatOpen, setAiChatOpen] = useState(false)
   const [etaApprovedCount, setEtaApprovedCount] = useState(5)
+  const [readEmailIds, setReadEmailIds] = useState<Set<string>>(new Set())
+  const [resolvedExceptionIds, setResolvedExceptionIds] = useState<Set<string>>(new Set())
 
   const handleEtaApproved = () => setEtaApprovedCount((prev) => prev + 1)
 
-  const exceptionsCount = SHIPMENTS.length
-  const unreadInboxCount = INBOX_EMAILS.filter((e) => !e.read).length
+  const handleMarkEmailRead = (emailId: string) => {
+    setReadEmailIds((prev) => new Set([...prev, emailId]))
+  }
+
+  const handleExceptionResolved = (shipmentId: string) => {
+    setResolvedExceptionIds((prev) => new Set([...prev, shipmentId]))
+  }
+
+  const exceptionsCount = SHIPMENTS.filter((s) => !resolvedExceptionIds.has(s.id)).length
+  const unreadInboxCount = INBOX_EMAILS.filter((e) => !e.read && !readEmailIds.has(e.id)).length
 
   const handleViewChange = (v: SidebarView) => {
     setViewHistory((prev) => [...prev, { view }])
@@ -71,8 +81,8 @@ export function AppShell({ persona }: { persona?: Persona }) {
       <Sidebar
         view={view}
         onViewChange={handleViewChange}
-        exceptionsCount={exceptionsCount}
-        unreadInboxCount={unreadInboxCount}
+        exceptionsCount={exceptionsCount || undefined}
+        unreadInboxCount={unreadInboxCount || undefined}
         persona={persona}
       />
 
@@ -122,6 +132,7 @@ export function AppShell({ persona }: { persona?: Persona }) {
               <ExceptionWorkbench
                 onSendNotification={handleSendNotification}
                 onOpenWeather={handleOpenWeather}
+                onExceptionResolved={handleExceptionResolved}
               />
             )}
 
@@ -139,6 +150,7 @@ export function AppShell({ persona }: { persona?: Persona }) {
                   setTrackingPreselect(id)
                   handleViewChange("tracking-search")
                 }}
+                onMarkRead={handleMarkEmailRead}
               />
             )}
 

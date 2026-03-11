@@ -53,12 +53,12 @@ export function Dashboard({ searchQuery, onViewChange }: DashboardProps) {
                 <ThinkingDots />
               </div>
             ) : (
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <p className="text-xs text-indigo-800 font-medium leading-relaxed">
-                  Monitoring 7 active shipments across 3 corridors — 2 Critical exceptions detected (SHP-40672, SHP-70991) requiring immediate carrier escalation.
+                  Monitoring <strong>7 active shipments</strong> across 3 corridors (APAC→Americas, South Asia→Europe, Domestic US) — <strong>2 Critical</strong> and <strong>4 High</strong> exceptions active. SHP-40672 (FedEx, CAN→DTW) and SHP-70991 (Emirates SkyCargo, BOM→LAX) flagged for immediate carrier escalation due to assembly line deadline risk.
                 </p>
                 <p className="text-xs text-indigo-600 leading-relaxed">
-                  APAC→Americas corridor averaging +19h delay driven by Customs Hold and Long Dwell at DXB hub. Recommend pre-advising receiving teams at Detroit Plant and LAX Receiving Dock.
+                  APAC→Americas corridor averaging <strong>+19h delay</strong> this week, driven by PVG ground stop (typhoon remnant), LA Port congestion (+18–24h berth wait), and DXB hub dwell. SHP-20334 Customs Hold at ORD is the highest-risk delay order item with 44h slippage. Agent has pre-drafted destination notifications for Detroit Assembly Plant (Line 3) and LAX Receiving Dock B — recommend coordinator review and send. OTM sync pending for SHP-10421 and SHP-40672.
                 </p>
               </div>
             )}

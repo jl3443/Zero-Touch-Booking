@@ -9,8 +9,9 @@ export type ExceptionType =
   | "Traffic Disruption"
   | "Customs Hold"
   | "Conflicting Sources"
+  | "None"
 
-export type SignalSource = "CargoSmart" | "Maersk Portal" | "MSC Portal" | "Flexport" | "Kuehne+Nagel" | "GPS" | "Carrier Portal" | "Email" | "UiPath" | "Weather API" | "Traffic API" | "System Alert" | "Agent"
+export type SignalSource = "CargoSmart" | "Maersk Portal" | "MSC Portal" | "Flexport" | "Kuehne+Nagel" | "GPS" | "GPS / AIS" | "Carrier Portal" | "Email" | "UiPath" | "Weather API" | "Traffic API" | "System Alert" | "Agent" | "OTM" | "Customs Broker"
 
 export interface ReasonChip {
   label: string
@@ -394,6 +395,51 @@ export const SHIPMENTS: Shipment[] = [
     lat: 25.2,
     lng: 55.4,
     disruptionContext: "Emirates SkyCargo DXB hub experiencing capacity constraints on BOM-LAX lane. Cargo has been bumped from 2 outbound flights. Next available confirmed departure slot: Mar 13 02:00 UTC.",
+  },
+
+  // Scenario 8: Air — Chennai → Los Angeles (New Order — Not Yet Dispatched)
+  {
+    id: "SHP-88442",
+    mode: "Air",
+    carrier: "FedEx International Priority",
+    trackingRef: "BKG-FX-20250312",
+    origin: "Chennai, IN",
+    destination: "Los Angeles, US",
+    plant: "LAX Receiving Dock C",
+    currentStatus: "Order Confirmed — Not Yet Dispatched",
+    plannedETA: "Mar 18, 2025 08:00",
+    revisedETA: "Mar 18, 2025 08:00",
+    delayHours: 0,
+    exceptionType: "None",
+    severity: "Medium",
+    lastSignal: "OTM booking confirmed",
+    lastSignalSource: "OTM",
+    recommendedAction: "Monitor pre-departure checklist. Cargo ready date: Mar 14. Ensure customs pre-filing is complete.",
+    reasonChips: [],
+    etaConfidence: 88,
+    criticalMaterial: false,
+    timeline: [
+      { timestamp: "Mar 12, 09:47", event: "Order Created in OTM", location: "OTM System", source: "OTM", status: "agent" },
+      { timestamp: "Mar 12, 09:50", event: "Booking Confirmed — FedEx International Priority", location: "Chennai, IN", source: "Carrier Portal", status: "ok" },
+      { timestamp: "Mar 12, 10:15", event: "ISF Pre-filing Submitted to CBP", location: "US Customs Pre-clearance", source: "Customs Broker", status: "ok" },
+    ],
+    sources: [
+      { source: "OTM", status: "Order Confirmed", timestamp: "Mar 12 09:47", freshness: "30m ago", aligned: true, fresh: true },
+      { source: "Carrier Portal", status: "Booking Confirmed", timestamp: "Mar 12 09:50", freshness: "26m ago", aligned: true, fresh: true },
+      { source: "Customs Broker", status: "Pre-filing Submitted", timestamp: "Mar 12 10:15", freshness: "1m ago", aligned: true, fresh: true },
+      { source: "GPS / AIS", status: "No signal — not yet departed", timestamp: "", freshness: "Awaiting departure", aligned: null, fresh: false },
+      { source: "Email", status: "PO received from shipper", timestamp: "Mar 12 09:30", freshness: "47m ago", aligned: true, fresh: true },
+    ],
+    exceptionReason: "No exceptions — order on schedule",
+    exceptionTrigger: "None",
+    likelyCause: "N/A",
+    businessImpact: "Planned arrival Mar 18 within assembly schedule window. No risk at this time.",
+    otmStatus: "Synced",
+    notificationStatus: "Not Yet Sent",
+    agentSummary: "New order SHP-88442 (FedEx International Priority, Chennai → LAX) was auto-ingested from OTM document OTM-ORD-2025-88442. Order confirmed, booking made, ISF pre-filing submitted. Cargo ready date Mar 14. Planned departure Mar 15, arrival Mar 18 — within assembly line window. No exceptions active. Agent will monitor pre-departure milestones.",
+    lane: "MAA→LAX",
+    lat: 13.1,
+    lng: 80.2,
   },
 ]
 

@@ -56,6 +56,7 @@ export function ExceptionBadge({ type }: { type: ExceptionType }) {
     "Traffic Disruption": "bg-amber-50 text-amber-700 border-amber-200",
     "Customs Hold": "bg-amber-50 text-amber-800 border-amber-300",
     "Conflicting Sources": "bg-gray-50 text-gray-700 border-gray-300",
+    "None": "bg-blue-50 text-blue-600 border-blue-200",
   }
   return (
     <span className={cn("inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium whitespace-nowrap", map[type])}>

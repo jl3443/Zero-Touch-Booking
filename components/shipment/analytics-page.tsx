@@ -54,7 +54,7 @@ const agentBarData = Object.entries(agentActionCounts).map(([type, count]) => ({
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function AnalyticsPage() {
+export function AnalyticsPage({ etaUpdatedCount = 5 }: { etaUpdatedCount?: number }) {
   const [insightThinking, setInsightThinking] = useState(true)
 
   useEffect(() => {
@@ -83,7 +83,7 @@ export function AnalyticsPage() {
             { label: "Total Delay Hours", value: `${SHIPMENTS.reduce((s, x) => s + x.delayHours, 0)}h`, icon: <Clock size={16} />, color: "text-red-600" },
             { label: "Avg Delay / Shipment", value: `${Math.round(SHIPMENTS.reduce((s, x) => s + x.delayHours, 0) / SHIPMENTS.length)}h`, icon: <TrendingUp size={16} />, color: "text-amber-600" },
             { label: "At-Risk Shipments", value: `${SHIPMENTS.filter((s) => s.severity !== "Low").length} / ${SHIPMENTS.length}`, icon: <AlertTriangle size={16} />, color: "text-orange-600" },
-            { label: "Agent Actions (24h)", value: `${AGENT_ACTIVITIES.length}`, icon: <Brain size={16} />, color: "text-blue-600" },
+            { label: "ETA Confirmed (24h)", value: `${etaUpdatedCount}`, icon: <CheckCircle2 size={16} />, color: "text-green-600" },
           ].map((k) => (
             <div key={k.label} className="bg-white rounded-xl border border-gray-200 p-4">
               <div className="flex items-center gap-2 mb-1">

@@ -18,6 +18,8 @@ interface DashboardProps {
   onOpenWeather?: (shipmentId: string) => void
   onSendNotification?: (email: SentEmailItem) => void
   autoOpenShipmentId?: string
+  onEtaApproved?: () => void
+  etaUpdatedCount?: number
 }
 
 function ThinkingDots() {
@@ -36,7 +38,7 @@ function ThinkingDots() {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
-export function Dashboard({ searchQuery, onViewChange, onOpenWeather, onSendNotification, autoOpenShipmentId }: DashboardProps) {
+export function Dashboard({ searchQuery, onViewChange, onOpenWeather, onSendNotification, autoOpenShipmentId, onEtaApproved, etaUpdatedCount }: DashboardProps) {
   const [activeFilter, setActiveFilter] = useState<string | null>(null)
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null)
   const [analysisThinking, setAnalysisThinking] = useState(true)
@@ -96,6 +98,7 @@ export function Dashboard({ searchQuery, onViewChange, onOpenWeather, onSendNoti
           activeFilter={activeFilter}
           onFilterChange={setActiveFilter}
           onExceptionsClick={() => onViewChange?.("exceptions")}
+          etaUpdatedCount={etaUpdatedCount}
         />
 
         {/* Exception distribution + Likely Delay Order + Geographic Overview — above table */}
@@ -124,6 +127,7 @@ export function Dashboard({ searchQuery, onViewChange, onOpenWeather, onSendNoti
           onClose={() => setSelectedShipment(null)}
           onOpenWeather={onOpenWeather}
           onSendNotification={onSendNotification}
+          onEtaApproved={onEtaApproved}
         />
       )}
     </div>

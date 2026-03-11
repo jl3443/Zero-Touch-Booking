@@ -30,6 +30,7 @@ interface ShipmentDrawerProps {
   onClose: () => void
   onOpenWeather?: (shipmentId: string) => void
   onSendNotification?: (email: SentEmailItem) => void
+  onEtaApproved?: () => void
 }
 
 const LOADING_STEPS = [
@@ -50,7 +51,7 @@ const LOADING_STEPS = [
   },
 ]
 
-export function ShipmentDrawer({ shipment, onClose, onOpenWeather, onSendNotification }: ShipmentDrawerProps) {
+export function ShipmentDrawer({ shipment, onClose, onOpenWeather, onSendNotification, onEtaApproved }: ShipmentDrawerProps) {
   const [activeTab, setActiveTab] = useState<DrawerTab>("overview")
   const [actions, setActions] = useState<ActionState>({
     etaApproved: false,
@@ -103,6 +104,7 @@ export function ShipmentDrawer({ shipment, onClose, onOpenWeather, onSendNotific
     setTimeout(() => {
       setSyncing(false)
       setActions((prev) => ({ ...prev, otmSynced: true, etaApproved: true }))
+      onEtaApproved?.()
     }, 1200)
   }
 
@@ -383,6 +385,21 @@ function OverviewTab({ shipment, actions, onAction, onOpenWeather }: { shipment:
       <div>
         <h4 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-3">Tracking Timeline</h4>
         <div className="space-y-0">
+          {/* Pending ETA entry — shown until ETA is approved */}
+          {!actions.etaApproved && (
+            <div className="flex gap-3">
+              <div className="flex flex-col items-center">
+                <div className="w-5 h-5 rounded-full bg-gray-900 border-2 border-gray-700 flex items-center justify-center">
+                  <div className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-pulse" />
+                </div>
+                <div className="w-px flex-1 bg-gray-200 my-0.5 min-h-[20px]" />
+              </div>
+              <div className="pb-3 flex-1">
+                <p className="text-xs font-semibold text-gray-900">Pending — Awaiting ETA Confirmation</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">Agent monitoring active · ETA update pending review</p>
+              </div>
+            </div>
+          )}
           {[...extraEvents, ...[...shipment.timeline].reverse()].map((event, i, arr) => {
             const isLast = i === arr.length - 1
             const isException = event.status === "warning" || event.status === "critical"

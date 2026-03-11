@@ -28,6 +28,9 @@ export function AppShell({ persona }: { persona?: Persona }) {
   const [trackingPreselect, setTrackingPreselect] = useState<string | null>(null)
   const [weatherHighlightId, setWeatherHighlightId] = useState<string | null>(null)
   const [aiChatOpen, setAiChatOpen] = useState(false)
+  const [etaApprovedCount, setEtaApprovedCount] = useState(5)
+
+  const handleEtaApproved = () => setEtaApprovedCount((prev) => prev + 1)
 
   const exceptionsCount = SHIPMENTS.length
   const unreadInboxCount = INBOX_EMAILS.filter((e) => !e.read).length
@@ -99,10 +102,12 @@ export function AppShell({ persona }: { persona?: Persona }) {
                 onOpenWeather={handleOpenWeather}
                 onSendNotification={handleSendNotification}
                 autoOpenShipmentId={backOpenShipmentId ?? undefined}
+                onEtaApproved={handleEtaApproved}
+                etaUpdatedCount={etaApprovedCount}
               />
             )}
 
-            {view === "analytics" && <AnalyticsPage />}
+            {view === "analytics" && <AnalyticsPage etaUpdatedCount={etaApprovedCount} />}
 
             {view === "tracking-search" && (
               <TrackingSearchPage

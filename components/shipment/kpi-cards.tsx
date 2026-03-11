@@ -7,9 +7,10 @@ interface KPICardsProps {
   activeFilter: string | null
   onFilterChange: (filter: string | null) => void
   onExceptionsClick?: () => void
+  etaUpdatedCount?: number
 }
 
-export function KPICards({ activeFilter, onFilterChange, onExceptionsClick }: KPICardsProps) {
+export function KPICards({ activeFilter, onFilterChange, onExceptionsClick, etaUpdatedCount = 5 }: KPICardsProps) {
   const handleClick = (filter: string) => {
     if (filter === "at-risk" || filter === "critical" || filter === "missing-signal") {
       onExceptionsClick?.()
@@ -70,7 +71,7 @@ export function KPICards({ activeFilter, onFilterChange, onExceptionsClick }: KP
         />
         <SecondaryKPICard
           label="ETA Updated (24h)"
-          value={5}
+          value={etaUpdatedCount}
           icon={<Clock size={14} />}
         />
         <SecondaryKPICard

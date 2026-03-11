@@ -5,8 +5,9 @@ import { cn } from "@/lib/utils"
 import {
   LayoutDashboard, BarChart2, Ship, AlertTriangle,
   CloudLightning, GitBranch, Mail, Inbox, Send, Brain,
-  ChevronDown, ChevronRight, FileStack, User, Award,
+  ChevronDown, ChevronRight, FileStack, User, Award, ScanSearch,
 } from "lucide-react"
+import { type Persona } from "./login-page"
 
 export type SidebarView =
   | "dashboard"
@@ -26,9 +27,10 @@ interface SidebarProps {
   onViewChange: (view: SidebarView) => void
   exceptionsCount?: number
   unreadInboxCount?: number
+  persona?: Persona
 }
 
-export function Sidebar({ view, onViewChange, exceptionsCount = 7, unreadInboxCount = 3 }: SidebarProps) {
+export function Sidebar({ view, onViewChange, exceptionsCount = 7, unreadInboxCount = 3, persona }: SidebarProps) {
   const [shipmentOpen, setShipmentOpen] = useState(true)
   const [emailOpen, setEmailOpen] = useState(true)
 
@@ -67,6 +69,12 @@ export function Sidebar({ view, onViewChange, exceptionsCount = 7, unreadInboxCo
           icon={<Award size={15} />}
           active={view === "carrier-scorecard"}
           onClick={() => onViewChange("carrier-scorecard")}
+        />
+        <NavItem
+          label="Track Shipment"
+          icon={<ScanSearch size={15} />}
+          active={view === "tracking-search"}
+          onClick={() => onViewChange("tracking-search")}
         />
 
         <div className="pt-2 pb-1" />
@@ -146,12 +154,18 @@ export function Sidebar({ view, onViewChange, exceptionsCount = 7, unreadInboxCo
       {/* Footer — User */}
       <div className="border-t border-gray-800 p-4">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-blue-600/20 border border-blue-600/30 flex items-center justify-center shrink-0">
-            <User size={14} className="text-blue-400" />
-          </div>
+          {persona ? (
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white text-[11px] font-bold ${persona.color}`}>
+              {persona.initials}
+            </div>
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-blue-600/20 border border-blue-600/30 flex items-center justify-center shrink-0">
+              <User size={14} className="text-blue-400" />
+            </div>
+          )}
           <div className="flex-1 min-w-0">
-            <div className="text-xs font-semibold text-white truncate">Export Coordinator</div>
-            <div className="text-[10px] text-gray-500 truncate">coordinator@company.com</div>
+            <div className="text-xs font-semibold text-white truncate">{persona?.role ?? "Coordinator"}</div>
+            <div className="text-[10px] text-gray-500 truncate">{persona?.email ?? "coordinator@company.com"}</div>
           </div>
         </div>
       </div>

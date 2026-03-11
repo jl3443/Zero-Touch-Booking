@@ -124,7 +124,11 @@ export function OTMStatusBadge({ status }: { status: "Synced" | "Pending Update"
 // ─── Source Badge ─────────────────────────────────────────────────────────────
 export function SourceBadge({ source }: { source: string }) {
   const map: Record<string, string> = {
-    GNosis: "bg-blue-600 text-white",
+    CargoSmart: "bg-blue-600 text-white",
+    "Maersk Portal": "bg-sky-700 text-white",
+    "MSC Portal": "bg-blue-700 text-white",
+    Flexport: "bg-indigo-500 text-white",
+    "Kuehne+Nagel": "bg-cyan-700 text-white",
     GPS: "bg-green-600 text-white",
     "Carrier Portal": "bg-indigo-600 text-white",
     Email: "bg-gray-500 text-white",

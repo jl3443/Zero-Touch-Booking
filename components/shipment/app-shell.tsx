@@ -17,9 +17,12 @@ import { TrackingSearchPage } from "./tracking-search-page"
 import { SearchResultsPage } from "./search-results-page"
 import { AIChatPanel } from "./ai-chat-panel"
 import { SHIPMENTS, INBOX_EMAILS } from "@/lib/mock-data"
+import { type Persona } from "./login-page"
 
-export function AppShell() {
+export function AppShell({ persona }: { persona?: Persona }) {
   const [view, setView] = useState<SidebarView>("dashboard")
+  const [viewHistory, setViewHistory] = useState<Array<{ view: SidebarView; openShipmentId?: string }>>([])
+  const [backOpenShipmentId, setBackOpenShipmentId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [sentEmails, setSentEmails] = useState<SentEmailItem[]>([])
   const [trackingPreselect, setTrackingPreselect] = useState<string | null>(null)
@@ -30,10 +33,21 @@ export function AppShell() {
   const unreadInboxCount = INBOX_EMAILS.filter((e) => !e.read).length
 
   const handleViewChange = (v: SidebarView) => {
+    setViewHistory((prev) => [...prev, { view }])
     setView(v)
     setSearchQuery("")
     if (v !== "tracking-search") setTrackingPreselect(null)
     if (v !== "weather-traffic") setWeatherHighlightId(null)
+    setBackOpenShipmentId(null)
+  }
+
+  const handleBack = () => {
+    if (viewHistory.length === 0) return
+    const entry = viewHistory[viewHistory.length - 1]
+    setViewHistory((h) => h.slice(0, -1))
+    setView(entry.view)
+    setBackOpenShipmentId(entry.openShipmentId ?? null)
+    setSearchQuery("")
   }
 
   const handleSendNotification = (email: SentEmailItem) => {
@@ -42,8 +56,10 @@ export function AppShell() {
 
   const handleOpenWeather = (shipmentId: string) => {
     setWeatherHighlightId(shipmentId)
+    setViewHistory((prev) => [...prev, { view, openShipmentId: shipmentId }])
     setView("weather-traffic")
     setSearchQuery("")
+    setBackOpenShipmentId(null)
   }
 
   return (
@@ -54,6 +70,7 @@ export function AppShell() {
         onViewChange={handleViewChange}
         exceptionsCount={exceptionsCount}
         unreadInboxCount={unreadInboxCount}
+        persona={persona}
       />
 
       {/* Main area */}
@@ -62,6 +79,8 @@ export function AppShell() {
           onSearch={setSearchQuery}
           onToggleAIChat={() => setAiChatOpen((prev) => !prev)}
           aiChatOpen={aiChatOpen}
+          canGoBack={viewHistory.length > 0}
+          onBack={handleBack}
         />
 
         {/* Search results overlay — shown when typing in search bar */}
@@ -79,6 +98,7 @@ export function AppShell() {
                 onViewChange={handleViewChange}
                 onOpenWeather={handleOpenWeather}
                 onSendNotification={handleSendNotification}
+                autoOpenShipmentId={backOpenShipmentId ?? undefined}
               />
             )}
 

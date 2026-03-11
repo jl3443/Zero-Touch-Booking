@@ -1,16 +1,18 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, RefreshCw, Brain } from "lucide-react"
+import { Search, RefreshCw, Brain, ChevronLeft } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface TopBarProps {
   onSearch: (q: string) => void
   onToggleAIChat?: () => void
   aiChatOpen?: boolean
+  canGoBack?: boolean
+  onBack?: () => void
 }
 
-export function TopBar({ onSearch, onToggleAIChat, aiChatOpen }: TopBarProps) {
+export function TopBar({ onSearch, onToggleAIChat, aiChatOpen, canGoBack, onBack }: TopBarProps) {
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
   const [spinning, setSpinning] = useState(false)
   const [query, setQuery] = useState("")
@@ -38,9 +40,19 @@ export function TopBar({ onSearch, onToggleAIChat, aiChatOpen }: TopBarProps) {
   return (
     <header className="bg-[#1E293B] text-white border-b border-slate-700">
       <div className="flex items-center justify-between px-5 py-3">
-        {/* Left: search */}
-        <div className="flex-1 max-w-xl">
-          <div className="relative">
+        {/* Left: back button + search */}
+        <div className="flex items-center gap-2 flex-1 max-w-xl">
+          {canGoBack && (
+            <button
+              onClick={onBack}
+              className="shrink-0 flex items-center gap-1 px-2 py-1.5 rounded-md bg-slate-700 border border-slate-600 text-slate-300 hover:text-white hover:border-slate-500 transition-colors text-xs font-medium"
+              title="Go back"
+            >
+              <ChevronLeft size={14} />
+              <span>Back</span>
+            </button>
+          )}
+          <div className="relative flex-1">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"

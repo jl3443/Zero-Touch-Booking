@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { SHIPMENTS, type Shipment } from "@/lib/mock-data"
 import { KPICards } from "./kpi-cards"
 import { AgentActivityLog } from "./agent-activity-log"
@@ -17,6 +17,7 @@ interface DashboardProps {
   onViewChange?: (view: SidebarView) => void
   onOpenWeather?: (shipmentId: string) => void
   onSendNotification?: (email: SentEmailItem) => void
+  autoOpenShipmentId?: string
 }
 
 function ThinkingDots() {
@@ -35,15 +36,24 @@ function ThinkingDots() {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
-export function Dashboard({ searchQuery, onViewChange, onOpenWeather, onSendNotification }: DashboardProps) {
+export function Dashboard({ searchQuery, onViewChange, onOpenWeather, onSendNotification, autoOpenShipmentId }: DashboardProps) {
   const [activeFilter, setActiveFilter] = useState<string | null>(null)
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null)
   const [analysisThinking, setAnalysisThinking] = useState(true)
+  const prevAutoOpen = useRef<string | undefined>(undefined)
 
   useEffect(() => {
     const t = setTimeout(() => setAnalysisThinking(false), 1800)
     return () => clearTimeout(t)
   }, [])
+
+  useEffect(() => {
+    if (autoOpenShipmentId && autoOpenShipmentId !== prevAutoOpen.current) {
+      prevAutoOpen.current = autoOpenShipmentId
+      const s = SHIPMENTS.find((sh) => sh.id === autoOpenShipmentId)
+      if (s) setSelectedShipment(s)
+    }
+  }, [autoOpenShipmentId])
 
   return (
     <div className="flex-1 overflow-y-auto bg-[#F8F9FA]">

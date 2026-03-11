@@ -6,12 +6,13 @@ import { SeverityBadge, ModeBadge, ExceptionBadge, ReasonChips, DelayDisplay } f
 import { cn } from "@/lib/utils"
 import {
   CheckCircle, Send, GitBranch, RefreshCw, AlertOctagon, ArrowUpDown, Filter, X,
-  Radio, PhoneCall, MapPin, TrendingUp, ChevronRight, Zap,
+  Radio, PhoneCall, MapPin, TrendingUp, ChevronRight, Zap, Brain, Radar, ScanSearch,
 } from "lucide-react"
 import type { SentEmailItem } from "./email-sent-page"
 import { ShipmentDrawer } from "./shipment-drawer"
 
 type SortBy = "severity" | "delay" | "cutoff"
+type ComposeType = "destination" | "carrier" | "escalation" | "signal"
 
 const SEVERITY_ORDER: Record<Severity, number> = { Critical: 0, High: 1, Medium: 2, Low: 3 }
 
@@ -131,6 +132,28 @@ Best regards,
 Export Coordination Team`
 }
 
+function buildSignalLostInquiryBody(s: Shipment): string {
+  return `Dear ${CARRIER_OPS[s.id]?.name ?? s.carrier} Team,
+
+Our AI tracking agent has detected an AIS/GPS signal loss for the following shipment and is unable to compute a reliable ETA.
+
+Shipment:      ${s.id}
+Tracking:      ${s.trackingRef}
+Route:         ${s.origin.split(",")[0]} → ${s.destination.split(",")[0]}
+Last Signal:   ${s.lastSignal}
+Last Source:   ${s.lastSignalSource}
+
+The agent has attempted to recover position from AIS providers and customs feeds without success. Please provide:
+  1. Current vessel / cargo position (lat/lng or port name)
+  2. Estimated arrival at the next scheduled port of call
+  3. Any deviations from planned routing or known disruptions
+
+Our destination team is awaiting ETA confirmation. A response within 2 hours is requested.
+
+Export Coordination Team
+(Sent automatically by AI Shipment Agent)`
+}
+
 function buildEscalationBody(s: Shipment): string {
   return `Dear VP Operations,
 
@@ -191,9 +214,13 @@ export function ExceptionWorkbench({ onSendNotification, onOpenWeather }: Except
   const [sortBy, setSortBy] = useState<SortBy>("severity")
   const [actions, setActions] = useState<AllActions>({})
 
+  // Vessel locate state (Missing Signal AI flow)
+  const [locatingVessel, setLocatingVessel] = useState<Set<string>>(new Set())
+  const [vesselLocated, setVesselLocated] = useState<Set<string>>(new Set())
+
   // Modal state
   const [composeShipment, setComposeShipment] = useState<Shipment | null>(null)
-  const [composeType, setComposeType] = useState<"destination" | "carrier" | "escalation">("destination")
+  const [composeType, setComposeType] = useState<ComposeType>("destination")
   const [routeShipment, setRouteShipment] = useState<Shipment | null>(null)
   const [escalateShipment, setEscalateShipment] = useState<Shipment | null>(null)
   const [drawerShipment, setDrawerShipment] = useState<Shipment | null>(null)
@@ -236,6 +263,19 @@ export function ExceptionWorkbench({ onSendNotification, onOpenWeather }: Except
     setComposeShipment(s)
   }
 
+  const openSignalInquiry = (s: Shipment) => {
+    setComposeType("signal")
+    setComposeShipment(s)
+  }
+
+  const handleLocateVessel = (s: Shipment) => {
+    setLocatingVessel((prev) => new Set([...prev, s.id]))
+    setTimeout(() => {
+      setLocatingVessel((prev) => { const n = new Set(prev); n.delete(s.id); return n })
+      setVesselLocated((prev) => new Set([...prev, s.id]))
+    }, 2500)
+  }
+
   const openEscalate = (s: Shipment) => {
     setEscalateShipment(s)
   }
@@ -243,23 +283,26 @@ export function ExceptionWorkbench({ onSendNotification, onOpenWeather }: Except
   const handleSendNotify = (body: string) => {
     if (!composeShipment) return
     const isCarrier = composeType === "carrier"
-    const recipient = isCarrier
+    const isSignal = composeType === "signal"
+    const recipient = (isCarrier || isSignal)
       ? (CARRIER_OPS[composeShipment.id] ?? { name: composeShipment.carrier, email: "ops@carrier.com" })
       : getRecipient(composeShipment.id)
     const email: SentEmailItem = {
       id: `SE-DYN-${composeShipment.id}-${Date.now()}`,
       to: recipient.email,
       toName: recipient.name,
-      subject: isCarrier
+      subject: isSignal
+        ? `⚡ Signal Lost — ${composeShipment.id} — AI Agent Position Request`
+        : isCarrier
         ? `Long Dwell Inquiry — ${composeShipment.id} — Status Update Request`
         : `Delay Alert — ${composeShipment.id} — +${composeShipment.delayHours}h ${composeShipment.exceptionType}`,
       body,
       timestamp: getTimestamp(),
       shipmentId: composeShipment.id,
-      tag: isCarrier ? "delay" : "delay",
+      tag: "delay",
     }
     onSendNotification?.(email)
-    updateAction(composeShipment.id, isCarrier ? { carrierQueried: true } : { notified: true })
+    updateAction(composeShipment.id, (isCarrier || isSignal) ? { carrierQueried: true } : { notified: true })
     setComposeShipment(null)
   }
 
@@ -379,9 +422,13 @@ Export Coordination Team`,
                   key={s.id}
                   shipment={s}
                   actions={acts}
+                  isLocatingVessel={locatingVessel.has(s.id)}
+                  isVesselLocated={vesselLocated.has(s.id)}
                   onAcknowledge={() => updateAction(s.id, { acknowledged: true })}
                   onNotifyClick={() => openNotify(s)}
                   onCarrierInquiry={() => openCarrierInquiry(s)}
+                  onSignalInquiry={() => openSignalInquiry(s)}
+                  onLocateVessel={() => handleLocateVessel(s)}
                   onOTMUpdate={() => updateAction(s.id, { otmUpdated: true })}
                   onEscalate={() => openEscalate(s)}
                   onReviewRoute={() => setRouteShipment(s)}
@@ -437,18 +484,21 @@ Export Coordination Team`,
 
 function NotifyComposeModal({ shipment: s, composeType, onClose, onSend }: {
   shipment: Shipment
-  composeType: "destination" | "carrier" | "escalation"
+  composeType: ComposeType
   onClose: () => void
   onSend: (body: string) => void
 }) {
   const isCarrier = composeType === "carrier"
-  const recipient = isCarrier
+  const isSignal = composeType === "signal"
+  const recipient = (isCarrier || isSignal)
     ? (CARRIER_OPS[s.id] ?? { name: s.carrier, email: "ops@carrier.com" })
     : getRecipient(s.id)
-  const subject = isCarrier
+  const subject = isSignal
+    ? `⚡ Signal Lost — ${s.id} — AI Agent Position Request`
+    : isCarrier
     ? `Long Dwell Inquiry — ${s.id} — Status Update Request`
     : `Delay Alert — ${s.id} — +${s.delayHours}h ${s.exceptionType}`
-  const defaultBody = isCarrier ? buildCarrierInquiryBody(s) : buildNotifyBody(s, recipient.name)
+  const defaultBody = isSignal ? buildSignalLostInquiryBody(s) : isCarrier ? buildCarrierInquiryBody(s) : buildNotifyBody(s, recipient.name)
   const [body, setBody] = useState(defaultBody)
 
   return (
@@ -456,9 +506,9 @@ function NotifyComposeModal({ shipment: s, composeType, onClose, onSend }: {
       <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-xl mx-4 flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
-            {isCarrier ? <PhoneCall size={15} className="text-amber-600" /> : <Send size={15} className="text-blue-600" />}
+            {isSignal ? <Brain size={15} className="text-indigo-600" /> : isCarrier ? <PhoneCall size={15} className="text-amber-600" /> : <Send size={15} className="text-blue-600" />}
             <span className="text-sm font-semibold text-gray-800">
-              {isCarrier ? "Query Carrier" : "Notify Team"}
+              {isSignal ? "AI: Query Carrier — Signal Lost" : isCarrier ? "Query Carrier" : "Notify Team"}
             </span>
             <span className="text-[11px] text-gray-400 ml-1">— {s.id}</span>
           </div>
@@ -507,11 +557,11 @@ function NotifyComposeModal({ shipment: s, composeType, onClose, onSend }: {
             onClick={() => onSend(body)}
             className={cn(
               "px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors",
-              isCarrier ? "bg-amber-500 text-white hover:bg-amber-600" : "bg-blue-600 text-white hover:bg-blue-700"
+              isSignal ? "bg-indigo-600 text-white hover:bg-indigo-700" : isCarrier ? "bg-amber-500 text-white hover:bg-amber-600" : "bg-blue-600 text-white hover:bg-blue-700"
             )}
           >
             <Send size={11} />
-            Send
+            {isSignal ? "Send AI Inquiry" : "Send"}
           </button>
         </div>
       </div>
@@ -742,9 +792,13 @@ function RouteComparisonModal({ shipment, approvedId, onClose, onApprove }: {
 interface ExceptionCardProps {
   shipment: Shipment
   actions: WorkbenchCardActions
+  isLocatingVessel?: boolean
+  isVesselLocated?: boolean
   onAcknowledge: () => void
   onNotifyClick: () => void
   onCarrierInquiry: () => void
+  onSignalInquiry: () => void
+  onLocateVessel: () => void
   onOTMUpdate: () => void
   onEscalate: () => void
   onReviewRoute: () => void
@@ -755,9 +809,13 @@ interface ExceptionCardProps {
 function ExceptionCard({
   shipment: s,
   actions,
+  isLocatingVessel = false,
+  isVesselLocated = false,
   onAcknowledge,
   onNotifyClick,
   onCarrierInquiry,
+  onSignalInquiry,
+  onLocateVessel,
   onOTMUpdate,
   onEscalate,
   onReviewRoute,
@@ -791,8 +849,14 @@ function ExceptionCard({
             <span className="font-mono font-bold text-blue-700 text-sm group-hover:underline">{s.id}</span>
             <ExceptionBadge type={s.exceptionType} />
 
-            {/* AIS Recovery badge */}
-            {isMissingSignal && aisData && !actions.etaConfirmed && (
+            {/* Missing Signal: AIS locating → recovered → confirmed */}
+            {isMissingSignal && isLocatingVessel && (
+              <span className="flex items-center gap-1.5 text-[9px] font-semibold bg-indigo-50 border border-indigo-300 text-indigo-700 rounded-full px-2 py-0.5 animate-pulse">
+                <Brain size={9} className="animate-pulse" />
+                AI Scanning maritime database…
+              </span>
+            )}
+            {isMissingSignal && aisData && isVesselLocated && !actions.etaConfirmed && (
               <span className="flex items-center gap-1 text-[9px] font-semibold bg-green-50 border border-green-300 text-green-700 rounded-full px-2 py-0.5">
                 <Radio size={9} className="text-green-600" />
                 AIS Recovered — {aisData.lat}, {aisData.lng}
@@ -878,12 +942,30 @@ function ExceptionCard({
           variant="primary"
         />
 
-        {/* Missing Signal: Confirm ETA */}
-        {isMissingSignal && aisData && (
+        {/* Missing Signal: AI Locate Vessel → AIS data → Confirm ETA */}
+        {isMissingSignal && !isVesselLocated && !actions.etaConfirmed && (
+          <WorkbenchAction
+            label={isLocatingVessel ? "Scanning…" : "AI Locate Vessel"}
+            done={false}
+            icon={isLocatingVessel ? <Brain size={11} className="animate-pulse" /> : <ScanSearch size={11} />}
+            onClick={onLocateVessel}
+            variant="route"
+          />
+        )}
+        {isMissingSignal && !actions.carrierQueried && (
+          <WorkbenchAction
+            label="AI Query Carrier"
+            done={actions.carrierQueried}
+            icon={<Radio size={11} />}
+            onClick={onSignalInquiry}
+            variant="warning"
+          />
+        )}
+        {isMissingSignal && aisData && isVesselLocated && (
           <WorkbenchAction
             label={actions.etaConfirmed ? "ETA Confirmed" : `Confirm ETA (+${aisData.etaDeltaHours}h)`}
             done={actions.etaConfirmed}
-            icon={<Radio size={11} />}
+            icon={<CheckCircle size={11} />}
             onClick={onConfirmETA}
             variant="success"
           />

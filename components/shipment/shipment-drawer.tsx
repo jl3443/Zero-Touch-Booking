@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { type Shipment } from "@/lib/mock-data"
+import { type Shipment, type TimelineEvent } from "@/lib/mock-data"
 import {
   SeverityBadge, ModeBadge, ExceptionBadge, ReasonChips,
   ConfidenceBar, SourceBadge, OTMStatusBadge,
@@ -9,7 +9,7 @@ import {
 import { cn } from "@/lib/utils"
 import {
   X, Brain, CheckCircle, Send, AlertOctagon, RotateCcw, PauseCircle,
-  ArrowRight, ChevronRight, Check, Loader2,
+  ArrowRight, ChevronRight, Check, Loader2, Radio, ScanSearch,
 } from "lucide-react"
 import { ModeIcon } from "./shared"
 import { EmailComposer } from "./email-composer"
@@ -32,12 +32,22 @@ interface ShipmentDrawerProps {
   onSendNotification?: (email: SentEmailItem) => void
 }
 
-const DATA_SOURCES = [
-  "Carrier Portal",
-  "Weather API",
-  "AIS Data Feed",
-  "OTM System",
-  "Customs Broker",
+const LOADING_STEPS = [
+  {
+    title: "Pulling real-time data",
+    subtitle: "Querying carrier portals, GPS feeds & customs systems",
+    items: ["Carrier Portal API", "AIS / GPS Data Feed", "Customs Broker System"],
+  },
+  {
+    title: "Analyzing signals",
+    subtitle: "Cross-referencing sources for ETA drift & discrepancies",
+    items: ["Route Deviation Check", "ETA Recalculation", "Exception Scoring"],
+  },
+  {
+    title: "Connecting to Weather AI API",
+    subtitle: "Enriching shipment context with disruption intelligence",
+    items: ["Weather Forecast Layer", "Traffic Incident Feed", "Risk Assessment Engine"],
+  },
 ]
 
 export function ShipmentDrawer({ shipment, onClose, onOpenWeather, onSendNotification }: ShipmentDrawerProps) {
@@ -52,21 +62,35 @@ export function ShipmentDrawer({ shipment, onClose, onOpenWeather, onSendNotific
   const [syncing, setSyncing] = useState(false)
   const [showEmailModal, setShowEmailModal] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
-  const [loadingSource, setLoadingSource] = useState(0)
+  const [loadingTick, setLoadingTick] = useState(0)
+  const [reconciling, setReconciling] = useState(false)
+  const [resolvedSource, setResolvedSource] = useState<string | null>(null)
 
   useEffect(() => {
     setIsLoading(true)
-    setLoadingSource(0)
+    setLoadingTick(0)
     setActiveTab("overview")
-    const tick = setInterval(() => {
-      setLoadingSource((prev) => prev + 1)
-    }, 380)
-    const done = setTimeout(() => {
-      clearInterval(tick)
-      setIsLoading(false)
-    }, 2000)
+    setReconciling(false)
+    setResolvedSource(null)
+    const tick = setInterval(() => setLoadingTick((prev) => prev + 1), 340)
+    const done = setTimeout(() => { clearInterval(tick); setIsLoading(false) }, 3200)
     return () => { clearInterval(tick); clearTimeout(done) }
   }, [shipment?.id])
+
+  const handleReconcile = () => {
+    if (!shipment) return
+    setReconciling(true)
+    setTimeout(() => {
+      const winner = shipment.sources.find(s => s.aligned === true && s.fresh)
+        ?? shipment.sources.filter(s => s.fresh).sort((a, b) => (a.source.includes("Portal") ? -1 : 1))[0]
+        ?? shipment.sources[0]
+      setResolvedSource(winner?.source ?? null)
+      setReconciling(false)
+    }, 2200)
+  }
+
+  const loadingStep = Math.min(Math.floor(loadingTick / 3), 2)
+  const loadingSubItem = loadingTick % 3
 
   if (!shipment) return null
 
@@ -157,33 +181,69 @@ export function ShipmentDrawer({ shipment, onClose, onOpenWeather, onSendNotific
 
         {/* Loading overlay */}
         {isLoading && (
-          <div className="flex-1 flex flex-col items-center justify-center gap-5 bg-white">
+          <div className="flex-1 flex flex-col items-center justify-center gap-6 bg-white">
             <div className="flex items-center gap-3">
               <Brain size={22} className="text-indigo-500 animate-pulse" />
               <div>
-                <p className="text-sm font-semibold text-gray-800">Agent pulling real-time data…</p>
-                <p className="text-[11px] text-gray-400 mt-0.5">Aggregating signals from multiple sources</p>
+                <p className="text-sm font-semibold text-gray-800">Agent intelligence loading…</p>
+                <p className="text-[11px] text-gray-400 mt-0.5">Building real-time shipment snapshot</p>
               </div>
             </div>
-            <div className="w-72 space-y-2">
-              {DATA_SOURCES.map((src, i) => (
-                <div key={src} className="flex items-center gap-2">
-                  <div className={cn(
-                    "w-2 h-2 rounded-full shrink-0 transition-colors duration-300",
-                    i < loadingSource ? "bg-green-500" : i === loadingSource ? "bg-indigo-400 animate-pulse" : "bg-gray-200"
-                  )} />
-                  <span className={cn(
-                    "text-xs transition-colors duration-300",
-                    i < loadingSource ? "text-green-700 font-medium" : i === loadingSource ? "text-indigo-600 font-semibold" : "text-gray-300"
-                  )}>{src}</span>
-                  {i < loadingSource && (
-                    <Check size={10} className="text-green-500 ml-auto" />
-                  )}
-                  {i === loadingSource && (
-                    <Loader2 size={10} className="text-indigo-400 ml-auto animate-spin" />
-                  )}
-                </div>
-              ))}
+            <div className="w-80 space-y-4">
+              {LOADING_STEPS.map((step, i) => {
+                const done = loadingStep > i
+                const active = loadingStep === i
+                return (
+                  <div key={i} className="flex gap-3">
+                    {/* Step indicator */}
+                    <div className="flex flex-col items-center gap-1 pt-0.5">
+                      <div className={cn(
+                        "w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-colors duration-300",
+                        done ? "bg-green-500" : active ? "bg-indigo-500 animate-pulse" : "bg-gray-200"
+                      )}>
+                        {done ? (
+                          <Check size={10} className="text-white" />
+                        ) : (
+                          <span className="text-[9px] font-bold text-white">{i + 1}</span>
+                        )}
+                      </div>
+                      {i < 2 && <div className={cn("w-px flex-1 min-h-[12px]", done ? "bg-green-300" : "bg-gray-200")} />}
+                    </div>
+                    {/* Step content */}
+                    <div className="flex-1 pb-2">
+                      <p className={cn(
+                        "text-xs font-semibold transition-colors duration-300",
+                        done ? "text-green-700" : active ? "text-indigo-700" : "text-gray-300"
+                      )}>{step.title}</p>
+                      {(done || active) && (
+                        <p className="text-[10px] text-gray-400 mt-0.5">{step.subtitle}</p>
+                      )}
+                      {(done || active) && (
+                        <div className="mt-2 space-y-1">
+                          {step.items.map((item, j) => {
+                            const itemDone = done || (active && loadingSubItem > j)
+                            const itemActive = active && loadingSubItem === j
+                            return (
+                              <div key={j} className="flex items-center gap-1.5">
+                                <div className={cn(
+                                  "w-1.5 h-1.5 rounded-full shrink-0 transition-colors duration-200",
+                                  itemDone ? "bg-green-400" : itemActive ? "bg-indigo-400 animate-pulse" : "bg-gray-200"
+                                )} />
+                                <span className={cn(
+                                  "text-[10px] transition-colors duration-200",
+                                  itemDone ? "text-green-600 font-medium" : itemActive ? "text-indigo-600" : "text-gray-300"
+                                )}>{item}</span>
+                                {itemDone && <Check size={8} className="text-green-400 ml-auto" />}
+                                {itemActive && <Loader2 size={8} className="text-indigo-400 ml-auto animate-spin" />}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}
@@ -194,7 +254,12 @@ export function ShipmentDrawer({ shipment, onClose, onOpenWeather, onSendNotific
             <OverviewTab shipment={shipment} actions={actions} onAction={handleAction} onOpenWeather={onOpenWeather} />
           )}
           {activeTab === "signals" && (
-            <SignalsTab shipment={shipment} />
+            <SignalsTab
+              shipment={shipment}
+              reconciling={reconciling}
+              resolvedSource={resolvedSource}
+              onReconcile={handleReconcile}
+            />
           )}
           {activeTab === "otm" && (
             <OTMTab
@@ -227,10 +292,37 @@ export function ShipmentDrawer({ shipment, onClose, onOpenWeather, onSendNotific
 // ─── Overview Tab ──────────────────────────────────────────────────────────────
 function OverviewTab({ shipment, actions, onAction, onOpenWeather }: { shipment: Shipment; actions: ActionState; onAction: (k: keyof ActionState) => void; onOpenWeather?: (id: string) => void }) {
   const [summaryThinking, setSummaryThinking] = useState(true)
+  const [extraEvents, setExtraEvents] = useState<TimelineEvent[]>([])
+
   useEffect(() => {
     const t = setTimeout(() => setSummaryThinking(false), 1600)
     return () => clearTimeout(t)
   }, [shipment.id])
+
+  // Reset extra events when shipment changes
+  useEffect(() => { setExtraEvents([]) }, [shipment.id])
+
+  // Add dark-green event when ETA is approved
+  useEffect(() => {
+    if (!actions.etaApproved) return
+    setExtraEvents((prev) => {
+      if (prev.some((e) => e.event.includes("ETA Approved"))) return prev
+      const now = new Date()
+      const ts = `${now.toLocaleDateString("en", { month: "short", day: "numeric" })} ${now.toLocaleTimeString("en", { hour: "2-digit", minute: "2-digit", hour12: false })}`
+      return [{ timestamp: ts, event: "ETA Approved — Updated in OTM", location: "", source: "Agent", status: "agent" }, ...prev]
+    })
+  }, [actions.etaApproved])
+
+  // Add dark-green event when notification is sent
+  useEffect(() => {
+    if (!actions.notified) return
+    setExtraEvents((prev) => {
+      if (prev.some((e) => e.event.includes("Notification Sent"))) return prev
+      const now = new Date()
+      const ts = `${now.toLocaleDateString("en", { month: "short", day: "numeric" })} ${now.toLocaleTimeString("en", { hour: "2-digit", minute: "2-digit", hour12: false })}`
+      return [{ timestamp: ts, event: "Notification Sent — Destination Team Alerted", location: "", source: "Agent", status: "agent" }, ...prev]
+    })
+  }, [actions.notified])
 
   return (
     <div className="p-5 space-y-4">
@@ -291,35 +383,39 @@ function OverviewTab({ shipment, actions, onAction, onOpenWeather }: { shipment:
       <div>
         <h4 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-3">Tracking Timeline</h4>
         <div className="space-y-0">
-          {shipment.timeline.map((event, i) => {
-            const isLast = i === shipment.timeline.length - 1
-            const iconMap = {
-              ok: <div className="w-5 h-5 rounded-full bg-green-100 border-2 border-green-400 flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-green-500" /></div>,
-              warning: <div className="w-5 h-5 rounded-full bg-amber-100 border-2 border-amber-400 flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-amber-500" /></div>,
-              critical: <div className="w-5 h-5 rounded-full bg-red-100 border-2 border-red-500 flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-red-600" /></div>,
-              info: <div className="w-5 h-5 rounded-full bg-blue-100 border-2 border-blue-400 flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-blue-500" /></div>,
-              agent: <div className="w-5 h-5 rounded-full bg-slate-700 border-2 border-slate-600 flex items-center justify-center"><Brain size={9} className="text-white" /></div>,
-            }
+          {[...extraEvents, ...[...shipment.timeline].reverse()].map((event, i, arr) => {
+            const isLast = i === arr.length - 1
+            const isException = event.status === "warning" || event.status === "critical"
+            const isResolved = event.status === "agent"
+            // 3-color icon map
+            const dot = isException
+              ? <div className="w-5 h-5 rounded-full bg-red-100 border-2 border-red-500 flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-red-600" /></div>
+              : isResolved
+              ? <div className="w-5 h-5 rounded-full bg-green-700 border-2 border-green-600 flex items-center justify-center"><Check size={9} className="text-white" /></div>
+              : <div className="w-5 h-5 rounded-full bg-green-100 border-2 border-green-400 flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-green-500" /></div>
             return (
               <div key={i} className="flex gap-3">
                 <div className="flex flex-col items-center">
-                  {iconMap[event.status]}
+                  {dot}
                   {!isLast && <div className="w-px flex-1 bg-gray-200 my-0.5" />}
                 </div>
-                <div className={cn("pb-3 flex-1 min-w-0", isLast ? "" : "")}>
+                <div className="pb-3 flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
-                      <span className={cn("text-xs font-medium", event.status === "agent" ? "text-slate-700" : "text-gray-800")}>
+                      <span className={cn(
+                        "text-xs font-medium",
+                        isException ? "text-red-700" : isResolved ? "text-green-800 font-semibold" : "text-gray-800"
+                      )}>
                         {event.event}
                       </span>
                       {event.anomaly && (
-                        <p className={cn("text-[10px] mt-0.5", event.status === "critical" ? "text-red-600" : "text-amber-700")}>
-                          {event.anomaly}
-                        </p>
+                        <p className="text-[10px] mt-0.5 text-red-600">{event.anomaly}</p>
                       )}
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-[10px] text-gray-400">{event.location}</span>
-                      </div>
+                      {event.location && (
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[10px] text-gray-400">{event.location}</span>
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <SourceBadge source={event.source} />
@@ -428,7 +524,13 @@ function OverviewTab({ shipment, actions, onAction, onOpenWeather }: { shipment:
 }
 
 // ─── Signals Tab ───────────────────────────────────────────────────────────────
-function SignalsTab({ shipment }: { shipment: Shipment }) {
+interface SignalsTabProps {
+  shipment: Shipment
+  reconciling: boolean
+  resolvedSource: string | null
+  onReconcile: () => void
+}
+function SignalsTab({ shipment, reconciling, resolvedSource, onReconcile }: SignalsTabProps) {
   const totalSources = shipment.sources.length
   const alignedCount = shipment.sources.filter(s => s.aligned === true).length
   const hasConflict = shipment.sources.some(s => s.aligned === false)
@@ -515,14 +617,55 @@ function SignalsTab({ shipment }: { shipment: Shipment }) {
         </div>
       </div>
 
-      {/* Conflict callout */}
+      {/* Conflict callout + AI Reconcile */}
       {hasConflict && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3">
-          <div className="text-[10px] font-semibold text-red-700 uppercase tracking-wider mb-1">Source Conflict Detected</div>
-          <p className="text-xs text-red-800">
-            One or more sources are reporting conflicting status for this shipment.
-            Review the discrepancies above and verify directly with the carrier before updating OTM.
-          </p>
+        <div className="space-y-3">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-semibold text-red-700 uppercase tracking-wider mb-1">Source Conflict Detected</div>
+                <p className="text-xs text-red-800">
+                  {resolvedSource
+                    ? `Agent has resolved the conflict — trusting ${resolvedSource} as the authoritative source.`
+                    : "One or more sources are reporting conflicting status. Use AI Reconcile to automatically identify the authoritative source."
+                  }
+                </p>
+              </div>
+              {!resolvedSource && (
+                <button
+                  onClick={onReconcile}
+                  disabled={reconciling}
+                  className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-indigo-600 text-white text-[11px] font-semibold hover:bg-indigo-700 disabled:opacity-60 transition-colors"
+                >
+                  <Brain size={11} className={reconciling ? "animate-pulse" : ""} />
+                  {reconciling ? "Reconciling…" : "AI Reconcile"}
+                </button>
+              )}
+            </div>
+            {reconciling && (
+              <div className="mt-2.5 flex items-center gap-2 text-[11px] text-indigo-700">
+                <Loader2 size={11} className="animate-spin shrink-0" />
+                <span>Agent cross-validating sources — checking timestamp recency, carrier authority, and GPS correlation…</span>
+              </div>
+            )}
+          </div>
+
+          {/* AI Resolution card */}
+          {resolvedSource && (
+            <div className="rounded-lg border border-green-300 bg-green-50 p-3 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <Check size={13} className="text-green-700 shrink-0" />
+                <span className="text-[11px] font-semibold text-green-800 uppercase tracking-wider">AI Reconciliation Complete</span>
+              </div>
+              <p className="text-xs text-green-900">
+                <strong>{resolvedSource}</strong> selected as authoritative source —
+                {" "}most recent signal, highest carrier authority, and GPS correlation confirmed.
+              </p>
+              <p className="text-[10px] text-green-700">
+                Recommendation: Update OTM using {resolvedSource} data. Stale/conflicting sources flagged for re-sync.
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -5,16 +5,16 @@ import { SHIPMENTS } from "@/lib/mock-data"
 import { ModeBadge, SeverityBadge } from "./shared"
 import { cn } from "@/lib/utils"
 import {
-  GitBranch, ChevronDown, ChevronRight, CheckCircle2, AlertTriangle,
-  Info, AlertOctagon, Brain,
+  GitBranch, ChevronDown, ChevronRight, AlertTriangle, Check,
 } from "lucide-react"
 
+// 3-color system: green (ok/info), red (warning/critical), dark-green (agent/resolved)
 const STATUS_CONFIG = {
-  ok: { icon: <CheckCircle2 size={12} />, color: "text-green-600", dot: "bg-green-500", line: "bg-green-200" },
-  warning: { icon: <AlertTriangle size={12} />, color: "text-amber-600", dot: "bg-amber-500", line: "bg-amber-200" },
-  critical: { icon: <AlertOctagon size={12} />, color: "text-red-600", dot: "bg-red-500", line: "bg-red-200" },
-  info: { icon: <Info size={12} />, color: "text-blue-600", dot: "bg-blue-400", line: "bg-blue-200" },
-  agent: { icon: <Brain size={12} />, color: "text-purple-600", dot: "bg-purple-500", line: "bg-purple-200" },
+  ok:       { dot: "bg-green-500",  ring: "ring-green-100",  cardBg: "",                 cardBorder: "border-gray-100",  textColor: "text-gray-800" },
+  info:     { dot: "bg-green-500",  ring: "ring-green-100",  cardBg: "",                 cardBorder: "border-gray-100",  textColor: "text-gray-700" },
+  warning:  { dot: "bg-red-500",    ring: "ring-red-200",    cardBg: "bg-red-50/40",     cardBorder: "border-red-200",   textColor: "text-red-700"  },
+  critical: { dot: "bg-red-500",    ring: "ring-red-200",    cardBg: "bg-red-50/40",     cardBorder: "border-red-200",   textColor: "text-red-700"  },
+  agent:    { dot: "bg-green-700",  ring: "ring-green-200",  cardBg: "bg-green-50/40",   cardBorder: "border-green-200", textColor: "text-green-800" },
 }
 
 export function TimelinePage() {
@@ -45,12 +45,9 @@ export function TimelinePage() {
 
         {/* Legend */}
         <div className="flex items-center gap-4 text-[11px] text-gray-500">
-          {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
-            <span key={key} className="flex items-center gap-1.5">
-              <span className={cn("w-2 h-2 rounded-full shrink-0", cfg.dot)} />
-              {key.charAt(0).toUpperCase() + key.slice(1)}
-            </span>
-          ))}
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500" />Ok</span>
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500" />Exception</span>
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-700" />Resolved / ETA Updated</span>
         </div>
 
         {/* Shipment timelines */}
@@ -94,28 +91,29 @@ export function TimelinePage() {
                       <div className="absolute left-[7px] top-3 bottom-3 w-px bg-gray-200" />
 
                       <div className="space-y-0">
-                        {shipment.timeline.map((event, i) => {
+                        {[...shipment.timeline].reverse().map((event, i, arr) => {
                           const cfg = STATUS_CONFIG[event.status]
-                          const isLast = i === shipment.timeline.length - 1
+                          const isLast = i === arr.length - 1
+                          const isResolved = event.status === "agent"
+                          const isException = event.status === "warning" || event.status === "critical"
                           return (
                             <div key={i} className="relative flex gap-4 pb-4 last:pb-0">
                               {/* Dot */}
-                              <div className={cn("w-3.5 h-3.5 rounded-full border-2 border-white shrink-0 mt-1 z-10 ring-2", cfg.dot,
-                                event.status === "critical" ? "ring-red-200" : event.status === "warning" ? "ring-amber-200" : "ring-gray-100"
-                              )} />
+                              <div className={cn(
+                                "w-3.5 h-3.5 rounded-full border-2 border-white shrink-0 mt-1 z-10 ring-2",
+                                cfg.dot, cfg.ring
+                              )}>
+                                {isResolved && <Check size={7} className="text-white absolute inset-0 m-auto" />}
+                              </div>
 
                               {/* Content */}
                               <div className={cn(
                                 "flex-1 rounded-lg border p-3 -mt-0.5",
-                                event.status === "critical" ? "border-red-200 bg-red-50/40" :
-                                event.status === "warning" ? "border-amber-200 bg-amber-50/40" :
-                                event.status === "agent" ? "border-purple-200 bg-purple-50/40" :
-                                "border-gray-100 bg-gray-50/30"
+                                cfg.cardBg, cfg.cardBorder
                               )}>
                                 <div className="flex items-start justify-between gap-2">
                                   <div>
-                                    <span className={cn("text-xs font-semibold", cfg.color, "flex items-center gap-1 mb-0.5")}>
-                                      {cfg.icon}
+                                    <span className={cn("text-xs font-semibold flex items-center gap-1 mb-0.5", cfg.textColor)}>
                                       {event.event}
                                     </span>
                                     <div className="text-[11px] text-gray-400">{event.location}</div>

@@ -10,7 +10,7 @@ export type ExceptionType =
   | "Customs Hold"
   | "Conflicting Sources"
 
-export type SignalSource = "GNosis" | "GPS" | "Carrier Portal" | "Email" | "UiPath" | "Weather API" | "Traffic API" | "System Alert" | "Agent"
+export type SignalSource = "CargoSmart" | "Maersk Portal" | "MSC Portal" | "Flexport" | "Kuehne+Nagel" | "GPS" | "Carrier Portal" | "Email" | "UiPath" | "Weather API" | "Traffic API" | "System Alert" | "Agent"
 
 export interface ReasonChip {
   label: string
@@ -88,20 +88,20 @@ export const SHIPMENTS: Shipment[] = [
     exceptionType: "Schedule Slippage",
     severity: "High",
     lastSignal: "2h ago",
-    lastSignalSource: "GNosis",
+    lastSignalSource: "CargoSmart",
     recommendedAction: "Notify Destination Team",
     reasonChips: [{ label: "Port Congestion", type: "port" }, { label: "Berth Delay", type: "deviation" }],
     etaConfidence: 79,
     timeline: [
-      { timestamp: "Mar 05 09:00", event: "Pickup Completed", location: "Shanghai Port, CN", source: "GNosis", status: "ok" },
-      { timestamp: "Mar 05 18:00", event: "Vessel Departed Yangshan Deep Water Port", location: "Shanghai, CN", source: "GNosis", status: "ok" },
-      { timestamp: "Mar 09 12:00", event: "En Route — Trans-Pacific", location: "Open Pacific", source: "GNosis", status: "ok" },
-      { timestamp: "Mar 12 06:00", event: "Arrived San Pedro Bay", location: "Los Angeles, US", source: "GNosis", status: "warning", anomaly: "Berth unavailable — congestion" },
+      { timestamp: "Mar 05 09:00", event: "Pickup Completed", location: "Shanghai Port, CN", source: "CargoSmart", status: "ok" },
+      { timestamp: "Mar 05 18:00", event: "Vessel Departed Yangshan Deep Water Port", location: "Shanghai, CN", source: "CargoSmart", status: "ok" },
+      { timestamp: "Mar 09 12:00", event: "En Route — Trans-Pacific", location: "Open Pacific", source: "CargoSmart", status: "ok" },
+      { timestamp: "Mar 12 06:00", event: "Arrived San Pedro Bay", location: "Los Angeles, US", source: "CargoSmart", status: "warning", anomaly: "Berth unavailable — congestion" },
       { timestamp: "Mar 12 08:00", event: "Port Congestion Alert", location: "Los Angeles Port", source: "UiPath", status: "critical", anomaly: "22+ vessel queue at WBCT Terminal" },
       { timestamp: "Mar 12 08:05", event: "ETA Recalculated (+18h)", location: "System", source: "Agent", status: "agent" },
     ],
     sources: [
-      { source: "GNosis", status: "At Port — Awaiting Berth", timestamp: "Mar 12 10:00", freshness: "2h ago", aligned: true, fresh: true },
+      { source: "CargoSmart", status: "At Port — Awaiting Berth", timestamp: "Mar 12 10:00", freshness: "2h ago", aligned: true, fresh: true },
       { source: "Carrier Portal", status: "Arrived Destination", timestamp: "Mar 12 09:30", freshness: "2.5h ago", aligned: true, fresh: true },
       { source: "UiPath", status: "Port Congestion Detected", timestamp: "Mar 12 08:00", freshness: "4h ago", aligned: null, fresh: true },
     ],
@@ -151,7 +151,7 @@ export const SHIPMENTS: Shipment[] = [
     sources: [
       { source: "Carrier Portal", status: "Customs Hold — ORD", timestamp: "Mar 11 21:00", freshness: "3h ago", aligned: true, fresh: true },
       { source: "Email", status: "Broker Notified — Awaiting CBP Release", timestamp: "Mar 11 15:00", freshness: "9h ago", aligned: true, fresh: true },
-      { source: "GNosis", status: "Arrived Destination", timestamp: "Mar 11 12:30", freshness: "11h ago", aligned: false, fresh: true },
+      { source: "Flexport", status: "Arrived Destination", timestamp: "Mar 11 12:30", freshness: "11h ago", aligned: false, fresh: true },
     ],
     exceptionReason: "Shipment held at ORD Customs for CBP physical inspection — electronics",
     exceptionTrigger: "CBP selected cargo for TSCA compliance review on entry",
@@ -182,18 +182,18 @@ export const SHIPMENTS: Shipment[] = [
     exceptionType: "Missing Signal",
     severity: "High",
     lastSignal: "9h ago",
-    lastSignalSource: "GNosis",
+    lastSignalSource: "Maersk Portal",
     recommendedAction: "Contact Carrier",
     reasonChips: [{ label: "No AIS Signal", type: "signal" }, { label: "Low Confidence", type: "confidence" }],
     etaConfidence: 38,
     timeline: [
-      { timestamp: "Mar 13 10:00", event: "Departed JNPT Port Mumbai", location: "Mumbai, IN", source: "GNosis", status: "ok" },
-      { timestamp: "Mar 15 06:00", event: "En Route — Arabian Sea", location: "Arabian Sea", source: "GNosis", status: "ok" },
+      { timestamp: "Mar 13 10:00", event: "Departed JNPT Port Mumbai", location: "Mumbai, IN", source: "Maersk Portal", status: "ok" },
+      { timestamp: "Mar 15 06:00", event: "En Route — Arabian Sea", location: "Arabian Sea", source: "Maersk Portal", status: "ok" },
       { timestamp: "Mar 15 14:00", event: "AIS Signal Lost", location: "Arabian Sea (15°N, 63°E)", source: "System Alert", status: "critical", anomaly: "No AIS ping for 9+ hours — unusual for this lane" },
       { timestamp: "Mar 15 23:00", event: "Missing Signal Alert — Vessel Offline", location: "System", source: "Agent", status: "agent" },
     ],
     sources: [
-      { source: "GNosis", status: "Last Known — Arabian Sea", timestamp: "Mar 15 14:00", freshness: "9h ago", aligned: false, fresh: false },
+      { source: "Maersk Portal", status: "Last Known — Arabian Sea", timestamp: "Mar 15 14:00", freshness: "9h ago", aligned: false, fresh: false },
       { source: "Carrier Portal", status: "In Transit", timestamp: "Mar 14 22:00", freshness: "25h ago", aligned: false, fresh: false },
       { source: "Email", status: "", timestamp: "", freshness: "No update", aligned: null, fresh: false },
     ],
@@ -242,7 +242,7 @@ export const SHIPMENTS: Shipment[] = [
     sources: [
       { source: "Carrier Portal", status: "Ground Hold — PVG Weather", timestamp: "Mar 11 21:42", freshness: "18m ago", aligned: true, fresh: true },
       { source: "Weather API", status: "Severe Weather — PVG Ground Stop", timestamp: "Mar 11 20:00", freshness: "2h ago", aligned: null, fresh: true },
-      { source: "GNosis", status: "In Transit", timestamp: "Mar 11 18:00", freshness: "4h ago", aligned: false, fresh: true },
+      { source: "Kuehne+Nagel", status: "In Transit", timestamp: "Mar 11 18:00", freshness: "4h ago", aligned: false, fresh: true },
     ],
     exceptionReason: "Revised ETA will miss plant receiving deadline by 8h — critical assembly parts",
     exceptionTrigger: "Weather-induced ground stop at PVG transfer hub + critical material flag",
@@ -257,7 +257,7 @@ export const SHIPMENTS: Shipment[] = [
     disruptionContext: "Severe thunderstorm and typhoon remnant causing ground stop at Shanghai PVG hub. All outbound cargo flights grounded. Weather expected to clear by Mar 11 18:00 UTC. FedEx rebooking onto next available departure.",
   },
 
-  // Scenario 5: Ocean — Chennai → Houston (Conflicting Sources)
+  // Scenario 5: Ocean — Chennai → Houston (Email-Triggered Happy Path — Agent Auto-Confirmed)
   {
     id: "SHP-50219",
     mode: "Ocean",
@@ -266,40 +266,41 @@ export const SHIPMENTS: Shipment[] = [
     origin: "Chennai, IN",
     destination: "Houston, US",
     plant: "Houston Port Terminal",
-    currentStatus: "Status Conflict — Manual Review Required",
+    currentStatus: "Arrived Houston — Agent Auto-Confirmed ✓",
     plannedETA: "Mar 18, 2025 09:00",
-    revisedETA: "Mar 18, 2025 09:00",
+    revisedETA: "Mar 18, 2025 09:15",
     delayHours: 0,
     exceptionType: "Conflicting Sources",
-    severity: "Medium",
-    lastSignal: "1h ago",
-    lastSignalSource: "Email",
-    recommendedAction: "Manual Review",
-    reasonChips: [{ label: "Low Confidence", type: "confidence" }, { label: "Source Conflict", type: "deviation" }],
-    etaConfidence: 35,
+    severity: "Low",
+    lastSignal: "15m ago",
+    lastSignalSource: "Agent",
+    recommendedAction: "Confirm Arrival & Update OTM",
+    reasonChips: [{ label: "All Sources Aligned", type: "signal" }, { label: "Agent Verified", type: "confidence" }],
+    etaConfidence: 94,
     timeline: [
-      { timestamp: "Mar 08 10:00", event: "Departed Chennai (Ennore Port)", location: "Chennai, IN", source: "GNosis", status: "ok" },
+      { timestamp: "Mar 08 10:00", event: "Departed Chennai (Ennore Port)", location: "Chennai, IN", source: "MSC Portal", status: "ok" },
       { timestamp: "Mar 13 08:00", event: "Transit — Indian Ocean", location: "Indian Ocean", source: "GPS", status: "ok" },
-      { timestamp: "Mar 17 14:00", event: "Email: 'Vessel Arrived Houston'", location: "Houston, US", source: "Email", status: "warning", anomaly: "Forwarder email claims arrival — not confirmed" },
-      { timestamp: "Mar 17 15:00", event: "Carrier Portal: 'In Transit — Gulf of Mexico'", location: "Gulf of Mexico", source: "Carrier Portal", status: "warning", anomaly: "Contradicts email — vessel shows 50nm from port" },
-      { timestamp: "Mar 17 15:05", event: "Conflicting Source Alert", location: "System", source: "Agent", status: "critical", anomaly: "3 sources disagree — low confidence flag raised" },
+      { timestamp: "Mar 17 06:00", event: "Entering Gulf of Mexico", location: "Gulf of Mexico", source: "GPS", status: "ok" },
+      { timestamp: "Mar 18 09:10", event: "Email: 'Vessel Arrived Houston Terminal A3'", location: "Houston, US", source: "Email", status: "info" },
+      { timestamp: "Mar 18 09:12", event: "Agent cross-validated: GPS confirms vessel docked", location: "Houston Port, US", source: "Agent", status: "ok" },
+      { timestamp: "Mar 18 09:14", event: "Agent cross-validated: MSC Portal confirms arrival", location: "Houston Port, US", source: "Agent", status: "ok" },
+      { timestamp: "Mar 18 09:15", event: "All 3 sources aligned — ETA confirmed, OTM auto-synced", location: "System", source: "Agent", status: "agent" },
     ],
     sources: [
-      { source: "GNosis", status: "Approaching Houston", timestamp: "Mar 17 09:00", freshness: "6h ago", aligned: false, fresh: true },
-      { source: "GPS", status: "Vessel — Gulf of Mexico 50nm out", timestamp: "Mar 17 10:00", freshness: "5h ago", aligned: false, fresh: true },
-      { source: "Carrier Portal", status: "In Transit", timestamp: "Mar 17 15:00", freshness: "1h ago", aligned: false, fresh: true },
-      { source: "Email", status: "Arrived Houston (forwarder unconfirmed)", timestamp: "Mar 17 14:00", freshness: "2h ago", aligned: null, fresh: true },
+      { source: "MSC Portal", status: "Arrived — Houston Terminal A3", timestamp: "Mar 18 09:14", freshness: "15m ago", aligned: true, fresh: true },
+      { source: "GPS", status: "Vessel Docked — Houston Port", timestamp: "Mar 18 09:12", freshness: "15m ago", aligned: true, fresh: true },
+      { source: "Email", status: "Vessel Arrived Houston Terminal A3 (forwarder confirmed)", timestamp: "Mar 18 09:10", freshness: "15m ago", aligned: true, fresh: true },
     ],
-    exceptionReason: "Multiple sources provide conflicting status — low confidence triggered",
-    exceptionTrigger: "Forwarder email claims arrival; GPS and portal show vessel 50nm out",
-    likelyCause: "Forwarder email may be premature or reference different voyage; vessel AIS shows Gulf approach",
-    businessImpact: "Cannot confirm ETA — Houston Terminal pre-arrival planning on hold; customs filing at risk",
-    otmStatus: "Needs Review",
-    notificationStatus: "Not Yet Sent",
-    agentSummary: "Shipment SHP-50219 (MSC, Chennai → Houston) has a critical source conflict: a forwarder email claims arrival in Houston, but GPS and carrier portal show vessel is 50nm out in the Gulf of Mexico. Confidence is 35%. Do not update OTM until the conflict is resolved — contact MSC operations to confirm vessel position directly, then update the Houston Terminal on the corrected ETA.",
+    exceptionReason: "Email arrival notification received — agent initiated cross-source validation",
+    exceptionTrigger: "Forwarder email confirmed vessel arrival at 09:10; agent validated against GPS and MSC Portal within 5 minutes",
+    likelyCause: "Standard arrival confirmation flow — email received first, GPS and MSC Portal confirmed within 5 minutes",
+    businessImpact: "No impact — vessel arrived on schedule. Houston Terminal A3 notified. OTM auto-synced by agent.",
+    otmStatus: "Synced",
+    notificationStatus: "Sent",
+    agentSummary: "SHP-50219 (MSC, Chennai → Houston) — Forwarder email arrival notification received at 09:10. Agent cross-validated against GPS (vessel docked at 09:12) and MSC Portal (confirmed at 09:14). All 3 sources aligned. ETA confirmed at Mar 18 09:15 — arrived on schedule. OTM auto-synced. Houston Terminal A3 has been notified of vessel arrival and is scheduling discharge.",
     lane: "MAA→HOU",
-    lat: 24.5,
-    lng: -90.0,
+    lat: 29.7,
+    lng: -95.0,
   },
 
   // Scenario 6: Road — Nhava Sheva Dray to Chicago Plant (Traffic)
@@ -379,7 +380,7 @@ export const SHIPMENTS: Shipment[] = [
     ],
     sources: [
       { source: "Carrier Portal", status: "At DXB Hub — Awaiting Outbound", timestamp: "Mar 12 13:00", freshness: "1h ago", aligned: true, fresh: true },
-      { source: "GNosis", status: "In Transit", timestamp: "Mar 12 10:00", freshness: "4h ago", aligned: false, fresh: true },
+      { source: "Kuehne+Nagel", status: "In Transit", timestamp: "Mar 12 10:00", freshness: "4h ago", aligned: false, fresh: true },
       { source: "Email", status: "No broker update", timestamp: "", freshness: "No update", aligned: null, fresh: false },
     ],
     exceptionReason: "Cargo has dwelled at DXB for 24h without being loaded — threshold exceeded",
@@ -715,7 +716,7 @@ export const SHIPMENT_DOCUMENTS: ShipmentDocSet[] = [
   {
     shipmentId: "SHP-10421",
     docs: [
-      { docType: "Bill of Lading", status: "verified", source: "GNosis", receivedAt: "Mar 05, 09:30" },
+      { docType: "Bill of Lading", status: "verified", source: "CargoSmart", receivedAt: "Mar 05, 09:30" },
       { docType: "Commercial Invoice", status: "verified", source: "Carrier Portal", receivedAt: "Mar 04, 17:00" },
       { docType: "Packing List", status: "verified", source: "Carrier Portal", receivedAt: "Mar 04, 17:05" },
       { docType: "ISF Filing (10+2)", status: "received", source: "UiPath", receivedAt: "Mar 03, 14:00", notes: "Filed — awaiting CBP acknowledgement" },
@@ -726,7 +727,7 @@ export const SHIPMENT_DOCUMENTS: ShipmentDocSet[] = [
   {
     shipmentId: "SHP-20334",
     docs: [
-      { docType: "Bill of Lading", status: "verified", source: "GNosis", receivedAt: "Mar 06, 08:00" },
+      { docType: "Bill of Lading", status: "verified", source: "Flexport", receivedAt: "Mar 06, 08:00" },
       { docType: "Commercial Invoice", status: "received", source: "Carrier Portal", receivedAt: "Mar 06, 09:00" },
       { docType: "Packing List", status: "received", source: "Email", receivedAt: "Mar 06, 09:05" },
       { docType: "ISF Filing (10+2)", status: "verified", source: "UiPath", receivedAt: "Mar 04, 11:00" },
@@ -758,7 +759,7 @@ export const SHIPMENT_DOCUMENTS: ShipmentDocSet[] = [
   {
     shipmentId: "SHP-50219",
     docs: [
-      { docType: "Bill of Lading", status: "verified", source: "GNosis", receivedAt: "Mar 01, 14:00" },
+      { docType: "Bill of Lading", status: "verified", source: "MSC Portal", receivedAt: "Mar 01, 14:00" },
       { docType: "Commercial Invoice", status: "received", source: "Email", receivedAt: "Mar 01, 15:00", notes: "Version mismatch with carrier portal copy — broker to reconcile" },
       { docType: "Packing List", status: "received", source: "Email", receivedAt: "Mar 01, 15:05" },
       { docType: "ISF Filing (10+2)", status: "verified", source: "UiPath", receivedAt: "Feb 28, 10:00" },
@@ -768,7 +769,7 @@ export const SHIPMENT_DOCUMENTS: ShipmentDocSet[] = [
   {
     shipmentId: "SHP-60441",
     docs: [
-      { docType: "Bill of Lading", status: "verified", source: "GNosis", receivedAt: "Mar 07, 13:00" },
+      { docType: "Bill of Lading", status: "verified", source: "Kuehne+Nagel", receivedAt: "Mar 07, 13:00" },
       { docType: "Commercial Invoice", status: "verified", source: "Carrier Portal", receivedAt: "Mar 07, 14:00" },
       { docType: "Packing List", status: "verified", source: "Carrier Portal", receivedAt: "Mar 07, 14:05" },
       { docType: "Certificate of Origin", status: "verified", source: "Email", receivedAt: "Mar 06, 16:00" },

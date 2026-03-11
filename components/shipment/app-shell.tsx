@@ -13,12 +13,14 @@ import { TimelinePage } from "./timeline-page"
 import { EmailInboxPage } from "./email-inbox-page"
 import { EmailSentPage, type SentEmailItem } from "./email-sent-page"
 import { CarrierScorecardPage } from "./carrier-scorecard-page"
+import { TrackingSearchPage } from "./tracking-search-page"
 import { SHIPMENTS, INBOX_EMAILS } from "@/lib/mock-data"
 
 export function AppShell() {
   const [view, setView] = useState<SidebarView>("dashboard")
   const [searchQuery, setSearchQuery] = useState("")
   const [sentEmails, setSentEmails] = useState<SentEmailItem[]>([])
+  const [trackingPreselect, setTrackingPreselect] = useState<string | null>(null)
 
   const exceptionsCount = SHIPMENTS.length
   const unreadInboxCount = INBOX_EMAILS.filter((e) => !e.read).length
@@ -26,6 +28,7 @@ export function AppShell() {
   const handleViewChange = (v: SidebarView) => {
     setView(v)
     setSearchQuery("")
+    if (v !== "tracking-search") setTrackingPreselect(null)
   }
 
   const handleSendNotification = (email: SentEmailItem) => {
@@ -52,6 +55,10 @@ export function AppShell() {
 
         {view === "analytics" && <AnalyticsPage />}
 
+        {view === "tracking-search" && (
+          <TrackingSearchPage preselectedId={trackingPreselect ?? undefined} />
+        )}
+
         {view === "carrier-scorecard" && <CarrierScorecardPage />}
 
         {view === "exceptions" && (
@@ -64,7 +71,14 @@ export function AppShell() {
 
         {view === "timeline" && <TimelinePage />}
 
-        {view === "email-inbox" && <EmailInboxPage />}
+        {view === "email-inbox" && (
+          <EmailInboxPage
+            onOpenTracking={(id) => {
+              setTrackingPreselect(id)
+              handleViewChange("tracking-search")
+            }}
+          />
+        )}
 
         {view === "email-sent" && <EmailSentPage dynamicEmails={sentEmails} />}
 

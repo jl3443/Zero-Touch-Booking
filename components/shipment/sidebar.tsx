@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 import {
-  LayoutDashboard, BarChart2, Ship, AlertTriangle, FileText,
+  LayoutDashboard, BarChart2, Ship, AlertTriangle,
   CloudLightning, GitBranch, Mail, Inbox, Send, Brain,
   ChevronDown, ChevronRight, FileStack, User, Award, ScanSearch,
 } from "lucide-react"
@@ -94,12 +94,6 @@ export function Sidebar({ view, onViewChange, exceptionsCount = 7, unreadInboxCo
               active={view === "exceptions"}
               onClick={() => onViewChange("exceptions")}
               badge={exceptionsCount}
-            />
-            <NavSubItem
-              label="Supporting Documents"
-              icon={<FileText size={13} />}
-              active={view === "documents"}
-              onClick={() => onViewChange("documents")}
             />
             <NavSubItem
               label="Weather / Traffic"

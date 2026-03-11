@@ -9,6 +9,7 @@ import {
   Radio, PhoneCall, MapPin, TrendingUp, ChevronRight, Zap,
 } from "lucide-react"
 import type { SentEmailItem } from "./email-sent-page"
+import { ShipmentDrawer } from "./shipment-drawer"
 
 type SortBy = "severity" | "delay" | "cutoff"
 
@@ -180,9 +181,10 @@ function getTimestamp(): string {
 
 interface ExceptionWorkbenchProps {
   onSendNotification?: (email: SentEmailItem) => void
+  onOpenWeather?: (shipmentId: string) => void
 }
 
-export function ExceptionWorkbench({ onSendNotification }: ExceptionWorkbenchProps) {
+export function ExceptionWorkbench({ onSendNotification, onOpenWeather }: ExceptionWorkbenchProps) {
   const [modeFilter, setModeFilter] = useState<TransportMode | "All">("All")
   const [severityFilter, setSeverityFilter] = useState<Severity | "All">("All")
   const [exceptionFilter, setExceptionFilter] = useState<ExceptionType | "All">("All")
@@ -194,6 +196,7 @@ export function ExceptionWorkbench({ onSendNotification }: ExceptionWorkbenchPro
   const [composeType, setComposeType] = useState<"destination" | "carrier" | "escalation">("destination")
   const [routeShipment, setRouteShipment] = useState<Shipment | null>(null)
   const [escalateShipment, setEscalateShipment] = useState<Shipment | null>(null)
+  const [drawerShipment, setDrawerShipment] = useState<Shipment | null>(null)
 
   const getActions = (id: string): WorkbenchCardActions =>
     actions[id] ?? { ...DEFAULT_ACTIONS }
@@ -383,6 +386,7 @@ Export Coordination Team`,
                   onEscalate={() => openEscalate(s)}
                   onReviewRoute={() => setRouteShipment(s)}
                   onConfirmETA={() => handleConfirmETA(s)}
+                  onViewDetail={() => setDrawerShipment(s)}
                 />
               )
             })}
@@ -418,6 +422,13 @@ Export Coordination Team`,
           onApprove={(option) => handleApproveReroute(routeShipment, option)}
         />
       )}
+
+      {/* Shipment Detail Drawer */}
+      <ShipmentDrawer
+        shipment={drawerShipment}
+        onClose={() => setDrawerShipment(null)}
+        onOpenWeather={onOpenWeather}
+      />
     </div>
   )
 }
@@ -738,6 +749,7 @@ interface ExceptionCardProps {
   onEscalate: () => void
   onReviewRoute: () => void
   onConfirmETA: () => void
+  onViewDetail: () => void
 }
 
 function ExceptionCard({
@@ -750,6 +762,7 @@ function ExceptionCard({
   onEscalate,
   onReviewRoute,
   onConfirmETA,
+  onViewDetail,
 }: ExceptionCardProps) {
   const allDone = actions.acknowledged && actions.notified && actions.otmUpdated
   const aisData = AIS_RECOVERY[s.id]
@@ -772,7 +785,12 @@ function ExceptionCard({
           <div className="flex items-center gap-2 flex-wrap mb-2">
             <SeverityBadge severity={s.severity} />
             <ModeBadge mode={s.mode} />
-            <span className="font-mono font-bold text-blue-700 text-sm">{s.id}</span>
+            <button
+              onClick={onViewDetail}
+              className="font-mono font-bold text-blue-700 text-sm hover:underline hover:text-blue-900 transition-colors"
+            >
+              {s.id}
+            </button>
             <ExceptionBadge type={s.exceptionType} />
 
             {/* AIS Recovery badge */}

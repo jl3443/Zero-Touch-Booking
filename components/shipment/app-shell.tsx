@@ -21,6 +21,7 @@ export function AppShell() {
   const [searchQuery, setSearchQuery] = useState("")
   const [sentEmails, setSentEmails] = useState<SentEmailItem[]>([])
   const [trackingPreselect, setTrackingPreselect] = useState<string | null>(null)
+  const [weatherHighlightId, setWeatherHighlightId] = useState<string | null>(null)
 
   const exceptionsCount = SHIPMENTS.length
   const unreadInboxCount = INBOX_EMAILS.filter((e) => !e.read).length
@@ -29,10 +30,17 @@ export function AppShell() {
     setView(v)
     setSearchQuery("")
     if (v !== "tracking-search") setTrackingPreselect(null)
+    if (v !== "weather-traffic") setWeatherHighlightId(null)
   }
 
   const handleSendNotification = (email: SentEmailItem) => {
     setSentEmails((prev) => [email, ...prev])
+  }
+
+  const handleOpenWeather = (shipmentId: string) => {
+    setWeatherHighlightId(shipmentId)
+    setView("weather-traffic")
+    setSearchQuery("")
   }
 
   return (
@@ -50,7 +58,11 @@ export function AppShell() {
         <TopBar onSearch={setSearchQuery} />
 
         {view === "dashboard" && (
-          <Dashboard searchQuery={searchQuery} onViewChange={handleViewChange} />
+          <Dashboard
+            searchQuery={searchQuery}
+            onViewChange={handleViewChange}
+            onOpenWeather={handleOpenWeather}
+          />
         )}
 
         {view === "analytics" && <AnalyticsPage />}
@@ -62,12 +74,17 @@ export function AppShell() {
         {view === "carrier-scorecard" && <CarrierScorecardPage />}
 
         {view === "exceptions" && (
-          <ExceptionWorkbench onSendNotification={handleSendNotification} />
+          <ExceptionWorkbench
+            onSendNotification={handleSendNotification}
+            onOpenWeather={handleOpenWeather}
+          />
         )}
 
         {view === "documents" && <DocumentsPage />}
 
-        {view === "weather-traffic" && <WeatherTrafficPage />}
+        {view === "weather-traffic" && (
+          <WeatherTrafficPage highlightShipmentId={weatherHighlightId ?? undefined} />
+        )}
 
         {view === "timeline" && <TimelinePage />}
 

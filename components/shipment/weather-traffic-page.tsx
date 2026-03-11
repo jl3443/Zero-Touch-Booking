@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useRef } from "react"
 import { SHIPMENTS, PORT_STATUS, type CongestionLevel } from "@/lib/mock-data"
 import { ModeBadge, SeverityBadge } from "./shared"
 import { cn } from "@/lib/utils"
@@ -83,7 +84,19 @@ const SEV_DOT: Record<string, string> = {
   Medium: "bg-yellow-400",
 }
 
-export function WeatherTrafficPage() {
+interface WeatherTrafficPageProps {
+  highlightShipmentId?: string
+}
+
+export function WeatherTrafficPage({ highlightShipmentId }: WeatherTrafficPageProps) {
+  const highlightRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (highlightShipmentId && highlightRef.current) {
+      highlightRef.current.scrollIntoView({ behavior: "smooth", block: "center" })
+    }
+  }, [highlightShipmentId])
+
   return (
     <div className="flex-1 overflow-y-auto bg-[#F8F9FA]">
       <div className="p-6 max-w-[1100px] mx-auto space-y-4">
@@ -180,12 +193,27 @@ export function WeatherTrafficPage() {
             {activeDisruptions.map((s) => {
               const exType = s.exceptionType as keyof typeof DISRUPTION_TYPES
               const cfg = DISRUPTION_TYPES[exType]
+              const isHighlighted = s.id === highlightShipmentId
               return (
-                <div key={s.id} className="bg-white rounded-xl border border-gray-200 p-4">
+                <div
+                  key={s.id}
+                  ref={isHighlighted ? highlightRef : null}
+                  className={cn(
+                    "bg-white rounded-xl border p-4 transition-all duration-500",
+                    isHighlighted
+                      ? "border-blue-400 ring-2 ring-blue-200 shadow-md"
+                      : "border-gray-200"
+                  )}
+                >
                   <div className="flex items-start gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
                         <span className="font-mono font-bold text-blue-700 text-sm">{s.id}</span>
+                        {isHighlighted && (
+                          <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5">
+                            ← Navigated from shipment detail
+                          </span>
+                        )}
                         <ModeBadge mode={s.mode} />
                         <SeverityBadge severity={s.severity} />
                         {cfg && (

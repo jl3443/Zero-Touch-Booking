@@ -27,9 +27,18 @@ interface ActionState {
 interface ShipmentDrawerProps {
   shipment: Shipment | null
   onClose: () => void
+  onOpenWeather?: (shipmentId: string) => void
 }
 
-export function ShipmentDrawer({ shipment, onClose }: ShipmentDrawerProps) {
+const DATA_SOURCES = [
+  "Carrier Portal",
+  "Weather API",
+  "AIS Data Feed",
+  "OTM System",
+  "Customs Broker",
+]
+
+export function ShipmentDrawer({ shipment, onClose, onOpenWeather }: ShipmentDrawerProps) {
   const [activeTab, setActiveTab] = useState<DrawerTab>("overview")
   const [actions, setActions] = useState<ActionState>({
     etaApproved: false,
@@ -40,6 +49,22 @@ export function ShipmentDrawer({ shipment, onClose }: ShipmentDrawerProps) {
   })
   const [syncing, setSyncing] = useState(false)
   const [showEmailModal, setShowEmailModal] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadingSource, setLoadingSource] = useState(0)
+
+  useEffect(() => {
+    setIsLoading(true)
+    setLoadingSource(0)
+    setActiveTab("overview")
+    const tick = setInterval(() => {
+      setLoadingSource((prev) => prev + 1)
+    }, 380)
+    const done = setTimeout(() => {
+      clearInterval(tick)
+      setIsLoading(false)
+    }, 2000)
+    return () => { clearInterval(tick); clearTimeout(done) }
+  }, [shipment?.id])
 
   if (!shipment) return null
 
@@ -128,10 +153,43 @@ export function ShipmentDrawer({ shipment, onClose }: ShipmentDrawerProps) {
           ))}
         </div>
 
+        {/* Loading overlay */}
+        {isLoading && (
+          <div className="flex-1 flex flex-col items-center justify-center gap-5 bg-white">
+            <div className="flex items-center gap-3">
+              <Brain size={22} className="text-indigo-500 animate-pulse" />
+              <div>
+                <p className="text-sm font-semibold text-gray-800">Agent pulling real-time data…</p>
+                <p className="text-[11px] text-gray-400 mt-0.5">Aggregating signals from multiple sources</p>
+              </div>
+            </div>
+            <div className="w-72 space-y-2">
+              {DATA_SOURCES.map((src, i) => (
+                <div key={src} className="flex items-center gap-2">
+                  <div className={cn(
+                    "w-2 h-2 rounded-full shrink-0 transition-colors duration-300",
+                    i < loadingSource ? "bg-green-500" : i === loadingSource ? "bg-indigo-400 animate-pulse" : "bg-gray-200"
+                  )} />
+                  <span className={cn(
+                    "text-xs transition-colors duration-300",
+                    i < loadingSource ? "text-green-700 font-medium" : i === loadingSource ? "text-indigo-600 font-semibold" : "text-gray-300"
+                  )}>{src}</span>
+                  {i < loadingSource && (
+                    <Check size={10} className="text-green-500 ml-auto" />
+                  )}
+                  {i === loadingSource && (
+                    <Loader2 size={10} className="text-indigo-400 ml-auto animate-spin" />
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Tab content */}
-        <div className="flex-1 overflow-y-auto">
+        <div className={cn("flex-1 overflow-y-auto", isLoading && "hidden")}>
           {activeTab === "overview" && (
-            <OverviewTab shipment={shipment} actions={actions} onAction={handleAction} />
+            <OverviewTab shipment={shipment} actions={actions} onAction={handleAction} onOpenWeather={onOpenWeather} />
           )}
           {activeTab === "signals" && (
             <SignalsTab shipment={shipment} />
@@ -164,7 +222,7 @@ export function ShipmentDrawer({ shipment, onClose }: ShipmentDrawerProps) {
 }
 
 // ─── Overview Tab ──────────────────────────────────────────────────────────────
-function OverviewTab({ shipment, actions, onAction }: { shipment: Shipment; actions: ActionState; onAction: (k: keyof ActionState) => void }) {
+function OverviewTab({ shipment, actions, onAction, onOpenWeather }: { shipment: Shipment; actions: ActionState; onAction: (k: keyof ActionState) => void; onOpenWeather?: (id: string) => void }) {
   const [summaryThinking, setSummaryThinking] = useState(true)
   useEffect(() => {
     const t = setTimeout(() => setSummaryThinking(false), 1600)
@@ -215,6 +273,14 @@ function OverviewTab({ shipment, actions, onAction }: { shipment: Shipment; acti
           <div className="mt-2 flex items-center gap-2">
             <ReasonChips chips={shipment.reasonChips} />
           </div>
+          {onOpenWeather && (shipment.exceptionType === "Weather Disruption" || shipment.exceptionType === "Traffic Disruption") && (
+            <button
+              onClick={() => onOpenWeather(shipment.id)}
+              className="mt-3 flex items-center gap-1.5 text-[11px] font-semibold text-blue-700 hover:text-blue-900 transition-colors"
+            >
+              <ChevronRight size={12} /> View full disruption details in Weather / Traffic
+            </button>
+          )}
         </div>
       )}
 

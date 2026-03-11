@@ -14,6 +14,7 @@ import { Brain } from "lucide-react"
 interface DashboardProps {
   searchQuery: string
   onViewChange?: (view: SidebarView) => void
+  onOpenWeather?: (shipmentId: string) => void
 }
 
 function ThinkingDots() {
@@ -30,7 +31,7 @@ function ThinkingDots() {
   )
 }
 
-export function Dashboard({ searchQuery, onViewChange }: DashboardProps) {
+export function Dashboard({ searchQuery, onViewChange, onOpenWeather }: DashboardProps) {
   const [activeFilter, setActiveFilter] = useState<string | null>(null)
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null)
   const [analysisThinking, setAnalysisThinking] = useState(true)
@@ -107,6 +108,7 @@ export function Dashboard({ searchQuery, onViewChange }: DashboardProps) {
         <ShipmentDrawer
           shipment={selectedShipment}
           onClose={() => setSelectedShipment(null)}
+          onOpenWeather={onOpenWeather}
         />
       )}
     </div>

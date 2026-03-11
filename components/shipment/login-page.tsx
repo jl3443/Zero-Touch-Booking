@@ -191,7 +191,6 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                       <p className="text-sm font-semibold text-gray-800">{p.role}</p>
                       <p className="text-[11px] text-gray-400 mt-0.5 truncate">{p.email}</p>
                     </div>
-                    <span className="text-[10px] font-mono text-gray-300 shrink-0">Demo@2024</span>
                   </div>
                 </button>
               ))}

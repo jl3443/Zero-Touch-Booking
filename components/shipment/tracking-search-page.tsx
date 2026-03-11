@@ -21,7 +21,7 @@ interface TrackingSearchPageProps {
 type UploadStage = "idle" | "file-ready" | "analyzing" | "done"
 
 const ANALYSIS_STEPS = [
-  { label: "Reading OTM document", detail: "Parsing order references and shipment fields…" },
+  { label: "Reading shipping document", detail: "Parsing order references and shipment fields…" },
   { label: "Extracting identifiers", detail: "Matching PO numbers, carrier refs, booking codes…" },
   { label: "Cross-referencing systems", detail: "Querying OTM, FedEx Portal, CBP Pre-filing, GPS…" },
 ]
@@ -149,7 +149,7 @@ export function TrackingSearchPage({ preselectedId, onSendNotification }: Tracki
           {/* ── OTM Upload divider ── */}
           <div className="flex items-center gap-3 my-5">
             <div className="flex-1 h-px bg-gray-100" />
-            <span className="text-[11px] text-gray-400 font-medium uppercase tracking-wider">or import from OTM</span>
+            <span className="text-[11px] text-gray-400 font-medium uppercase tracking-wider">or upload shipping document</span>
             <div className="flex-1 h-px bg-gray-100" />
           </div>
 
@@ -173,8 +173,8 @@ export function TrackingSearchPage({ preselectedId, onSendNotification }: Tracki
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f) }}
               />
               <Upload size={22} className="mx-auto text-gray-300 mb-2" />
-              <p className="text-sm font-medium text-gray-600">Drop OTM shipment document here</p>
-              <p className="text-[11px] text-gray-400 mt-1">Supports OTM export PDF · XML · CSV</p>
+              <p className="text-sm font-medium text-gray-600">Drop shipping document here</p>
+              <p className="text-[11px] text-gray-400 mt-1">Supports PDF · XML · CSV</p>
               <button className="mt-3 px-4 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors">
                 Browse File
               </button>
@@ -190,7 +190,7 @@ export function TrackingSearchPage({ preselectedId, onSendNotification }: Tracki
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-amber-900">{uploadedFileName}</p>
-                    <p className="text-[11px] text-amber-700 mt-0.5">OTM document detected — AI analysis ready</p>
+                    <p className="text-[11px] text-amber-700 mt-0.5">Shipping document detected — AI analysis ready</p>
                   </div>
                 </div>
                 <button onClick={handleReset} className="text-gray-400 hover:text-gray-600 shrink-0"><X size={14} /></button>
@@ -214,7 +214,7 @@ export function TrackingSearchPage({ preselectedId, onSendNotification }: Tracki
             <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Brain size={14} className="text-indigo-600 animate-pulse" />
-                <span className="text-xs font-semibold text-indigo-700">Agent analyzing OTM document</span>
+                <span className="text-xs font-semibold text-indigo-700">Agent analyzing shipping document</span>
                 <ThinkingDots />
               </div>
               <div className="space-y-2">
@@ -252,7 +252,7 @@ export function TrackingSearchPage({ preselectedId, onSendNotification }: Tracki
                     <Check size={14} className="text-green-700" />
                     <span className="text-xs font-bold text-green-800 uppercase tracking-wider">AI Analysis Complete</span>
                   </div>
-                  <p className="text-[11px] text-green-700">OTM document <span className="font-mono font-semibold">{uploadedFileName}</span> processed successfully.</p>
+                  <p className="text-[11px] text-green-700">Shipping document <span className="font-mono font-semibold">{uploadedFileName}</span> processed successfully.</p>
                 </div>
                 <button onClick={handleReset} className="text-gray-400 hover:text-gray-600 shrink-0"><X size={13} /></button>
               </div>

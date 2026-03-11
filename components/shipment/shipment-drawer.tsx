@@ -385,8 +385,8 @@ function OverviewTab({ shipment, actions, onAction, onOpenWeather }: { shipment:
       <div>
         <h4 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-3">Tracking Timeline</h4>
         <div className="space-y-0">
-          {/* Pending ETA entry — shown until ETA is approved */}
-          {!actions.etaApproved && (
+          {/* Pending ETA entry — shown until ETA is approved, only when there's a delay to confirm */}
+          {!actions.etaApproved && shipment.delayHours > 0 && (
             <div className="flex gap-3">
               <div className="flex flex-col items-center">
                 <div className="w-5 h-5 rounded-full bg-gray-900 border-2 border-gray-700 flex items-center justify-center">
@@ -497,45 +497,47 @@ function OverviewTab({ shipment, actions, onAction, onOpenWeather }: { shipment:
         )}
       </div>
 
-      {/* Action Buttons */}
-      <div className="rounded-lg border border-gray-200 p-4">
-        <h4 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-3">Recommended Actions</h4>
-        <div className="flex flex-wrap gap-2">
-          <ActionButton
-            label={actions.etaApproved ? "ETA Approved" : "Approve ETA Update"}
-            variant="primary"
-            done={actions.etaApproved}
-            icon={<Check size={12} />}
-            onClick={() => onAction("etaApproved")}
-          />
-          <ActionButton
-            label={actions.notified ? "Team Notified" : "Notify Destination Team"}
-            variant="primary"
-            done={actions.notified}
-            icon={<Send size={12} />}
-            onClick={() => onAction("notified")}
-          />
-          <ActionButton
-            label={actions.escalated ? "Escalated" : "Escalate"}
-            variant="secondary"
-            done={actions.escalated}
-            icon={<AlertOctagon size={12} />}
-            onClick={() => onAction("escalated")}
-          />
-          <ActionButton
-            label="Override ETA"
-            variant="secondary"
-            icon={<RotateCcw size={12} />}
-            onClick={() => {}}
-          />
-          <ActionButton
-            label="Hold for Review"
-            variant="tertiary"
-            icon={<PauseCircle size={12} />}
-            onClick={() => {}}
-          />
+      {/* Action Buttons — only shown when there's an active exception/delay to resolve */}
+      {shipment.delayHours > 0 && (
+        <div className="rounded-lg border border-gray-200 p-4">
+          <h4 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-3">Recommended Actions</h4>
+          <div className="flex flex-wrap gap-2">
+            <ActionButton
+              label={actions.etaApproved ? "ETA Approved" : "Approve ETA Update"}
+              variant="primary"
+              done={actions.etaApproved}
+              icon={<Check size={12} />}
+              onClick={() => onAction("etaApproved")}
+            />
+            <ActionButton
+              label={actions.notified ? "Team Notified" : "Notify Destination Team"}
+              variant="primary"
+              done={actions.notified}
+              icon={<Send size={12} />}
+              onClick={() => onAction("notified")}
+            />
+            <ActionButton
+              label={actions.escalated ? "Escalated" : "Escalate"}
+              variant="secondary"
+              done={actions.escalated}
+              icon={<AlertOctagon size={12} />}
+              onClick={() => onAction("escalated")}
+            />
+            <ActionButton
+              label="Override ETA"
+              variant="secondary"
+              icon={<RotateCcw size={12} />}
+              onClick={() => {}}
+            />
+            <ActionButton
+              label="Hold for Review"
+              variant="tertiary"
+              icon={<PauseCircle size={12} />}
+              onClick={() => {}}
+            />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

@@ -1,6 +1,6 @@
-# ETA Control Tower — Operations Readiness Demo
+# Booking Automation — Zero Touch Agent Demo
 
-AI-powered shipment tracking control tower for multi-modal logistics (ocean, air, road). Built to demonstrate real-time ETA management, exception handling, and intelligent alerting across a supply chain portfolio.
+AI-powered freight booking automation platform for multi-modal logistics (ocean, air, road). Built to demonstrate autonomous booking workflows, intelligent exception handling, carrier selection, and human-in-the-loop escalation across a supply chain portfolio.
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
@@ -11,17 +11,18 @@ AI-powered shipment tracking control tower for multi-modal logistics (ocean, air
 
 ## Overview
 
-A full-featured logistics visibility platform that tracks shipments across carriers, modes, and geographies. The system aggregates signals from multiple sources (carrier portals, GPS/AIS, weather APIs, customs systems) and uses AI agents to detect anomalies, reconcile conflicting data, and recommend corrective actions.
+A full-featured logistics booking automation platform that manages freight bookings across carriers, modes, and geographies. The system integrates with carrier portals (Maersk, MSC, Hapag-Lloyd, CMA-CGM), SAP TM, and uses AI agents to autonomously execute bookings, detect exceptions, reconcile multi-source signals, and recommend corrective actions when human intervention is needed.
 
 ### Key Capabilities
 
-- **Multi-source signal reconciliation** — Compare ETA data from 15+ sources (CargoSmart, Maersk Portal, GPS/AIS, Weather API, etc.) with confidence scoring and freshness tracking
-- **AI agent automation** — Proactive anomaly detection, ETA recalculation, carrier notification drafting, and escalation recommendations
-- **Exception workbench** — Structured resolution workflows: acknowledge → notify → sync OTM → escalate, with one-click email composition and AI-powered phone escalation
-- **Portfolio analytics** — Delay by carrier, mode split, exception distribution, carrier scorecards, lane performance trends
-- **Interactive tracking map** — Leaflet-based map with shipment pin locations and route visualization
+- **Autonomous booking workflows** — 8-step pipeline from SAP requirement intake through carrier selection, portal login, booking submission, document upload, confirmation, and stakeholder notification
+- **AI agent exception handling** — Detect capacity shortages, portal failures, rate mismatches, missing SAP fields, carrier rejections, and expired credentials with recommended resolution paths
+- **Multi-source signal reconciliation** — Compare data from 14 sources (SAP TM, OTM, carrier portals, RPA Bot, EDI, API Gateway, etc.) with freshness tracking and alignment status
+- **Carrier selection intelligence** — Rate comparison, SLA scoring, capacity availability, contract vs spot pricing, and lane performance analytics
+- **Exception workbench** — Structured resolution workflows: approve carrier override, authorize spot booking, complete missing fields, retry portal, reroute via alternate lanes
+- **Portfolio analytics** — Booking success rate, zero-touch rate, exception distribution, carrier performance, lane trends
 - **Email management** — Inbox with AI-powered shipment reference extraction, sent folder, tagged messages (carrier, customs, weather, compliance, advisory)
-- **Natural language AI chat** — Query shipment status, delays, risks, and weather impacts in English or Chinese
+- **Natural language AI chat** — Query booking status, exceptions, carrier options, and lane performance in English or Chinese
 
 ---
 
@@ -42,46 +43,51 @@ A full-featured logistics visibility platform that tracks shipments across carri
 
 ## Pages & Features
 
-### Portfolio
+### Overview
 
 | Page | Description |
 |------|-------------|
-| **Dashboard** | KPI cards, AI corridor analysis, shipment table, exception distribution, D&D risk panel, mini map |
-| **Analytics** | Delay-by-carrier charts, mode split, severity breakdown, agent action timeline |
-| **Carrier Scorecards** | Performance ratings (Preferred / Monitor / Caution), KPI trends, delivery metrics |
-| **Track Shipment** | Search and filter shipments, real-time tracking lookup |
+| **Dashboard** | KPI cards (bookings, exceptions, zero-touch rate), AI corridor analysis, booking table, exception distribution, mini map, portal health |
+| **Analytics** | Booking success charts, carrier performance, exception trends, agent action timeline, lane utilization |
 
-### Shipment Operations
+### Exception Workflow
 
 | Page | Description |
 |------|-------------|
-| **Exception Workbench** | Per-shipment action cards with multi-step resolution workflows and resolve tracking |
-| **Weather / Traffic** | Weather disruption visualization, port congestion status, impact zones |
-| **Timeline** | Full journey timeline with multi-source signal attribution |
+| **Exception Workbench** | Per-booking exception cards with multi-step resolution: carrier override approval, spot booking authorization, missing field completion, portal retry, reroute options |
+| **Portal Status** | Carrier portal health (Online / Degraded / Offline), API connectivity, weather disruptions, port congestion |
+| **Booking Timeline** | Full booking lifecycle timeline with multi-source event attribution (SAP TM, carrier portals, RPA Bot, Agent, etc.) |
+
+### Booking Operations
+
+| Page | Description |
+|------|-------------|
+| **Search Bookings** | Search and filter bookings by status, carrier, lane, mode, severity |
+| **Carrier Selection** | Carrier scorecards with performance ratings (Preferred / Monitor / Caution), KPI trends, contract rates, SLA scores |
 | **Documents** | Shipping document tracking (BOL, commercial invoice, packing list, certificate of origin) |
 
 ### Communication
 
 | Page | Description |
 |------|-------------|
-| **Email Inbox** | Tagged inbox with AI analysis to auto-extract shipment references from unregistered emails |
+| **Email Inbox** | Tagged inbox with AI analysis to auto-extract booking references from unregistered emails |
 | **Email Sent** | History of sent notifications and escalations |
 
 ### Intelligence
 
 | Feature | Description |
 |---------|-------------|
-| **AI Chat Panel** | Natural language queries about shipments, delays, weather, customs holds |
-| **Agent Activity Log** | Real-time feed of AI agent actions (detect, recalculate, notify, flag, recommend, sync) |
+| **AI Chat Panel** | Natural language queries about bookings, exceptions, carrier capacity, lane performance |
+| **Agent Activity Log** | Real-time feed of AI agent actions (detect, book, retry, flag, recommend, escalate, sync) |
 
 ---
 
-## Shipment Drawer
+## Booking Drawer
 
-Click any shipment to open a detail drawer with three tabs:
+Click any booking to open a detail drawer with three tabs:
 
-- **Overview** — ETA confidence, delay summary, AI agent analysis, recommended actions (approve ETA, notify team, escalate with AI call, override)
-- **Signals** — Multi-source data comparison table with freshness, alignment status, and reconciliation
+- **Overview** — 8-step workflow progress, booking status, AI agent summary, carrier options with rate/SLA comparison, recommended actions (approve, override, reroute, escalate)
+- **Signals** — Multi-source data comparison table with freshness, alignment status, and reconciliation across 14 signal sources
 - **Shipping Document** — OTM sync status, document upload with AI extraction, receiver notification workflow
 
 ---
@@ -102,7 +108,7 @@ pnpm build
 pnpm start
 ```
 
-Open [http://localhost:3000](http://localhost:3000) — select a persona (Router or Shipment Coordinator) to enter the dashboard.
+Open [http://localhost:3000](http://localhost:3000) — select a persona (Router or Shipment Planner) to enter the dashboard.
 
 ---
 
@@ -112,38 +118,40 @@ Open [http://localhost:3000](http://localhost:3000) — select a persona (Router
 app/
 ├── page.tsx                    # Entry point (login → app shell)
 ├── layout.tsx                  # Root layout, fonts, metadata
-└── api/send-email/route.ts     # Email API endpoint
+└── api/send-email/route.ts     # Email API endpoint (nodemailer + Gmail SMTP)
 
 components/shipment/            # 26 feature components
-├── app-shell.tsx               # Main layout + state management
+├── app-shell.tsx               # Main layout + state management + view routing
 ├── sidebar.tsx                 # Navigation with dynamic badges
 ├── top-bar.tsx                 # Search, AI toggle, back nav
-├── dashboard.tsx               # Portfolio dashboard
+├── login-page.tsx              # Persona selection (Router / Shipment Planner)
+├── dashboard.tsx               # Portfolio dashboard with KPIs
 ├── kpi-cards.tsx               # Compact KPI row
-├── shipment-table.tsx          # Sortable shipment list
-├── shipment-drawer.tsx         # Detail drawer (Overview/Signals/OTM)
+├── shipment-table.tsx          # Sortable booking list
+├── shipment-drawer.tsx         # Detail drawer (Overview/Signals/Documents)
 ├── exception-workbench.tsx     # Exception resolution workflows
 ├── exception-panels.tsx        # Distribution chart + D&D risk
 ├── analytics-page.tsx          # Charts and metrics
 ├── carrier-scorecard-page.tsx  # Carrier performance ratings
-├── tracking-search-page.tsx    # Shipment search
+├── tracking-search-page.tsx    # Booking search
 ├── search-results-page.tsx     # Global search results
-├── weather-traffic-page.tsx    # Weather/traffic disruptions
-├── timeline-page.tsx           # Journey timeline
+├── weather-traffic-page.tsx    # Portal status + weather disruptions
+├── timeline-page.tsx           # Booking lifecycle timeline
 ├── documents-page.tsx          # Document tracking
 ├── email-inbox-page.tsx        # Email inbox + AI analysis
 ├── email-sent-page.tsx         # Sent email history
 ├── email-composer.tsx          # Email drafting
 ├── agent-activity-log.tsx      # AI agent feed
 ├── ai-chat-panel.tsx           # Natural language chat
-├── mini-map.tsx                # Leaflet map
-├── login-page.tsx              # Persona selection
+├── mini-map.tsx                # Leaflet map (dashboard)
+├── leaflet-map.tsx             # Full interactive map
+├── lane-insight-banner.tsx     # Lane performance insights
 └── shared.tsx                  # Reusable badges + chips
 
-components/ui/                  # ~50 shadcn/ui primitives
+components/ui/                  # ~56 shadcn/ui primitives
 
 lib/
-├── mock-data.ts                # All mock data (shipments, emails, carriers, etc.)
+├── mock-data.ts                # All mock data (bookings, emails, carriers, etc.)
 └── utils.ts                    # Utility functions
 ```
 
@@ -151,27 +159,46 @@ lib/
 
 ## Mock Data
 
-The app runs entirely on client-side mock data — no external APIs required. The dataset includes:
+The app runs entirely on client-side mock data — no external APIs required (except optional email sending via Gmail SMTP). The dataset includes:
 
-- **7 shipments** across ocean, air, and road with full timelines, multi-source signals, and exception scenarios
+- **14 bookings** across ocean, air, and road with full 8-step workflow progression, multi-source signals, and exception scenarios
 - **20+ inbox emails** tagged by category (carrier, customs, weather, compliance, advisory, agent)
-- **7 carrier scorecards** with performance metrics
+- **7 carrier scorecards** with performance metrics and contract rates
 - **20+ agent activity logs** with action reasoning
-- **Port congestion data**, lane performance, D&D risk scores, reroute options with AIS coordinates
+- **Frequent routes**, lane performance data, carrier options with rate/SLA scoring
 
 ---
 
 ## Demo Scenarios
 
-| Shipment | Mode | Route | Exception |
-|----------|------|-------|-----------|
-| SHP-10421 | Ocean (COSCO) | Shanghai → Los Angeles | Port congestion at San Pedro Bay |
-| SHP-20334 | Air (DHL) | Shenzhen → Chicago | Customs hold at ORD |
-| SHP-30188 | Ocean (Maersk) | Mumbai → Rotterdam | Missing AIS signal |
-| SHP-40672 | Air (FedEx) | Guangzhou → Detroit | Weather diversion (critical material) |
-| SHP-50219 | Ocean (MSC) | Busan → Seattle | Long dwell at transshipment |
-| SHP-60441 | Road | Los Angeles → Chicago | Traffic disruption on I-40 |
-| SHP-88442 | Air | Pre-shipment | Awaiting departure |
+### Exception Bookings
+
+| Booking | Mode | Route | Exception | Severity |
+|---------|------|-------|-----------|----------|
+| BKG-50219 | Ocean (Maersk) | Chennai → Houston | Carrier Rejection — vessel capacity exhausted | Critical |
+| BKG-30188 | Ocean | Mumbai → Rotterdam | Missing Allocation — all carriers full | High |
+| BKG-60441 | Road (CMA-CGM) | Memphis → Chicago | Portal Unavailable — API timeout | High |
+| BKG-70991 | Ocean (CMA-CGM) | Mumbai → Los Angeles | Rate Mismatch — spot 19% above contract | High |
+| BKG-92410 | Ocean (CMA-CGM) | Mumbai → Los Angeles | Credentials Expired — portal session expired | High |
+| BKG-88442 | Ocean (Hapag-Lloyd) | Hong Kong → Rotterdam | Missing Booking Fields — SAP data incomplete | Medium |
+
+### Approval Bookings
+
+| Booking | Mode | Route | Approval Type |
+|---------|------|-------|---------------|
+| BKG-40672 | Road (Hapag-Lloyd) | Toronto → Detroit | Carrier Override — AI pick vs historical preference |
+
+### Active / Completed Bookings
+
+| Booking | Mode | Route | Status |
+|---------|------|-------|--------|
+| BKG-10421 | Ocean (Maersk) | Shanghai → Los Angeles | Confirmed |
+| BKG-91204 | Ocean (Maersk) | Shanghai → Los Angeles | Confirmed |
+| BKG-91003 | Road (FedEx) | Memphis → Chicago | Confirmed |
+| BKG-93001 | Road (XPO) | Memphis → Chicago | Notified |
+| BKG-92015 | Ocean (MSC) | Shenzhen → Chicago | Docs Uploaded |
+| BKG-20334 | Ocean (MSC) | Shenzhen → Chicago | In Progress |
+| BKG-91587 | Road (DHL) | Toronto → Detroit | In Progress |
 
 ---
 

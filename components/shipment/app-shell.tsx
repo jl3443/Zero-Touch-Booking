@@ -5,7 +5,7 @@ import { Sidebar, type SidebarView } from "./sidebar"
 import { TopBar } from "./top-bar"
 import { Dashboard } from "./dashboard"
 import { ExceptionWorkbench } from "./exception-workbench"
-import { AgentActivityLog } from "./agent-activity-log"
+import { AgentActivityLog, type DynamicActivity } from "./agent-activity-log"
 import { AnalyticsPage } from "./analytics-page"
 import { DocumentsPage } from "./documents-page"
 import { WeatherTrafficPage } from "./weather-traffic-page"
@@ -16,7 +16,7 @@ import { CarrierScorecardPage } from "./carrier-scorecard-page"
 import { TrackingSearchPage } from "./tracking-search-page"
 import { SearchResultsPage } from "./search-results-page"
 import { AIChatPanel } from "./ai-chat-panel"
-import { SHIPMENTS, INBOX_EMAILS } from "@/lib/mock-data"
+import { BOOKING_REQUESTS, INBOX_EMAILS } from "@/lib/mock-data"
 import { type Persona } from "./login-page"
 
 export function AppShell({ persona }: { persona?: Persona }) {
@@ -28,11 +28,24 @@ export function AppShell({ persona }: { persona?: Persona }) {
   const [trackingPreselect, setTrackingPreselect] = useState<string | null>(null)
   const [weatherHighlightId, setWeatherHighlightId] = useState<string | null>(null)
   const [aiChatOpen, setAiChatOpen] = useState(false)
-  const [etaApprovedCount, setEtaApprovedCount] = useState(5)
+  const [etaApprovedCount, setEtaApprovedCount] = useState(3)
   const [readEmailIds, setReadEmailIds] = useState<Set<string>>(new Set())
   const [resolvedExceptionIds, setResolvedExceptionIds] = useState<Set<string>>(new Set())
+  const [dynamicActivities, setDynamicActivities] = useState<DynamicActivity[]>([])
 
   const handleEtaApproved = () => setEtaApprovedCount((prev) => prev + 1)
+
+  const addActivity = (description: string, actionType: DynamicActivity["actionType"], shipmentId?: string) => {
+    const now = new Date()
+    const ts = `${now.toLocaleDateString("en", { month: "short", day: "numeric" })}, ${now.toLocaleTimeString("en", { hour: "2-digit", minute: "2-digit", hour12: false })}`
+    setDynamicActivities((prev) => [{
+      id: `DYN-${Date.now()}`,
+      description,
+      actionType,
+      timestamp: ts,
+      shipmentId,
+    }, ...prev])
+  }
 
   const handleMarkEmailRead = (emailId: string) => {
     setReadEmailIds((prev) => new Set([...prev, emailId]))
@@ -40,9 +53,17 @@ export function AppShell({ persona }: { persona?: Persona }) {
 
   const handleExceptionResolved = (shipmentId: string) => {
     setResolvedExceptionIds((prev) => new Set([...prev, shipmentId]))
+    const booking = BOOKING_REQUESTS.find((b) => b.id === shipmentId)
+    if (booking) {
+      addActivity(`Exception resolved for ${shipmentId} — ${booking.exceptionType}`, "confirmed", shipmentId)
+    }
   }
 
-  const exceptionsCount = SHIPMENTS.filter((s) => !resolvedExceptionIds.has(s.id)).length
+  const handleResumeWorkflow = (shipmentId: string) => {
+    addActivity(`Workflow resumed for ${shipmentId} — agent proceeding to next step`, "booking_submit", shipmentId)
+  }
+
+  const exceptionsCount = BOOKING_REQUESTS.filter((s) => s.bookingStatus === "Exception" || s.bookingStatus === "Awaiting Approval").filter((s) => !resolvedExceptionIds.has(s.id)).length
   const unreadInboxCount = INBOX_EMAILS.filter((e) => !e.read && !readEmailIds.has(e.id)).length
 
   const handleViewChange = (v: SidebarView) => {
@@ -159,6 +180,7 @@ export function AppShell({ persona }: { persona?: Persona }) {
             {view === "agent-activity" && (
               <AgentActivityLog
                 onShipmentClick={() => handleViewChange("dashboard")}
+                dynamicActivities={dynamicActivities}
               />
             )}
           </>

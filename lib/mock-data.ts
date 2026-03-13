@@ -1,21 +1,62 @@
 export type TransportMode = "Ocean" | "Road" | "Air"
 export type Severity = "Critical" | "High" | "Medium" | "Low"
-export type ExceptionType =
-  | "Schedule Slippage"
-  | "Missing Signal"
-  | "Long Dwell"
-  | "Route Deviation"
-  | "Weather Disruption"
-  | "Traffic Disruption"
-  | "Customs Hold"
-  | "Conflicting Sources"
+
+export type BookingStatus =
+  | "Pending"
+  | "In Progress"
+  | "Carrier Selected"
+  | "Portal Login"
+  | "Booking Submitted"
+  | "Docs Uploaded"
+  | "Confirmed"
+  | "Notified"
+  | "Exception"
+  | "Awaiting Approval"
+
+export type BookingExceptionType =
+  | "Missing Allocation"
+  | "Portal Unavailable"
+  | "Rate Mismatch"
+  | "Missing Booking Fields"
+  | "Carrier Rejection"
+  | "Credentials Expired"
   | "None"
 
-export type SignalSource = "CargoSmart" | "Maersk Portal" | "MSC Portal" | "Flexport" | "Kuehne+Nagel" | "GPS" | "GPS / AIS" | "Carrier Portal" | "Email" | "UiPath" | "Weather API" | "Traffic API" | "System Alert" | "Agent" | "OTM" | "Customs Broker"
+export type ApprovalType =
+  | "Carrier Override"
+  | "Booking Rejection"
+  | "Spot Booking"
+  | "None"
+
+// Keep these aliases for backward compatibility with components
+export type ExceptionType = BookingExceptionType
+export type SignalSource = "SAP TM" | "OTM" | "Maersk Portal" | "MSC Portal" | "Hapag-Lloyd Portal" | "CMA-CGM Portal" | "RPA Bot" | "Email" | "EDI" | "API Gateway" | "Agent" | "System Alert" | "Rate Engine" | "Document System"
 
 export interface ReasonChip {
   label: string
-  type: "weather" | "traffic" | "signal" | "port" | "flight" | "customs" | "deviation" | "confidence"
+  type: "carrier" | "rate" | "capacity" | "portal" | "document" | "approval" | "sap" | "booking"
+}
+
+export interface BookingWorkflowStep {
+  step: number
+  title: string
+  status: "completed" | "active" | "pending" | "failed"
+  timestamp?: string
+  detail?: string
+  system?: string
+}
+
+export interface CarrierOption {
+  carrier: string
+  logo?: string
+  rate: number
+  contractRate: number
+  transitDays: number
+  capacity: "Available" | "Limited" | "Full"
+  sla: number
+  lanePerformance: number
+  recommended: boolean
+  reason?: string
 }
 
 export interface TimelineEvent {
@@ -36,456 +77,916 @@ export interface SourceSignal {
   fresh: boolean
 }
 
-export interface Shipment {
+export interface MissingField {
+  field: string
+  label: string
+  required: boolean
+  type: "text" | "number" | "date"
+  mockValue?: string
+}
+
+export interface AlternateOption {
+  label: string          // "Option 2", "Option 3", etc.
+  carrier: string
+  lane: string
+  via?: string           // "via Colombo", "via Singapore"
+  transitDays: number
+  rate: number
+  capacity: "Available" | "Limited"
+  sla: number
+  score: number
+}
+
+export interface BookingRequest {
   id: string
   mode: TransportMode
   carrier: string
-  trackingRef: string
+  bookingRef?: string
+  vesselSchedule?: string
+  containerType: string
   origin: string
   destination: string
   plant: string
-  currentStatus: string
-  plannedETA: string
-  revisedETA: string
-  delayHours: number
-  exceptionType: ExceptionType
+  bookingStatus: BookingStatus
+  requestedDate: string
+  targetShipDate: string
+  confirmedShipDate?: string
   severity: Severity
-  lastSignal: string
-  lastSignalSource: SignalSource
-  recommendedAction: string
+  exceptionType: BookingExceptionType
+  approvalType: ApprovalType
+  lane: string
+  sapOrderRef: string
+  agentSummary: string
+  workflowSteps: BookingWorkflowStep[]
+  carrierOptions: CarrierOption[]
   reasonChips: ReasonChip[]
-  etaConfidence: number
-  cutoffTime?: string
-  criticalMaterial?: boolean
   timeline: TimelineEvent[]
   sources: SourceSignal[]
-  exceptionReason: string
-  exceptionTrigger: string
-  likelyCause: string
-  businessImpact: string
-  otmStatus: "Synced" | "Pending Update" | "Needs Review"
-  notificationStatus: "Sent" | "Not Yet Sent" | "Escalated"
-  agentSummary: string
-  lane: string
   lat: number
   lng: number
-  disruptionContext?: string
+  missingFields?: MissingField[]
+  alternateOptions?: AlternateOption[]
+  rejectionReason?: string
+  rejectionCategory?: "capacity" | "equipment" | "policy" | "schedule"
+  // Compatibility fields used by existing component patterns
+  currentStatus: string
+  recommendedAction: string
+  notificationStatus: "Sent" | "Not Yet Sent" | "Escalated"
+  otmStatus: "Synced" | "Pending Update" | "Needs Review"
+  etaConfidence: number
+  delayHours: number
+  trackingRef: string
+  plannedETA: string
+  revisedETA: string
+  lastSignal: string
+  lastSignalSource: SignalSource
 }
 
-export const SHIPMENTS: Shipment[] = [
-  // Scenario 1: Ocean — Shanghai → LA Port Congestion
+// Alias for backward compat — all components import Shipment
+export type Shipment = BookingRequest
+
+// ── Workflow Step Templates ──────────────────────────────────────────────
+
+function makeWorkflowSteps(completedUpTo: number, failedAt?: number): BookingWorkflowStep[] {
+  const STEP_DEFS = [
+    { step: 1, title: "Read Shipment Requirement", system: "SAP TM / OTM" },
+    { step: 2, title: "Identify Best-Fit Carrier", system: "AI Routing Engine" },
+    { step: 3, title: "Log into Carrier Portal", system: "RPA / API" },
+    { step: 4, title: "Complete Booking Request", system: "Carrier Portal" },
+    { step: 5, title: "Upload Supporting Documents", system: "Document System" },
+    { step: 6, title: "Retrieve Booking Confirmation", system: "Carrier Portal" },
+    { step: 7, title: "Notify Plant / SCM & Update SAP", system: "SAP TM / Email" },
+    { step: 8, title: "Track Booking Status & Alerts", system: "Booking Monitor" },
+  ]
+  return STEP_DEFS.map((d) => {
+    let status: BookingWorkflowStep["status"] = "pending"
+    if (failedAt && d.step === failedAt) status = "failed"
+    else if (d.step < completedUpTo) status = "completed"
+    else if (d.step === completedUpTo) status = "active"
+    return {
+      ...d,
+      status,
+      timestamp: d.step <= completedUpTo ? `Mar 13, ${String(7 + d.step).padStart(2, "0")}:${String(d.step * 7).padStart(2, "0")}` : undefined,
+      detail: d.step <= completedUpTo ? `Step ${d.step} processed successfully` : undefined,
+    }
+  })
+}
+
+// ── Carrier Options ──────────────────────────────────────────────────────
+
+const CARRIER_OPTIONS_SHA_LAX: CarrierOption[] = [
+  { carrier: "Maersk", rate: 2850, contractRate: 2800, transitDays: 14, capacity: "Available", sla: 92, lanePerformance: 94, recommended: true, reason: "Best combination of rate, SLA, and capacity on SHA→LAX lane" },
+  { carrier: "MSC", rate: 2720, contractRate: 2750, transitDays: 16, capacity: "Available", sla: 87, lanePerformance: 89, recommended: false, reason: "Lower rate but 2 extra transit days" },
+  { carrier: "CMA-CGM", rate: 3100, contractRate: 3000, transitDays: 13, capacity: "Limited", sla: 90, lanePerformance: 91, recommended: false, reason: "Fastest transit but premium rate" },
+  { carrier: "Hapag-Lloyd", rate: 2900, contractRate: 2850, transitDays: 15, capacity: "Available", sla: 88, lanePerformance: 86, recommended: false },
+]
+
+const CARRIER_OPTIONS_SZX_ORD: CarrierOption[] = [
+  { carrier: "MSC", rate: 3200, contractRate: 3150, transitDays: 18, capacity: "Available", sla: 89, lanePerformance: 91, recommended: true, reason: "Best value carrier for SZX→ORD with strong SLA compliance" },
+  { carrier: "Maersk", rate: 3350, contractRate: 3300, transitDays: 17, capacity: "Limited", sla: 93, lanePerformance: 95, recommended: false },
+  { carrier: "Hapag-Lloyd", rate: 3180, contractRate: 3200, transitDays: 19, capacity: "Available", sla: 86, lanePerformance: 88, recommended: false },
+  { carrier: "CMA-CGM", rate: 3500, contractRate: 3400, transitDays: 16, capacity: "Available", sla: 91, lanePerformance: 90, recommended: false },
+]
+
+const CARRIER_OPTIONS_BOM_RTM: CarrierOption[] = [
+  { carrier: "Maersk", rate: 2200, contractRate: 2150, transitDays: 21, capacity: "Full", sla: 90, lanePerformance: 92, recommended: false, reason: "No capacity on current sailing" },
+  { carrier: "MSC", rate: 2100, contractRate: 2100, transitDays: 23, capacity: "Full", sla: 85, lanePerformance: 87, recommended: false, reason: "Fully booked through end of month" },
+  { carrier: "Hapag-Lloyd", rate: 2350, contractRate: 2300, transitDays: 20, capacity: "Full", sla: 88, lanePerformance: 89, recommended: false, reason: "No available slots" },
+  { carrier: "CMA-CGM", rate: 2450, contractRate: 2400, transitDays: 22, capacity: "Full", sla: 87, lanePerformance: 85, recommended: false, reason: "All carriers at full capacity on this lane" },
+]
+
+const CARRIER_OPTIONS_YYZ_DTW: CarrierOption[] = [
+  { carrier: "DHL Freight", rate: 1800, contractRate: 1750, transitDays: 2, capacity: "Available", sla: 94, lanePerformance: 96, recommended: false },
+  { carrier: "Hapag-Lloyd", rate: 1650, contractRate: 1700, transitDays: 2, capacity: "Available", sla: 91, lanePerformance: 93, recommended: true, reason: "AI selected: below-contract rate with strong on-time performance" },
+  { carrier: "XPO Logistics", rate: 1900, contractRate: 1850, transitDays: 1, capacity: "Available", sla: 89, lanePerformance: 90, recommended: false },
+]
+
+const CARRIER_OPTIONS_MAA_IAH: CarrierOption[] = [
+  { carrier: "Maersk", rate: 2600, contractRate: 2550, transitDays: 25, capacity: "Available", sla: 90, lanePerformance: 88, recommended: true, reason: "Optimal rate-to-transit ratio for MAA→IAH" },
+  { carrier: "MSC", rate: 2500, contractRate: 2500, transitDays: 27, capacity: "Available", sla: 86, lanePerformance: 84, recommended: false },
+  { carrier: "CMA-CGM", rate: 2750, contractRate: 2700, transitDays: 23, capacity: "Limited", sla: 89, lanePerformance: 91, recommended: false },
+]
+
+const CARRIER_OPTIONS_MEM_ORD: CarrierOption[] = [
+  { carrier: "FedEx Freight", rate: 850, contractRate: 800, transitDays: 1, capacity: "Available", sla: 96, lanePerformance: 97, recommended: true, reason: "Best domestic rate with same-day capacity" },
+  { carrier: "XPO Logistics", rate: 920, contractRate: 900, transitDays: 1, capacity: "Available", sla: 93, lanePerformance: 94, recommended: false },
+  { carrier: "J.B. Hunt", rate: 880, contractRate: 850, transitDays: 1, capacity: "Limited", sla: 91, lanePerformance: 92, recommended: false },
+]
+
+const CARRIER_OPTIONS_BOM_LAX: CarrierOption[] = [
+  { carrier: "CMA-CGM", rate: 3800, contractRate: 3200, transitDays: 22, capacity: "Available", sla: 88, lanePerformance: 86, recommended: false, reason: "Spot rate 19% above contract — requires planner approval" },
+  { carrier: "Maersk", rate: 3500, contractRate: 3400, transitDays: 24, capacity: "Limited", sla: 91, lanePerformance: 90, recommended: true, reason: "Closer to contract rate but limited capacity" },
+  { carrier: "MSC", rate: 3600, contractRate: 3300, transitDays: 23, capacity: "Available", sla: 87, lanePerformance: 85, recommended: false },
+]
+
+const CARRIER_OPTIONS_HKG_RTM: CarrierOption[] = [
+  { carrier: "Hapag-Lloyd", rate: 2950, contractRate: 2900, transitDays: 20, capacity: "Available", sla: 91, lanePerformance: 93, recommended: true, reason: "Strong SLA and within contract rate tolerance" },
+  { carrier: "Maersk", rate: 3050, contractRate: 3000, transitDays: 19, capacity: "Available", sla: 93, lanePerformance: 95, recommended: false },
+  { carrier: "MSC", rate: 2800, contractRate: 2850, transitDays: 22, capacity: "Available", sla: 86, lanePerformance: 88, recommended: false },
+]
+
+// ── 8 Booking Requests ───────────────────────────────────────────────────
+
+export const BOOKING_REQUESTS: BookingRequest[] = [
   {
-    id: "SHP-10421",
+    id: "BKG-10421",
     mode: "Ocean",
-    carrier: "COSCO",
-    trackingRef: "COSU8812045",
+    carrier: "Maersk",
+    bookingRef: "MAEU2450891",
+    vesselSchedule: "Maersk Elba — Sailing Mar 15",
+    containerType: "40' HC",
     origin: "Shanghai, CN",
     destination: "Los Angeles, US",
     plant: "LAX Distribution Center",
-    currentStatus: "At Destination Port — Awaiting Berth",
-    plannedETA: "Mar 12, 2025 08:00",
-    revisedETA: "Mar 13, 2025 02:00",
-    delayHours: 18,
-    exceptionType: "Schedule Slippage",
-    severity: "High",
-    lastSignal: "2h ago",
-    lastSignalSource: "CargoSmart",
-    recommendedAction: "Notify Destination Team",
-    reasonChips: [{ label: "Port Congestion", type: "port" }, { label: "Berth Delay", type: "deviation" }],
-    etaConfidence: 79,
-    timeline: [
-      { timestamp: "Mar 05 09:00", event: "Pickup Completed", location: "Shanghai Port, CN", source: "CargoSmart", status: "ok" },
-      { timestamp: "Mar 05 18:00", event: "Vessel Departed Yangshan Deep Water Port", location: "Shanghai, CN", source: "CargoSmart", status: "ok" },
-      { timestamp: "Mar 09 12:00", event: "En Route — Trans-Pacific", location: "Open Pacific", source: "CargoSmart", status: "ok" },
-      { timestamp: "Mar 12 06:00", event: "Arrived San Pedro Bay", location: "Los Angeles, US", source: "CargoSmart", status: "warning", anomaly: "Berth unavailable — congestion" },
-      { timestamp: "Mar 12 08:00", event: "Port Congestion Alert", location: "Los Angeles Port", source: "UiPath", status: "critical", anomaly: "22+ vessel queue at WBCT Terminal" },
-      { timestamp: "Mar 12 08:05", event: "ETA Recalculated (+18h)", location: "System", source: "Agent", status: "agent" },
-    ],
-    sources: [
-      { source: "CargoSmart", status: "At Port — Awaiting Berth", timestamp: "Mar 12 10:00", freshness: "2h ago", aligned: true, fresh: true },
-      { source: "GPS / AIS", status: "Vessel at Anchor — San Pedro Bay", timestamp: "Mar 12 09:45", freshness: "2h ago", aligned: true, fresh: true },
-      { source: "Carrier Portal", status: "Arrived Destination", timestamp: "Mar 12 09:30", freshness: "2.5h ago", aligned: true, fresh: true },
-      { source: "UiPath", status: "Port Congestion Detected", timestamp: "Mar 12 08:00", freshness: "4h ago", aligned: true, fresh: true },
-      { source: "Weather API", status: "Clear Skies — LA Basin", timestamp: "Mar 12 10:00", freshness: "2h ago", aligned: true, fresh: true },
-    ],
-    exceptionReason: "ETA drift beyond 6h ocean threshold",
-    exceptionTrigger: "Vessel arrived at port but no berth assigned after 6h",
-    likelyCause: "LA port WBCT terminal congestion — 22+ vessel queue, peak import season",
-    businessImpact: "ETA slipped +18h — LAX Distribution Center receiving window at risk",
-    otmStatus: "Pending Update",
-    notificationStatus: "Not Yet Sent",
-    agentSummary: "Shipment SHP-10421 (COSCO, Shanghai → LA) arrived at San Pedro Bay but cannot berth due to severe WBCT terminal congestion with 22+ vessels queued. ETA revised from Mar 12 08:00 to Mar 13 02:00 — 18 hours delayed. LAX Distribution Center receiving window may be impacted. Recommend approving OTM ETA update and notifying destination team immediately.",
+    bookingStatus: "Confirmed",
+    requestedDate: "Mar 12, 2025 09:00",
+    targetShipDate: "Mar 15, 2025",
+    confirmedShipDate: "Mar 15, 2025",
+    severity: "Low",
+    exceptionType: "None",
+    approvalType: "None",
     lane: "SHA→LAX",
-    lat: 33.7,
-    lng: -118.2,
-    disruptionContext: "WBCT Terminal at Los Angeles port experiencing severe congestion with 22+ vessel queue. Peak import season compounding delays. Average wait time for berth assignment: 18-24 hours. Expected to ease after March 15.",
-  },
-
-  // Scenario 2: Air — Shenzhen → Chicago Customs Hold
-  {
-    id: "SHP-20334",
-    mode: "Air",
-    carrier: "DHL",
-    trackingRef: "AWB: 057-11223344",
-    origin: "Shenzhen, CN",
-    destination: "Chicago, US",
-    plant: "ORD Air Freight Hub",
-    currentStatus: "Customs Hold — US CBP Inspection",
-    plannedETA: "Mar 11, 2025 14:00",
-    revisedETA: "Mar 13, 2025 10:00",
-    delayHours: 44,
-    exceptionType: "Customs Hold",
-    severity: "High",
-    lastSignal: "3h ago",
-    lastSignalSource: "Carrier Portal",
-    recommendedAction: "Follow Up with Broker",
-    reasonChips: [{ label: "Customs Hold", type: "customs" }, { label: "CBP Inspection", type: "deviation" }],
-    etaConfidence: 52,
-    cutoffTime: "Mar 13, 2025 12:00",
+    sapOrderRef: "SAP-TM-44821",
+    agentSummary: "Booking completed autonomously. Maersk selected as best-fit carrier based on rate ($2,850), 92% SLA score, and available capacity. Booking confirmed within 23 minutes of SAP requirement ingestion. Plant team notified, OTM updated.",
+    workflowSteps: makeWorkflowSteps(8).map((s) => ({ ...s, status: "completed" as const, timestamp: `Mar 12, ${String(9 + Math.floor(s.step * 0.3)).padStart(2, "0")}:${String((s.step * 3) % 60).padStart(2, "0")}`, detail: s.step === 2 ? "Maersk selected — $2,850/40'HC, 14d transit, 92% SLA" : s.step === 6 ? "Confirmation MAEU2450891 received" : `Step ${s.step} completed` })),
+    carrierOptions: CARRIER_OPTIONS_SHA_LAX,
+    reasonChips: [
+      { label: "Auto-Booked", type: "booking" },
+      { label: "On Contract", type: "rate" },
+      { label: "Capacity OK", type: "capacity" },
+    ],
     timeline: [
-      { timestamp: "Mar 10 08:00", event: "Freight Accepted at SZX", location: "Shenzhen Airport, CN", source: "Carrier Portal", status: "ok" },
-      { timestamp: "Mar 10 14:00", event: "Departed Shenzhen (DHL EK787)", location: "Shenzhen, CN", source: "Carrier Portal", status: "ok" },
-      { timestamp: "Mar 11 06:00", event: "Transited Hong Kong HKG", location: "Hong Kong", source: "Carrier Portal", status: "ok" },
-      { timestamp: "Mar 11 12:00", event: "Arrived ORD — Customs Entry Filed", location: "Chicago O'Hare, US", source: "Carrier Portal", status: "ok" },
-      { timestamp: "Mar 11 14:00", event: "Customs Hold Triggered — CBP Physical Inspection", location: "ORD Customs", source: "Carrier Portal", status: "critical", anomaly: "CBP hold on electronics cargo — TSCA review" },
-      { timestamp: "Mar 11 15:00", event: "Broker Notified via Email", location: "System", source: "Email", status: "info" },
-      { timestamp: "Mar 11 15:05", event: "ETA Recalculated (+44h estimated)", location: "System", source: "Agent", status: "agent" },
+      { timestamp: "Mar 12 09:00", event: "Shipment requirement ingested from SAP TM", location: "SAP TM", source: "SAP TM", status: "ok" },
+      { timestamp: "Mar 12 09:05", event: "Carrier evaluation completed — Maersk recommended", location: "AI Engine", source: "Agent", status: "agent" },
+      { timestamp: "Mar 12 09:08", event: "Logged into Maersk booking portal via API", location: "Maersk Portal", source: "API Gateway", status: "ok" },
+      { timestamp: "Mar 12 09:12", event: "Booking request submitted — 40' HC, Sailing Mar 15", location: "Maersk Portal", source: "RPA Bot", status: "ok" },
+      { timestamp: "Mar 12 09:15", event: "Supporting documents uploaded (SLI, packing list)", location: "Document System", source: "Document System", status: "ok" },
+      { timestamp: "Mar 12 09:18", event: "Booking confirmed — Ref MAEU2450891", location: "Maersk Portal", source: "Maersk Portal", status: "ok" },
+      { timestamp: "Mar 12 09:20", event: "Plant team notified — LAX DC ops updated", location: "Email / SAP", source: "Email", status: "ok" },
+      { timestamp: "Mar 12 09:23", event: "SAP TM & OTM updated with booking confirmation", location: "SAP TM", source: "SAP TM", status: "ok" },
     ],
     sources: [
-      { source: "Carrier Portal", status: "Customs Hold — ORD", timestamp: "Mar 11 21:00", freshness: "3h ago", aligned: true, fresh: true },
-      { source: "GPS", status: "On Ground — ORD Customs Area", timestamp: "Mar 11 14:30", freshness: "9h ago", aligned: true, fresh: true },
-      { source: "Email", status: "Broker Notified — Awaiting CBP Release", timestamp: "Mar 11 15:00", freshness: "9h ago", aligned: true, fresh: true },
-      { source: "Flexport", status: "Arrived Destination", timestamp: "Mar 11 12:30", freshness: "11h ago", aligned: false, fresh: true },
-      { source: "Weather API", status: "Light Snow — ORD Area", timestamp: "Mar 11 20:00", freshness: "4h ago", aligned: true, fresh: true },
+      { source: "SAP TM", status: "Booking Confirmed", timestamp: "Mar 12 09:23", freshness: "4h ago", aligned: true, fresh: true },
+      { source: "Maersk Portal", status: "Confirmed — MAEU2450891", timestamp: "Mar 12 09:18", freshness: "4h ago", aligned: true, fresh: true },
+      { source: "OTM", status: "Synced", timestamp: "Mar 12 09:23", freshness: "4h ago", aligned: true, fresh: true },
     ],
-    exceptionReason: "Shipment held at ORD Customs for CBP physical inspection — electronics",
-    exceptionTrigger: "CBP selected cargo for TSCA compliance review on entry",
-    likelyCause: "Electronics shipment flagged for TSCA Section 6 compliance review — common for SZX exports",
-    businessImpact: "ETA extended by ~44h — approaching ORD hub slot deadline",
-    otmStatus: "Pending Update",
-    notificationStatus: "Not Yet Sent",
-    agentSummary: "Shipment SHP-20334 (DHL, Shenzhen → Chicago) is held at ORD Customs under a CBP TSCA compliance review typical for Chinese electronics cargo. The estimated hold duration is 44h, with revised ETA Mar 13 10:00 — close to the hub slot window. Broker has been notified. Recommend following up with the broker every 12h for status and updating ORD hub team to adjust inbound schedule.",
-    lane: "SZX→ORD",
-    lat: 41.9,
-    lng: -87.6,
-    disruptionContext: "US CBP conducting TSCA Section 6 compliance review on electronics cargo from Shenzhen. Typical hold duration for this inspection type: 36-72 hours. Broker has been notified and is coordinating with CBP.",
-  },
-
-  // Scenario 3: Ocean — Mumbai → Rotterdam Missing Signal
-  {
-    id: "SHP-30188",
-    mode: "Ocean",
-    carrier: "Maersk",
-    trackingRef: "MSKU7234891",
-    origin: "Mumbai, IN",
-    destination: "Rotterdam, NL",
-    plant: "Rotterdam Port Terminal",
-    currentStatus: "GPS Signal Lost — Last Known: Arabian Sea",
-    plannedETA: "Mar 20, 2025 08:00",
-    revisedETA: "Mar 20, 2025 20:00",
-    delayHours: 12,
-    exceptionType: "Missing Signal",
-    severity: "High",
-    lastSignal: "9h ago",
+    currentStatus: "Booking Confirmed",
+    recommendedAction: "No action required — booking complete",
+    notificationStatus: "Sent",
+    otmStatus: "Synced",
+    etaConfidence: 95,
+    delayHours: 0,
+    trackingRef: "MAEU2450891",
+    plannedETA: "Mar 15, 2025",
+    revisedETA: "Mar 15, 2025",
+    lastSignal: "4h ago",
     lastSignalSource: "Maersk Portal",
-    recommendedAction: "Contact Carrier",
-    reasonChips: [{ label: "No AIS Signal", type: "signal" }, { label: "Low Confidence", type: "confidence" }],
-    etaConfidence: 38,
-    timeline: [
-      { timestamp: "Mar 13 10:00", event: "Departed JNPT Port Mumbai", location: "Mumbai, IN", source: "Maersk Portal", status: "ok" },
-      { timestamp: "Mar 15 06:00", event: "En Route — Arabian Sea", location: "Arabian Sea", source: "Maersk Portal", status: "ok" },
-      { timestamp: "Mar 15 14:00", event: "AIS Signal Lost", location: "Arabian Sea (15°N, 63°E)", source: "System Alert", status: "critical", anomaly: "No AIS ping for 9+ hours — unusual for this lane" },
-      { timestamp: "Mar 15 23:00", event: "Missing Signal Alert — Vessel Offline", location: "System", source: "Agent", status: "agent" },
-    ],
-    sources: [
-      { source: "Maersk Portal", status: "Last Known — Arabian Sea", timestamp: "Mar 15 14:00", freshness: "9h ago", aligned: false, fresh: false },
-      { source: "GPS / AIS", status: "Signal Lost — Last: 15°N 63°E", timestamp: "Mar 15 14:00", freshness: "9h ago", aligned: false, fresh: false },
-      { source: "Carrier Portal", status: "In Transit", timestamp: "Mar 14 22:00", freshness: "25h ago", aligned: false, fresh: false },
-      { source: "Email", status: "", timestamp: "", freshness: "No update", aligned: true, fresh: false },
-      { source: "Weather API", status: "Moderate Seas — Arabian Sea", timestamp: "Mar 15 12:00", freshness: "11h ago", aligned: true, fresh: true },
-    ],
-    exceptionReason: "No AIS signal for 9+ hours — ocean threshold exceeded",
-    exceptionTrigger: "AIS transponder offline since 14:00 Mar 15 in Arabian Sea",
-    likelyCause: "AIS transponder malfunction or vessel in restricted zone near Gulf of Oman",
-    businessImpact: "ETA to Rotterdam unknown — port slot at risk; cannot confirm customs pre-arrival filing",
-    otmStatus: "Needs Review",
-    notificationStatus: "Not Yet Sent",
-    agentSummary: "Shipment SHP-30188 (Maersk, Mumbai → Rotterdam) has lost AIS tracking for 9+ hours since last known position in the Arabian Sea. Carrier portal has not been updated in 25 hours. Confidence is at 38% — manual follow-up with Maersk vessel operations is required to verify position and re-establish tracking before the Rotterdam port slot is forfeited.",
-    lane: "BOM→RTM",
-    lat: 15.0,
-    lng: 63.0,
+    lat: 31.23,
+    lng: 121.47,
   },
-
-  // Scenario 4: Air — Guangzhou → Detroit (Critical Material, Assembly Line)
   {
-    id: "SHP-40672",
-    mode: "Air",
-    carrier: "FedEx",
-    trackingRef: "AWB: 023-77891023",
-    origin: "Guangzhou, CN",
-    destination: "Detroit, US",
-    plant: "Detroit Assembly Plant — Line 3",
-    currentStatus: "Delayed at PVG Transfer — Weather Diversion",
-    plannedETA: "Mar 11, 2025 20:00",
-    revisedETA: "Mar 12, 2025 06:00",
-    delayHours: 10,
-    exceptionType: "Weather Disruption",
-    severity: "Critical",
-    lastSignal: "18m ago",
-    lastSignalSource: "Carrier Portal",
-    recommendedAction: "Escalate + Notify Plant",
-    reasonChips: [{ label: "Weather Diversion", type: "weather" }, { label: "Critical Material", type: "deviation" }],
-    etaConfidence: 58,
-    cutoffTime: "Mar 11, 2025 22:00",
-    criticalMaterial: true,
-    timeline: [
-      { timestamp: "Mar 10 18:00", event: "Freight Accepted CAN Airport", location: "Guangzhou, CN", source: "Carrier Portal", status: "ok" },
-      { timestamp: "Mar 11 00:00", event: "Departed CAN (FX819)", location: "Guangzhou, CN", source: "Carrier Portal", status: "ok" },
-      { timestamp: "Mar 11 05:00", event: "PVG Transfer Hub — Weather Hold", location: "Shanghai PVG, CN", source: "Carrier Portal", status: "warning", anomaly: "Typhoon remnant causing ground stop at PVG" },
-      { timestamp: "Mar 11 06:00", event: "Severe Weather Alert — PVG", location: "Shanghai, CN", source: "Weather API", status: "critical" },
-      { timestamp: "Mar 11 06:15", event: "Delay Risk Alert — Critical Material", location: "System", source: "Agent", status: "critical", anomaly: "Assembly Line 3 deadline in 16h — escalation triggered" },
-      { timestamp: "Mar 11 06:20", event: "ETA Recalculated (+10h)", location: "System", source: "Agent", status: "agent" },
-    ],
-    sources: [
-      { source: "Carrier Portal", status: "Ground Hold — PVG Weather", timestamp: "Mar 11 21:42", freshness: "18m ago", aligned: true, fresh: true },
-      { source: "GPS", status: "On Ground — PVG Hub", timestamp: "Mar 11 21:00", freshness: "1h ago", aligned: true, fresh: true },
-      { source: "Weather API", status: "Severe Weather — PVG Ground Stop", timestamp: "Mar 11 20:00", freshness: "2h ago", aligned: true, fresh: true },
-      { source: "Kuehne+Nagel", status: "In Transit", timestamp: "Mar 11 18:00", freshness: "4h ago", aligned: false, fresh: true },
-    ],
-    exceptionReason: "Revised ETA will miss plant receiving deadline by 8h — critical assembly parts",
-    exceptionTrigger: "Weather-induced ground stop at PVG transfer hub + critical material flag",
-    likelyCause: "Typhoon remnant causing ground stop and diversions at Shanghai PVG hub",
-    businessImpact: "Detroit Assembly Line 3 faces 8h+ production stoppage — CRITICAL parts delayed",
-    otmStatus: "Pending Update",
-    notificationStatus: "Escalated",
-    agentSummary: "CRITICAL: Shipment SHP-40672 (FedEx, Guangzhou → Detroit) carries critical assembly parts for Detroit Line 3. A weather-induced ground stop at Shanghai PVG has pushed revised ETA to Mar 12 06:00 — 8 hours past the plant deadline. Production stoppage is likely. Escalation has been triggered. Recommend contacting FedEx for next available departure, and alerting Line 3 management to initiate contingency planning.",
-    lane: "CAN→DTW",
-    lat: 31.2,
-    lng: 121.3,
-    disruptionContext: "Severe thunderstorm and typhoon remnant causing ground stop at Shanghai PVG hub. All outbound cargo flights grounded. Weather expected to clear by Mar 11 18:00 UTC. FedEx rebooking onto next available departure.",
-  },
-
-  // Scenario 5: Ocean — Chennai → Houston (Email-Triggered Happy Path — Agent Auto-Confirmed)
-  {
-    id: "SHP-50219",
+    id: "BKG-20334",
     mode: "Ocean",
     carrier: "MSC",
-    trackingRef: "MSCU4451209",
+    bookingRef: undefined,
+    vesselSchedule: "MSC Gulsun — Sailing Mar 18",
+    containerType: "40' STD",
+    origin: "Shenzhen, CN",
+    destination: "Chicago, US",
+    plant: "ORD Warehouse Hub",
+    bookingStatus: "In Progress",
+    requestedDate: "Mar 13, 2025 07:30",
+    targetShipDate: "Mar 18, 2025",
+    severity: "Low",
+    exceptionType: "None",
+    approvalType: "None",
+    lane: "SZX→ORD",
+    sapOrderRef: "SAP-TM-44835",
+    agentSummary: "Booking in progress — currently filling booking form on MSC portal. MSC selected for optimal rate ($3,200) and capacity. Vessel MSC Gulsun sailing Mar 18. Agent at step 4 of 8.",
+    workflowSteps: makeWorkflowSteps(4).map((s, i) => ({
+      ...s,
+      timestamp: i < 4 ? `Mar 13, 0${7 + Math.floor(i * 0.25)}:${String(30 + i * 8).padStart(2, "0")}` : undefined,
+      detail: s.step === 2 ? "MSC selected — $3,200/40'STD, 18d transit, 89% SLA" : s.step === 4 ? "Filling booking form — vessel schedule & container allocation" : s.detail,
+    })),
+    carrierOptions: CARRIER_OPTIONS_SZX_ORD,
+    reasonChips: [
+      { label: "In Progress", type: "booking" },
+      { label: "Step 4/8", type: "booking" },
+      { label: "On Contract", type: "rate" },
+    ],
+    timeline: [
+      { timestamp: "Mar 13 07:30", event: "Shipment requirement ingested from SAP TM", location: "SAP TM", source: "SAP TM", status: "ok" },
+      { timestamp: "Mar 13 07:35", event: "Carrier evaluation — MSC recommended for SZX→ORD", location: "AI Engine", source: "Agent", status: "agent" },
+      { timestamp: "Mar 13 07:38", event: "Logged into MSC booking portal", location: "MSC Portal", source: "API Gateway", status: "ok" },
+      { timestamp: "Mar 13 07:42", event: "Completing booking form — vessel & container details", location: "MSC Portal", source: "RPA Bot", status: "info" },
+    ],
+    sources: [
+      { source: "SAP TM", status: "Booking In Progress", timestamp: "Mar 13 07:30", freshness: "1h ago", aligned: true, fresh: true },
+      { source: "MSC Portal", status: "Form submission in progress", timestamp: "Mar 13 07:42", freshness: "30m ago", aligned: true, fresh: true },
+    ],
+    currentStatus: "Completing Booking Form",
+    recommendedAction: "Monitor — agent completing booking on MSC portal",
+    notificationStatus: "Not Yet Sent",
+    otmStatus: "Pending Update",
+    etaConfidence: 80,
+    delayHours: 0,
+    trackingRef: "—",
+    plannedETA: "Mar 18, 2025",
+    revisedETA: "Mar 18, 2025",
+    lastSignal: "30m ago",
+    lastSignalSource: "MSC Portal",
+    lat: 22.54,
+    lng: 114.06,
+  },
+  {
+    id: "BKG-30188",
+    mode: "Ocean",
+    carrier: "—",
+    containerType: "20' STD",
+    origin: "Mumbai, IN",
+    destination: "Rotterdam, NL",
+    plant: "RTM Euro Hub",
+    bookingStatus: "Exception",
+    requestedDate: "Mar 12, 2025 14:00",
+    targetShipDate: "Mar 17, 2025",
+    severity: "High",
+    exceptionType: "Missing Allocation",
+    approvalType: "None",
+    lane: "BOM→RTM",
+    sapOrderRef: "SAP-TM-44802",
+    agentSummary: "All 4 contracted carriers at full capacity on BOM→RTM for Mar 17–19 sailing window. Agent checked Maersk, MSC, Hapag-Lloyd, and CMA-CGM — zero available slots. AI identified 3 alternate routing options. Awaiting planner decision to retry, reroute, or authorize spot booking.",
+    workflowSteps: makeWorkflowSteps(2, 2).map((s) => ({
+      ...s,
+      status: s.step === 1 ? "completed" as const : s.step === 2 ? "failed" as const : "pending" as const,
+      timestamp: s.step === 1 ? "Mar 12, 14:00" : s.step === 2 ? "Mar 12, 14:08" : undefined,
+      detail: s.step === 1 ? "SAP TM requirement ingested — BOM→RTM, 20' STD, target Mar 17"
+        : s.step === 2 ? "FAILED: Carrier capacity check — Maersk FULL · MSC FULL · Hapag-Lloyd FULL · CMA-CGM FULL"
+        : s.detail,
+    })),
+    alternateOptions: [
+      { label: "Option 2", carrier: "Maersk", lane: "BOM→FRA", via: "Direct to Frankfurt", transitDays: 19, rate: 2250, capacity: "Available", sla: 90, score: 88 },
+      { label: "Option 3", carrier: "MSC", lane: "BOM→RTM", via: "via Colombo (transship)", transitDays: 27, rate: 2100, capacity: "Available", sla: 84, score: 79 },
+      { label: "Option 4", carrier: "CMA-CGM", lane: "BOM→AMS", via: "via Singapore", transitDays: 24, rate: 2600, capacity: "Limited", sla: 87, score: 82 },
+    ],
+    carrierOptions: CARRIER_OPTIONS_BOM_RTM,
+    reasonChips: [
+      { label: "No Capacity", type: "capacity" },
+      { label: "All Carriers Full", type: "carrier" },
+      { label: "Spot Market", type: "rate" },
+    ],
+    timeline: [
+      { timestamp: "Mar 12 14:00", event: "Shipment requirement ingested from SAP TM", location: "SAP TM", source: "SAP TM", status: "ok" },
+      { timestamp: "Mar 12 14:05", event: "Carrier evaluation started — checking 4 carriers", location: "AI Engine", source: "Agent", status: "info" },
+      { timestamp: "Mar 12 14:08", event: "EXCEPTION: All carriers at full capacity on BOM→RTM", location: "AI Engine", source: "Agent", status: "critical", anomaly: "No available capacity from Maersk, MSC, Hapag-Lloyd, or CMA-CGM" },
+      { timestamp: "Mar 12 14:09", event: "Agent recommends: check spot market or Colombo transshipment", location: "AI Engine", source: "Agent", status: "agent" },
+    ],
+    sources: [
+      { source: "SAP TM", status: "Booking Exception", timestamp: "Mar 12 14:08", freshness: "10h ago", aligned: true, fresh: false },
+      { source: "Maersk Portal", status: "Full — no allocation", timestamp: "Mar 12 14:06", freshness: "10h ago", aligned: true, fresh: false },
+      { source: "MSC Portal", status: "Full — no allocation", timestamp: "Mar 12 14:07", freshness: "10h ago", aligned: true, fresh: false },
+    ],
+    currentStatus: "Exception — Missing Allocation",
+    recommendedAction: "Check spot market or approve Colombo transshipment",
+    notificationStatus: "Escalated",
+    otmStatus: "Needs Review",
+    etaConfidence: 20,
+    delayHours: 0,
+    trackingRef: "—",
+    plannedETA: "Mar 17, 2025",
+    revisedETA: "TBD",
+    lastSignal: "10h ago",
+    lastSignalSource: "Agent",
+    lat: 19.08,
+    lng: 72.88,
+  },
+  {
+    id: "BKG-40672",
+    mode: "Road",
+    carrier: "Hapag-Lloyd",
+    containerType: "Flatbed",
+    origin: "Toronto, CA",
+    destination: "Detroit, US",
+    plant: "DTW Assembly Plant",
+    bookingStatus: "Awaiting Approval",
+    requestedDate: "Mar 13, 2025 06:00",
+    targetShipDate: "Mar 14, 2025",
+    severity: "Medium",
+    exceptionType: "None",
+    approvalType: "Carrier Override",
+    lane: "YYZ→DTW",
+    sapOrderRef: "SAP-TM-44840",
+    agentSummary: "AI selected Hapag-Lloyd ($1,650, below contract) but historical preference for DHL Freight on this lane. Awaiting router confirmation to proceed with AI recommendation or override to DHL Freight ($1,800).",
+    workflowSteps: makeWorkflowSteps(2).map((s) => ({
+      ...s,
+      timestamp: s.step <= 2 ? `Mar 13, 06:0${s.step * 3}` : undefined,
+      detail: s.step === 2 ? "Hapag-Lloyd selected — AWAITING APPROVAL for carrier override" : s.detail,
+    })),
+    carrierOptions: CARRIER_OPTIONS_YYZ_DTW,
+    reasonChips: [
+      { label: "Carrier Override", type: "approval" },
+      { label: "Below Contract", type: "rate" },
+      { label: "Needs Approval", type: "approval" },
+    ],
+    timeline: [
+      { timestamp: "Mar 13 06:00", event: "Shipment requirement ingested from SAP TM", location: "SAP TM", source: "SAP TM", status: "ok" },
+      { timestamp: "Mar 13 06:03", event: "AI selected Hapag-Lloyd — $1,650, below contract rate", location: "AI Engine", source: "Agent", status: "agent" },
+      { timestamp: "Mar 13 06:04", event: "HOLD: Router approval requested — carrier override check", location: "System", source: "System Alert", status: "warning", anomaly: "Historical preference for DHL Freight on YYZ→DTW lane" },
+    ],
+    sources: [
+      { source: "SAP TM", status: "Awaiting Approval", timestamp: "Mar 13 06:04", freshness: "2h ago", aligned: true, fresh: true },
+      { source: "Hapag-Lloyd Portal", status: "Ready for booking", timestamp: "Mar 13 06:03", freshness: "2h ago", aligned: true, fresh: true },
+    ],
+    currentStatus: "Awaiting Carrier Override Approval",
+    recommendedAction: "Approve Hapag-Lloyd or override to DHL Freight",
+    notificationStatus: "Not Yet Sent",
+    otmStatus: "Pending Update",
+    etaConfidence: 75,
+    delayHours: 0,
+    trackingRef: "—",
+    plannedETA: "Mar 14, 2025",
+    revisedETA: "Mar 14, 2025",
+    lastSignal: "2h ago",
+    lastSignalSource: "System Alert",
+    lat: 43.65,
+    lng: -79.38,
+  },
+  {
+    id: "BKG-50219",
+    mode: "Ocean",
+    carrier: "Maersk",
+    containerType: "40' HC",
     origin: "Chennai, IN",
     destination: "Houston, US",
-    plant: "Houston Port Terminal",
-    currentStatus: "Arrived Houston — Agent Auto-Confirmed ✓",
-    plannedETA: "Mar 18, 2025 09:00",
-    revisedETA: "Mar 18, 2025 09:15",
-    delayHours: 0,
-    exceptionType: "Conflicting Sources",
-    severity: "Low",
-    lastSignal: "15m ago",
-    lastSignalSource: "Agent",
-    recommendedAction: "Confirm Arrival & Update OTM",
-    reasonChips: [{ label: "All Sources Aligned", type: "signal" }, { label: "Agent Verified", type: "confidence" }],
-    etaConfidence: 94,
+    plant: "IAH Petrochem Hub",
+    bookingStatus: "Exception",
+    requestedDate: "Mar 11, 2025 11:00",
+    targetShipDate: "Mar 16, 2025",
+    severity: "Critical",
+    exceptionType: "Carrier Rejection",
+    approvalType: "Booking Rejection",
+    lane: "MAA→IAH",
+    sapOrderRef: "SAP-TM-44788",
+    rejectionReason: "Vessel fully allocated after booking submission deadline — capacity exhausted 3h 15m before agent submitted request",
+    rejectionCategory: "capacity",
+    agentSummary: "Maersk rejected booking at Step 6 (Confirmation) — vessel fully allocated after deadline. Steps 1–5 completed successfully (portal login, form submitted, docs uploaded). AI identified MSC as next best carrier but next sailing is Mar 20 (+4 days). Critical: IAH production line at risk. Router approval required to reroute or escalate.",
+    workflowSteps: makeWorkflowSteps(6, 6).map((s) => ({
+      ...s,
+      status: s.step <= 5 ? "completed" as const : s.step === 6 ? "failed" as const : "pending" as const,
+      timestamp: s.step <= 6 ? `Mar 11, ${String(11 + Math.floor(s.step * 0.6)).padStart(2, "0")}:${String((s.step * 8) % 60).padStart(2, "0")}` : undefined,
+      detail: s.step === 2 ? "Maersk selected — $2,600/40'HC, 25d transit, 90% SLA (best for MAA→IAH)"
+        : s.step === 3 ? "Logged into Maersk booking portal via API gateway"
+        : s.step === 4 ? "Booking form submitted — Ref MAEU-PEND-0219, Sailing Mar 16"
+        : s.step === 5 ? "Commercial invoice, packing list & B/L draft uploaded"
+        : s.step === 6 ? "FAILED: Maersk rejected — vessel 98.2% allocated, booking accepted past cut-off"
+        : s.detail,
+    })),
+    carrierOptions: CARRIER_OPTIONS_MAA_IAH,
+    reasonChips: [
+      { label: "Carrier Rejected", type: "carrier" },
+      { label: "Re-routing Needed", type: "booking" },
+      { label: "Production Impact", type: "approval" },
+    ],
     timeline: [
-      { timestamp: "Mar 08 10:00", event: "Departed Chennai (Ennore Port)", location: "Chennai, IN", source: "MSC Portal", status: "ok" },
-      { timestamp: "Mar 13 08:00", event: "Transit — Indian Ocean", location: "Indian Ocean", source: "GPS", status: "ok" },
-      { timestamp: "Mar 17 06:00", event: "Entering Gulf of Mexico", location: "Gulf of Mexico", source: "GPS", status: "ok" },
-      { timestamp: "Mar 18 09:10", event: "Email: 'Vessel Arrived Houston Terminal A3'", location: "Houston, US", source: "Email", status: "info" },
-      { timestamp: "Mar 18 09:12", event: "Agent cross-validated: GPS confirms vessel docked", location: "Houston Port, US", source: "Agent", status: "ok" },
-      { timestamp: "Mar 18 09:14", event: "Agent cross-validated: MSC Portal confirms arrival", location: "Houston Port, US", source: "Agent", status: "ok" },
-      { timestamp: "Mar 18 09:15", event: "All 3 sources aligned — ETA confirmed, OTM auto-synced", location: "System", source: "Agent", status: "agent" },
+      { timestamp: "Mar 11 11:00", event: "Shipment requirement ingested from SAP TM", location: "SAP TM", source: "SAP TM", status: "ok" },
+      { timestamp: "Mar 11 11:06", event: "Maersk selected — best rate for MAA→IAH", location: "AI Engine", source: "Agent", status: "agent" },
+      { timestamp: "Mar 11 11:10", event: "Logged into Maersk booking portal", location: "Maersk Portal", source: "API Gateway", status: "ok" },
+      { timestamp: "Mar 11 11:15", event: "Booking submitted to Maersk", location: "Maersk Portal", source: "RPA Bot", status: "ok" },
+      { timestamp: "Mar 11 14:30", event: "REJECTION: Maersk declined — vessel fully allocated", location: "Maersk Portal", source: "Maersk Portal", status: "critical", anomaly: "Vessel capacity exhausted after booking deadline" },
+      { timestamp: "Mar 11 14:32", event: "Agent checking fallback carriers — MSC next sailing Mar 20", location: "AI Engine", source: "Agent", status: "warning" },
+      { timestamp: "Mar 11 14:33", event: "Escalated to router — re-routing approval required", location: "System", source: "System Alert", status: "critical" },
     ],
     sources: [
-      { source: "MSC Portal", status: "Arrived — Houston Terminal A3", timestamp: "Mar 18 09:14", freshness: "15m ago", aligned: true, fresh: true },
-      { source: "GPS", status: "Vessel Docked — Houston Port", timestamp: "Mar 18 09:12", freshness: "15m ago", aligned: true, fresh: true },
-      { source: "Email", status: "Vessel Arrived Houston Terminal A3 (forwarder confirmed)", timestamp: "Mar 18 09:10", freshness: "15m ago", aligned: true, fresh: true },
-      { source: "Weather API", status: "Clear — Gulf of Mexico", timestamp: "Mar 18 08:00", freshness: "1h ago", aligned: true, fresh: true },
+      { source: "SAP TM", status: "Booking Exception — Carrier Rejection", timestamp: "Mar 11 14:33", freshness: "1d ago", aligned: true, fresh: false },
+      { source: "Maersk Portal", status: "Rejected — vessel full", timestamp: "Mar 11 14:30", freshness: "1d ago", aligned: true, fresh: false },
     ],
-    exceptionReason: "Email arrival notification received — agent initiated cross-source validation",
-    exceptionTrigger: "Forwarder email confirmed vessel arrival at 09:10; agent validated against GPS and MSC Portal within 5 minutes",
-    likelyCause: "Standard arrival confirmation flow — email received first, GPS and MSC Portal confirmed within 5 minutes",
-    businessImpact: "No impact — vessel arrived on schedule. Houston Terminal A3 notified. OTM auto-synced by agent.",
-    otmStatus: "Synced",
-    notificationStatus: "Sent",
-    agentSummary: "SHP-50219 (MSC, Chennai → Houston) — Forwarder email arrival notification received at 09:10. Agent cross-validated against GPS (vessel docked at 09:12) and MSC Portal (confirmed at 09:14). All 3 sources aligned. ETA confirmed at Mar 18 09:15 — arrived on schedule. OTM auto-synced. Houston Terminal A3 has been notified of vessel arrival and is scheduling discharge.",
-    lane: "MAA→HOU",
-    lat: 29.7,
-    lng: -95.0,
+    currentStatus: "Exception — Carrier Rejection",
+    recommendedAction: "Approve alternate carrier (MSC Mar 20) or authorize expedited option",
+    notificationStatus: "Escalated",
+    otmStatus: "Needs Review",
+    etaConfidence: 15,
+    delayHours: 4,
+    trackingRef: "—",
+    plannedETA: "Mar 16, 2025",
+    revisedETA: "Mar 20, 2025",
+    lastSignal: "1d ago",
+    lastSignalSource: "Maersk Portal",
+    lat: 13.08,
+    lng: 80.27,
   },
-
-  // Scenario 6: Road — Nhava Sheva Dray to Chicago Plant (Traffic)
   {
-    id: "SHP-60441",
+    id: "BKG-60441",
     mode: "Road",
-    carrier: "Schneider",
-    trackingRef: "PRO-229841",
-    origin: "Los Angeles, US",
+    carrier: "CMA-CGM",
+    containerType: "53' Dry Van",
+    origin: "Memphis, US",
     destination: "Chicago, US",
-    plant: "Chicago Manufacturing Hub",
-    currentStatus: "Delayed — I-40 Incident Near Flagstaff",
-    plannedETA: "Mar 11, 2025 18:00",
-    revisedETA: "Mar 12, 2025 00:00",
-    delayHours: 6,
-    exceptionType: "Traffic Disruption",
-    severity: "Medium",
-    lastSignal: "30m ago",
-    lastSignalSource: "GPS",
-    recommendedAction: "Monitor & Update ETA",
-    reasonChips: [{ label: "Traffic", type: "traffic" }, { label: "Route Incident", type: "traffic" }],
-    etaConfidence: 70,
+    plant: "ORD Midwest DC",
+    bookingStatus: "Exception",
+    requestedDate: "Mar 13, 2025 08:00",
+    targetShipDate: "Mar 15, 2025",
+    severity: "High",
+    exceptionType: "Portal Unavailable",
+    approvalType: "None",
+    lane: "MEM→ORD",
+    sapOrderRef: "SAP-TM-44850",
+    agentSummary: "Booking agent could not connect to CMA-CGM eBusiness portal. API returned timeout after 3 retries. RPA fallback also failed — portal appears to be undergoing maintenance. Recommend switching to FedEx Freight (available, $850) or XPO Logistics ($920).",
+    workflowSteps: makeWorkflowSteps(3, 3).map((s) => ({
+      ...s,
+      status: s.step <= 2 ? "completed" as const : s.step === 3 ? "failed" as const : "pending" as const,
+      timestamp: s.step === 1 ? "Mar 13, 08:00" : s.step === 2 ? "Mar 13, 08:04" : s.step === 3 ? "Mar 13, 08:06" : undefined,
+      detail: s.step === 1 ? "Shipment requirement ingested from SAP TM"
+        : s.step === 2 ? "CMA-CGM selected — $920/53' Dry Van, 1d transit, 87% SLA"
+        : s.step === 3 ? "FAILED: CMA-CGM eBusiness portal unreachable — API timeout after 3 retries, RPA fallback failed"
+        : undefined,
+    })),
+    carrierOptions: [
+      { carrier: "CMA-CGM", rate: 920, contractRate: 900, transitDays: 1, capacity: "Available", sla: 87, lanePerformance: 85, recommended: false, reason: "Portal unavailable — cannot complete booking" },
+      { carrier: "FedEx Freight", rate: 850, contractRate: 800, transitDays: 1, capacity: "Available", sla: 96, lanePerformance: 97, recommended: true, reason: "Best alternate — reliable portal, strong SLA" },
+      { carrier: "XPO Logistics", rate: 920, contractRate: 900, transitDays: 1, capacity: "Available", sla: 93, lanePerformance: 94, recommended: false },
+      { carrier: "J.B. Hunt", rate: 880, contractRate: 850, transitDays: 1, capacity: "Limited", sla: 91, lanePerformance: 92, recommended: false },
+    ],
+    reasonChips: [
+      { label: "Portal Down", type: "portal" },
+      { label: "API Timeout", type: "portal" },
+      { label: "Switch Carrier", type: "carrier" },
+    ],
     timeline: [
-      { timestamp: "Mar 10 14:00", event: "Container Picked Up — LAX Port", location: "Los Angeles, US", source: "GPS", status: "ok" },
-      { timestamp: "Mar 10 16:00", event: "Departed Origin — I-10 East", location: "Los Angeles, US", source: "GPS", status: "ok" },
-      { timestamp: "Mar 11 09:00", event: "Traffic Incident Detected — I-40E", location: "Flagstaff, AZ", source: "Traffic API", status: "warning", anomaly: "Multi-vehicle accident blocking 2 lanes — 4h delay" },
-      { timestamp: "Mar 11 09:30", event: "Vehicle Slowed Near Flagstaff", location: "Near Flagstaff, AZ", source: "GPS", status: "warning" },
-      { timestamp: "Mar 11 09:35", event: "ETA Recalculated (+6h)", location: "System", source: "Agent", status: "agent" },
+      { timestamp: "Mar 13 08:00", event: "Shipment requirement ingested from SAP TM", location: "SAP TM", source: "SAP TM", status: "ok" },
+      { timestamp: "Mar 13 08:04", event: "Carrier evaluation — CMA-CGM selected for MEM→ORD", location: "AI Engine", source: "Agent", status: "agent" },
+      { timestamp: "Mar 13 08:05", event: "Attempting connection to CMA-CGM eBusiness portal...", location: "CMA-CGM Portal", source: "API Gateway", status: "info" },
+      { timestamp: "Mar 13 08:05", event: "API attempt 1/3 — timeout (30s)", location: "CMA-CGM Portal", source: "API Gateway", status: "warning" },
+      { timestamp: "Mar 13 08:06", event: "API attempt 2/3 — timeout (30s)", location: "CMA-CGM Portal", source: "API Gateway", status: "warning" },
+      { timestamp: "Mar 13 08:06", event: "API attempt 3/3 — timeout (30s)", location: "CMA-CGM Portal", source: "API Gateway", status: "critical", anomaly: "CMA-CGM portal unreachable after 3 attempts" },
+      { timestamp: "Mar 13 08:07", event: "RPA fallback attempted — portal login page unresponsive", location: "CMA-CGM Portal", source: "RPA Bot", status: "critical" },
+      { timestamp: "Mar 13 08:07", event: "EXCEPTION: Portal unavailable — agent recommends carrier switch", location: "System", source: "Agent", status: "agent" },
     ],
     sources: [
-      { source: "GPS", status: "Slow Moving — I-40E Flagstaff", timestamp: "Mar 11 21:30", freshness: "30m ago", aligned: true, fresh: true },
-      { source: "Traffic API", status: "Major Incident — I-40E Flagstaff", timestamp: "Mar 11 09:00", freshness: "12h ago", aligned: true, fresh: true },
-      { source: "Weather API", status: "Clear — AZ / NM Corridor", timestamp: "Mar 11 20:00", freshness: "2h ago", aligned: true, fresh: true },
-      { source: "Carrier Portal", status: "In Transit", timestamp: "Mar 11 16:00", freshness: "6h ago", aligned: true, fresh: true },
+      { source: "SAP TM", status: "Booking Exception", timestamp: "Mar 13 08:07", freshness: "20m ago", aligned: true, fresh: true },
+      { source: "CMA-CGM Portal", status: "Unreachable — API timeout", timestamp: "Mar 13 08:06", freshness: "20m ago", aligned: false, fresh: false },
+      { source: "RPA Bot", status: "Portal login failed", timestamp: "Mar 13 08:07", freshness: "20m ago", aligned: false, fresh: false },
     ],
-    exceptionReason: "ETA drift beyond 2h road threshold",
-    exceptionTrigger: "Traffic API incident on route; GPS confirms speed drop",
-    likelyCause: "Multi-vehicle accident on I-40 East near Flagstaff blocking 2 lanes — 4h clearance time",
-    businessImpact: "ETA slipped +6h — Chicago hub receiving window may close before arrival; dray origin is ocean import from India/China lane",
-    otmStatus: "Pending Update",
-    notificationStatus: "Not Yet Sent",
-    agentSummary: "Shipment SHP-60441 (Schneider dray from LAX — ocean import) is delayed 6 hours due to a multi-vehicle accident on I-40 East near Flagstaff. This is an intermodal last-mile leg for cargo that originated in Asia. Revised ETA is Mar 12 00:00. Recommend approving OTM ETA update and notifying Chicago hub team to reschedule receiving.",
-    lane: "LAX→CHI",
-    lat: 35.2,
-    lng: -111.6,
-    disruptionContext: "Multi-vehicle accident on I-40 East near Flagstaff, AZ blocking 2 of 3 lanes. Arizona DPS estimating 4-hour clearance time. Alternate route via I-17 would add 2 additional hours. GPS confirms vehicle is in the affected zone.",
+    currentStatus: "Exception — Portal Unavailable",
+    recommendedAction: "Switch to FedEx Freight or XPO Logistics; notify IT for CMA-CGM portal investigation",
+    notificationStatus: "Escalated",
+    otmStatus: "Needs Review",
+    etaConfidence: 30,
+    delayHours: 0,
+    trackingRef: "—",
+    plannedETA: "Mar 15, 2025",
+    revisedETA: "TBD",
+    lastSignal: "20m ago",
+    lastSignalSource: "Agent",
+    lat: 35.15,
+    lng: -90.05,
   },
-
-  // Scenario 7: Air — Mumbai → Los Angeles (Long Dwell at Hub)
   {
-    id: "SHP-70991",
-    mode: "Air",
-    carrier: "Emirates SkyCargo",
-    trackingRef: "AWB: 176-88990011",
+    id: "BKG-70991",
+    mode: "Ocean",
+    carrier: "CMA-CGM",
+    containerType: "40' Reefer",
     origin: "Mumbai, IN",
     destination: "Los Angeles, US",
-    plant: "LAX Receiving Dock B",
-    currentStatus: "Long Dwell at DXB Transfer Hub",
-    plannedETA: "Mar 12, 2025 06:00",
-    revisedETA: "Mar 13, 2025 06:00",
-    delayHours: 24,
-    exceptionType: "Long Dwell",
-    severity: "Critical",
-    lastSignal: "1h ago",
-    lastSignalSource: "Carrier Portal",
-    recommendedAction: "Escalate + Notify Plant",
-    reasonChips: [{ label: "Hub Dwell", type: "port" }, { label: "Critical Material", type: "deviation" }],
-    etaConfidence: 60,
-    cutoffTime: "Mar 13, 2025 08:00",
-    criticalMaterial: true,
-    timeline: [
-      { timestamp: "Mar 11 02:00", event: "Freight Accepted at BOM", location: "Mumbai Airport, IN", source: "Carrier Portal", status: "ok" },
-      { timestamp: "Mar 11 05:00", event: "Departed Mumbai (EK501)", location: "Mumbai, IN", source: "Carrier Portal", status: "ok" },
-      { timestamp: "Mar 11 08:00", event: "Arrived Dubai DXB Hub", location: "Dubai, UAE", source: "Carrier Portal", status: "ok" },
-      { timestamp: "Mar 12 08:00", event: "Dwell Threshold Exceeded — 24h at DXB", location: "Dubai, UAE", source: "System Alert", status: "critical", anomaly: "Cargo not loaded on any outbound flight to LAX" },
-      { timestamp: "Mar 12 09:00", event: "Long Dwell Alert — Critical Material", location: "System", source: "Agent", status: "critical" },
-      { timestamp: "Mar 12 09:05", event: "ETA Recalculated (+24h)", location: "System", source: "Agent", status: "agent" },
-    ],
-    sources: [
-      { source: "Carrier Portal", status: "At DXB Hub — Awaiting Outbound", timestamp: "Mar 12 13:00", freshness: "1h ago", aligned: true, fresh: true },
-      { source: "GPS", status: "At DXB Cargo Terminal 2", timestamp: "Mar 12 12:30", freshness: "1.5h ago", aligned: true, fresh: true },
-      { source: "Kuehne+Nagel", status: "In Transit", timestamp: "Mar 12 10:00", freshness: "4h ago", aligned: false, fresh: true },
-      { source: "Email", status: "No broker update", timestamp: "", freshness: "No update", aligned: true, fresh: false },
-      { source: "Weather API", status: "Clear — DXB to LAX Route", timestamp: "Mar 12 12:00", freshness: "2h ago", aligned: true, fresh: true },
-    ],
-    exceptionReason: "Cargo has dwelled at DXB for 24h without being loaded — threshold exceeded",
-    exceptionTrigger: "24h dwell at Emirates DXB hub without outbound booking confirmed",
-    likelyCause: "Emirates capacity constraint at DXB — BOM-LAX lane heavily booked; cargo bumped twice",
-    businessImpact: "ETA to LAX slipped +24h — critical automotive parts approaching receiving deadline",
-    otmStatus: "Pending Update",
-    notificationStatus: "Escalated",
-    agentSummary: "CRITICAL: Shipment SHP-70991 (Emirates SkyCargo, Mumbai → LA) has dwelled at Dubai DXB for 24 hours without being loaded on any outbound flight to LAX. Critical automotive parts are approaching the LAX receiving deadline of Mar 13 08:00. Emirates capacity constraints on the BOM-LAX lane appear to be the cause. Recommend immediate escalation to Emirates cargo supervisor and evaluation of alternative routing via EY (Abu Dhabi) or QR (Doha) if next available EK departure cannot be confirmed.",
+    plant: "LAX Cold Chain DC",
+    bookingStatus: "Exception",
+    requestedDate: "Mar 12, 2025 16:00",
+    targetShipDate: "Mar 19, 2025",
+    severity: "High",
+    exceptionType: "Rate Mismatch",
+    approvalType: "Spot Booking",
     lane: "BOM→LAX",
-    lat: 25.2,
-    lng: 55.4,
-    disruptionContext: "Emirates SkyCargo DXB hub experiencing capacity constraints on BOM-LAX lane. Cargo has been bumped from 2 outbound flights. Next available confirmed departure slot: Mar 13 02:00 UTC.",
-  },
-
-  // Scenario 8: Air — Chennai → Los Angeles (New Order — Not Yet Dispatched)
-  {
-    id: "SHP-88442",
-    mode: "Air",
-    carrier: "FedEx International Priority",
-    trackingRef: "BKG-FX-20250312",
-    origin: "Chennai, IN",
-    destination: "Los Angeles, US",
-    plant: "LAX Receiving Dock C",
-    currentStatus: "Order Confirmed — Not Yet Dispatched",
-    plannedETA: "Mar 18, 2025 08:00",
-    revisedETA: "Mar 18, 2025 08:00",
-    delayHours: 0,
-    exceptionType: "None",
-    severity: "Medium",
-    lastSignal: "OTM booking confirmed",
-    lastSignalSource: "OTM",
-    recommendedAction: "Monitor pre-departure checklist. Cargo ready date: Mar 14. Ensure customs pre-filing is complete.",
-    reasonChips: [],
-    etaConfidence: 88,
-    criticalMaterial: false,
+    sapOrderRef: "SAP-TM-44815",
+    agentSummary: "CMA-CGM spot rate ($3,800) is 19% above contract rate ($3,200). Agent flagged for planner approval. Reefer container type limits carrier options. Maersk alternative at $3,500 with limited capacity — also above contract.",
+    workflowSteps: makeWorkflowSteps(3, 3).map((s) => ({
+      ...s,
+      status: s.step <= 2 ? "completed" as const : s.step === 3 ? "failed" as const : "pending" as const,
+      timestamp: s.step <= 3 ? `Mar 12, ${16 + Math.floor(s.step * 0.15)}:${String(s.step * 5).padStart(2, "0")}` : undefined,
+      detail: s.step === 3 ? "HOLD: Rate mismatch — $3,800 spot vs $3,200 contract (19% premium)" : s.detail,
+    })),
+    carrierOptions: CARRIER_OPTIONS_BOM_LAX,
+    reasonChips: [
+      { label: "Rate Mismatch", type: "rate" },
+      { label: "Spot Premium 19%", type: "rate" },
+      { label: "Needs Approval", type: "approval" },
+    ],
     timeline: [
-      { timestamp: "Mar 12, 09:47", event: "Order Created in OTM", location: "OTM System", source: "OTM", status: "agent" },
-      { timestamp: "Mar 12, 09:50", event: "Booking Confirmed — FedEx International Priority", location: "Chennai, IN", source: "Carrier Portal", status: "ok" },
-      { timestamp: "Mar 12, 10:15", event: "ISF Pre-filing Submitted to CBP", location: "US Customs Pre-clearance", source: "Customs Broker", status: "ok" },
+      { timestamp: "Mar 12 16:00", event: "Shipment requirement ingested from SAP TM", location: "SAP TM", source: "SAP TM", status: "ok" },
+      { timestamp: "Mar 12 16:05", event: "Carrier evaluation — CMA-CGM best capacity for reefer", location: "AI Engine", source: "Agent", status: "agent" },
+      { timestamp: "Mar 12 16:08", event: "RATE ALERT: CMA-CGM $3,800 vs contract $3,200 (+19%)", location: "Rate Engine", source: "Rate Engine", status: "critical", anomaly: "Spot rate exceeds contract by 19% — approval required" },
+      { timestamp: "Mar 12 16:09", event: "Escalated to planner — spot booking authorization needed", location: "System", source: "System Alert", status: "warning" },
     ],
     sources: [
-      { source: "OTM", status: "Order Confirmed", timestamp: "Mar 12 09:47", freshness: "30m ago", aligned: true, fresh: true },
-      { source: "Carrier Portal", status: "Booking Confirmed", timestamp: "Mar 12 09:50", freshness: "26m ago", aligned: true, fresh: true },
-      { source: "Customs Broker", status: "Pre-filing Submitted", timestamp: "Mar 12 10:15", freshness: "1m ago", aligned: true, fresh: true },
-      { source: "GPS / AIS", status: "No signal — not yet departed", timestamp: "", freshness: "Awaiting departure", aligned: true, fresh: false },
-      { source: "Weather API", status: "Clear — Chennai Region", timestamp: "Mar 12 10:00", freshness: "15m ago", aligned: true, fresh: true },
-      { source: "Email", status: "PO received from shipper", timestamp: "Mar 12 09:30", freshness: "47m ago", aligned: true, fresh: true },
+      { source: "SAP TM", status: "Awaiting Rate Approval", timestamp: "Mar 12 16:09", freshness: "16h ago", aligned: true, fresh: false },
+      { source: "CMA-CGM Portal", status: "Rate quoted — $3,800", timestamp: "Mar 12 16:07", freshness: "16h ago", aligned: true, fresh: false },
+      { source: "Rate Engine", status: "Contract rate: $3,200", timestamp: "Mar 12 16:08", freshness: "16h ago", aligned: true, fresh: false },
     ],
-    exceptionReason: "No exceptions — order on schedule",
-    exceptionTrigger: "None",
-    likelyCause: "N/A",
-    businessImpact: "Planned arrival Mar 18 within assembly schedule window. No risk at this time.",
+    currentStatus: "Exception — Rate Mismatch",
+    recommendedAction: "Authorize spot booking at $3,800 or negotiate with carrier",
+    notificationStatus: "Escalated",
+    otmStatus: "Needs Review",
+    etaConfidence: 35,
+    delayHours: 0,
+    trackingRef: "—",
+    plannedETA: "Mar 19, 2025",
+    revisedETA: "TBD",
+    lastSignal: "16h ago",
+    lastSignalSource: "Rate Engine",
+    lat: 19.08,
+    lng: 72.88,
+  },
+  {
+    id: "BKG-88442",
+    mode: "Ocean",
+    carrier: "Hapag-Lloyd",
+    bookingRef: undefined,
+    vesselSchedule: "Hapag-Lloyd Express — Sailing Mar 17",
+    containerType: "40' HC",
+    origin: "Hong Kong, CN",
+    destination: "Rotterdam, NL",
+    plant: "RTM Euro Hub",
+    bookingStatus: "Exception",
+    requestedDate: "Mar 13, 2025 05:00",
+    targetShipDate: "Mar 17, 2025",
+    severity: "Medium",
+    exceptionType: "Missing Booking Fields",
+    approvalType: "None",
+    lane: "HKG→RTM",
+    sapOrderRef: "SAP-TM-44855",
+    agentSummary: "SAP TM record for HKG→RTM is incomplete — missing cargo weight, HS commodity code, and cargo ready date. Agent cannot proceed with carrier portal booking until mandatory fields are populated. Recommend pulling data from SAP master or requesting from shipment planner.",
+    missingFields: [
+      { field: "cargo_weight", label: "Cargo Weight (kg)", required: true, type: "number", mockValue: "18500" },
+      { field: "commodity_code", label: "HS Commodity Code", required: true, type: "text", mockValue: "8471.30" },
+      { field: "ready_date", label: "Cargo Ready Date", required: true, type: "date", mockValue: "2025-03-16" },
+      { field: "shipper_ref", label: "Shipper Reference No.", required: false, type: "text", mockValue: "SHIP-HK-2025-0442" },
+    ],
+    workflowSteps: makeWorkflowSteps(1, 1).map((s) => ({
+      ...s,
+      status: s.step === 1 ? "failed" as const : "pending" as const,
+      timestamp: s.step === 1 ? "Mar 13, 05:02" : undefined,
+      detail: s.step === 1 ? "FAILED: Mandatory fields validation — missing cargo_weight, commodity_code, ready_date" : undefined,
+    })),
+    carrierOptions: CARRIER_OPTIONS_HKG_RTM,
+    reasonChips: [
+      { label: "Missing Fields", type: "document" },
+      { label: "SAP Incomplete", type: "sap" },
+      { label: "Blocked", type: "booking" },
+    ],
+    timeline: [
+      { timestamp: "Mar 13 05:00", event: "Shipment requirement ingested from SAP TM", location: "SAP TM", source: "SAP TM", status: "ok" },
+      { timestamp: "Mar 13 05:01", event: "Agent validation: checking mandatory booking fields...", location: "System", source: "Agent", status: "info" },
+      { timestamp: "Mar 13 05:02", event: "VALIDATION FAILED: 3 mandatory fields missing (cargo_weight, commodity_code, ready_date)", location: "SAP TM", source: "Agent", status: "critical", anomaly: "SAP TM record incomplete — cannot proceed with booking" },
+      { timestamp: "Mar 13 05:02", event: "Agent recommends: pull from SAP master data or request from planner", location: "System", source: "Agent", status: "agent" },
+    ],
+    sources: [
+      { source: "SAP TM", status: "Record Incomplete", timestamp: "Mar 13 05:02", freshness: "3h ago", aligned: false, fresh: false },
+      { source: "Agent", status: "Awaiting field completion", timestamp: "Mar 13 05:02", freshness: "3h ago", aligned: true, fresh: true },
+    ],
+    currentStatus: "Exception — Missing Booking Fields",
+    recommendedAction: "Complete missing fields in SAP TM or provide via planner email",
+    notificationStatus: "Escalated",
+    otmStatus: "Needs Review",
+    etaConfidence: 40,
+    delayHours: 0,
+    trackingRef: "—",
+    plannedETA: "Mar 17, 2025",
+    revisedETA: "TBD",
+    lastSignal: "3h ago",
+    lastSignalSource: "Agent",
+    lat: 22.32,
+    lng: 114.17,
+  },
+  // ── Additional bookings for richer dashboard ──────────────────────────────
+  {
+    id: "BKG-91003",
+    mode: "Road" as TransportMode,
+    carrier: "FedEx Freight",
+    bookingRef: "FXF-20250313-0901",
+    containerType: "53' Dry Van",
+    origin: "Memphis, US",
+    destination: "Chicago, US",
+    plant: "ORD Warehouse Hub",
+    bookingStatus: "Confirmed" as BookingStatus,
+    requestedDate: "Mar 11, 2025 06:00",
+    targetShipDate: "Mar 12, 2025",
+    confirmedShipDate: "Mar 12, 2025",
+    severity: "Low" as Severity,
+    exceptionType: "None" as BookingExceptionType,
+    approvalType: "None" as ApprovalType,
+    lane: "MEM→ORD",
+    sapOrderRef: "SAP-TM-44790",
+    agentSummary: "Booking completed autonomously in 8 minutes. FedEx Freight selected — best rate ($820) on this lane with 98% SLA. Carrier portal confirmed instantly. Zero-touch booking.",
+    workflowSteps: makeWorkflowSteps(8).map((s) => ({ ...s, status: "completed" as const, timestamp: `Mar 11, 0${6 + Math.floor(s.step * 0.1)}:${String(s.step * 2).padStart(2, "0")}`, detail: `Step ${s.step} completed` })),
+    carrierOptions: CARRIER_OPTIONS_MEM_ORD,
+    reasonChips: [{ label: "Auto-Booked", type: "booking" as const }, { label: "On Contract", type: "rate" as const }],
+    timeline: [
+      { timestamp: "Mar 11 06:00", event: "Shipment requirement ingested from SAP TM", location: "SAP TM", source: "SAP TM" as SignalSource, status: "ok" },
+      { timestamp: "Mar 11 06:03", event: "FedEx Freight selected — $820, 2d transit, 98% SLA", location: "AI Engine", source: "Agent" as SignalSource, status: "agent" },
+      { timestamp: "Mar 11 06:05", event: "Booking confirmed — FXF-20250313-0901", location: "FedEx Portal", source: "API Gateway" as SignalSource, status: "ok" },
+      { timestamp: "Mar 11 06:08", event: "Plant team notified, SAP TM updated", location: "SAP TM", source: "SAP TM" as SignalSource, status: "ok" },
+    ],
+    sources: [
+      { source: "SAP TM" as SignalSource, status: "Booking Confirmed", timestamp: "Mar 11 06:08", freshness: "2d ago", aligned: true, fresh: true },
+      { source: "API Gateway" as SignalSource, status: "Confirmed", timestamp: "Mar 11 06:05", freshness: "2d ago", aligned: true, fresh: true },
+    ],
+    currentStatus: "Booking Confirmed",
+    recommendedAction: "No action required — booking complete",
+    notificationStatus: "Sent",
     otmStatus: "Synced",
-    notificationStatus: "Not Yet Sent",
-    agentSummary: "New order SHP-88442 (FedEx International Priority, Chennai → LAX) was auto-ingested from OTM document OTM-ORD-2025-88442. Order confirmed, booking made, ISF pre-filing submitted. Cargo ready date Mar 14. Planned departure Mar 15, arrival Mar 18 — within assembly line window. No exceptions active. Agent will monitor pre-departure milestones.",
-    lane: "MAA→LAX",
-    lat: 13.1,
-    lng: 80.2,
+    etaConfidence: 98,
+    delayHours: 0,
+    trackingRef: "FXF-20250313-0901",
+    plannedETA: "Mar 12, 2025",
+    revisedETA: "Mar 12, 2025",
+    lastSignal: "2d ago",
+    lastSignalSource: "API Gateway" as SignalSource,
+    lat: 35.15,
+    lng: -90.05,
   },
-]
-
-export const LANE_INSIGHTS = [
   {
+    id: "BKG-91204",
+    mode: "Ocean" as TransportMode,
+    carrier: "Maersk",
+    bookingRef: "MAEU2451102",
+    vesselSchedule: "Maersk Seletar — Sailing Mar 14",
+    containerType: "40' HC",
+    origin: "Shanghai, CN",
+    destination: "Los Angeles, US",
+    plant: "LAX Distribution Center",
+    bookingStatus: "Confirmed" as BookingStatus,
+    requestedDate: "Mar 10, 2025 11:00",
+    targetShipDate: "Mar 14, 2025",
+    confirmedShipDate: "Mar 14, 2025",
+    severity: "Low" as Severity,
+    exceptionType: "None" as BookingExceptionType,
+    approvalType: "None" as ApprovalType,
     lane: "SHA→LAX",
-    insight: "Trans-Pacific lane SHA→LAX showing increased port dwell at LA — average +16h above baseline over last 12 vessels from Chinese ports.",
-    count: 12,
-    period: "30 days",
-    node: "Los Angeles Port",
+    sapOrderRef: "SAP-TM-44775",
+    agentSummary: "Standard recurring booking on SHA→LAX lane. Maersk selected per contract terms. Confirmed in 31 minutes — zero-touch, fully automated.",
+    workflowSteps: makeWorkflowSteps(8).map((s) => ({ ...s, status: "completed" as const, timestamp: `Mar 10, 1${1 + Math.floor(s.step * 0.05)}:${String(s.step * 4).padStart(2, "0")}` })),
+    carrierOptions: CARRIER_OPTIONS_SHA_LAX,
+    reasonChips: [{ label: "Auto-Booked", type: "booking" as const }, { label: "Recurring", type: "booking" as const }],
+    timeline: [
+      { timestamp: "Mar 10 11:00", event: "Shipment requirement ingested from SAP TM", location: "SAP TM", source: "SAP TM" as SignalSource, status: "ok" },
+      { timestamp: "Mar 10 11:10", event: "Maersk selected — recurring lane, contract rate", location: "AI Engine", source: "Agent" as SignalSource, status: "agent" },
+      { timestamp: "Mar 10 11:25", event: "Booking confirmed — MAEU2451102", location: "Maersk Portal", source: "Maersk Portal" as SignalSource, status: "ok" },
+      { timestamp: "Mar 10 11:31", event: "SAP TM & plant team updated", location: "SAP TM", source: "SAP TM" as SignalSource, status: "ok" },
+    ],
+    sources: [
+      { source: "SAP TM" as SignalSource, status: "Booking Confirmed", timestamp: "Mar 10 11:31", freshness: "3d ago", aligned: true, fresh: true },
+    ],
+    currentStatus: "Booking Confirmed",
+    recommendedAction: "No action required",
+    notificationStatus: "Sent",
+    otmStatus: "Synced",
+    etaConfidence: 94,
+    delayHours: 0,
+    trackingRef: "MAEU2451102",
+    plannedETA: "Mar 14, 2025",
+    revisedETA: "Mar 14, 2025",
+    lastSignal: "3d ago",
+    lastSignalSource: "Maersk Portal" as SignalSource,
+    lat: 31.23,
+    lng: 121.47,
   },
   {
-    lane: "BOM→RTM",
-    insight: "Mumbai–Rotterdam lane via Suez showing AIS signal disruptions, likely due to vessel diversion around Red Sea. Add 3–5 days buffer.",
-    count: 5,
-    period: "3 weeks",
-    node: "Red Sea / Suez",
+    id: "BKG-91587",
+    mode: "Road" as TransportMode,
+    carrier: "DHL Freight",
+    bookingRef: undefined,
+    containerType: "Flatbed",
+    origin: "Toronto, CA",
+    destination: "Detroit, US",
+    plant: "DTW Assembly Plant",
+    bookingStatus: "In Progress" as BookingStatus,
+    requestedDate: "Mar 13, 2025 07:15",
+    targetShipDate: "Mar 14, 2025",
+    severity: "Low" as Severity,
+    exceptionType: "None" as BookingExceptionType,
+    approvalType: "None" as ApprovalType,
+    lane: "YYZ→DTW",
+    sapOrderRef: "SAP-TM-44862",
+    agentSummary: "DHL Freight selected for YYZ→DTW lane. Currently completing booking form on DHL portal. Expected confirmation within 15 minutes.",
+    workflowSteps: makeWorkflowSteps(4).map((s) => ({ ...s, timestamp: s.step <= 4 ? `Mar 13, 07:${String(15 + s.step * 3).padStart(2, "0")}` : undefined })),
+    carrierOptions: CARRIER_OPTIONS_YYZ_DTW,
+    reasonChips: [{ label: "In Progress", type: "booking" as const }, { label: "Step 4/8", type: "booking" as const }],
+    timeline: [
+      { timestamp: "Mar 13 07:15", event: "Shipment requirement ingested from SAP TM", location: "SAP TM", source: "SAP TM" as SignalSource, status: "ok" },
+      { timestamp: "Mar 13 07:18", event: "DHL Freight selected — $1,780, 2d transit", location: "AI Engine", source: "Agent" as SignalSource, status: "agent" },
+      { timestamp: "Mar 13 07:22", event: "Logged into DHL booking portal", location: "DHL Portal", source: "API Gateway" as SignalSource, status: "ok" },
+      { timestamp: "Mar 13 07:24", event: "Completing booking form...", location: "DHL Portal", source: "RPA Bot" as SignalSource, status: "info" },
+    ],
+    sources: [
+      { source: "SAP TM" as SignalSource, status: "In Progress", timestamp: "Mar 13 07:15", freshness: "1h ago", aligned: true, fresh: true },
+    ],
+    currentStatus: "Completing Booking Form",
+    recommendedAction: "Monitor — agent completing booking",
+    notificationStatus: "Not Yet Sent",
+    otmStatus: "Pending Update",
+    etaConfidence: 85,
+    delayHours: 0,
+    trackingRef: "—",
+    plannedETA: "Mar 14, 2025",
+    revisedETA: "Mar 14, 2025",
+    lastSignal: "1h ago",
+    lastSignalSource: "RPA Bot" as SignalSource,
+    lat: 43.65,
+    lng: -79.38,
+  },
+  {
+    id: "BKG-92015",
+    mode: "Ocean" as TransportMode,
+    carrier: "MSC",
+    bookingRef: "MSCU9022341",
+    vesselSchedule: "MSC Fantasia — Sailing Mar 16",
+    containerType: "20' STD",
+    origin: "Shenzhen, CN",
+    destination: "Chicago, US",
+    plant: "ORD Warehouse Hub",
+    bookingStatus: "Docs Uploaded" as BookingStatus,
+    requestedDate: "Mar 12, 2025 22:00",
+    targetShipDate: "Mar 16, 2025",
+    severity: "Low" as Severity,
+    exceptionType: "None" as BookingExceptionType,
+    approvalType: "None" as ApprovalType,
+    lane: "SZX→ORD",
+    sapOrderRef: "SAP-TM-44810",
+    agentSummary: "MSC booking confirmed, documents uploaded. Awaiting final tracking status update. Vessel sailing Mar 16.",
+    workflowSteps: makeWorkflowSteps(6).map((s) => ({ ...s, status: s.step <= 5 ? "completed" as const : s.step === 6 ? "active" as const : "pending" as const, timestamp: s.step <= 5 ? `Mar 12, ${String(22 + Math.floor(s.step * 0.1)).padStart(2, "0")}:${String(s.step * 5).padStart(2, "0")}` : undefined })),
+    carrierOptions: CARRIER_OPTIONS_SZX_ORD,
+    reasonChips: [{ label: "Docs Uploaded", type: "document" as const }, { label: "On Track", type: "booking" as const }],
+    timeline: [
+      { timestamp: "Mar 12 22:00", event: "Shipment requirement ingested from SAP TM", location: "SAP TM", source: "SAP TM" as SignalSource, status: "ok" },
+      { timestamp: "Mar 12 22:10", event: "MSC selected — $3,200, 18d transit", location: "AI Engine", source: "Agent" as SignalSource, status: "agent" },
+      { timestamp: "Mar 12 22:20", event: "Booking confirmed — MSCU9022341", location: "MSC Portal", source: "MSC Portal" as SignalSource, status: "ok" },
+      { timestamp: "Mar 12 22:25", event: "Documents uploaded — SLI, packing list", location: "Document System", source: "Document System" as SignalSource, status: "ok" },
+    ],
+    sources: [
+      { source: "SAP TM" as SignalSource, status: "Booking Confirmed", timestamp: "Mar 12 22:20", freshness: "10h ago", aligned: true, fresh: true },
+      { source: "MSC Portal" as SignalSource, status: "Confirmed — MSCU9022341", timestamp: "Mar 12 22:20", freshness: "10h ago", aligned: true, fresh: true },
+    ],
+    currentStatus: "Documents Uploaded — Awaiting Confirmation",
+    recommendedAction: "Monitor — docs uploaded, tracking pending",
+    notificationStatus: "Not Yet Sent",
+    otmStatus: "Pending Update",
+    etaConfidence: 88,
+    delayHours: 0,
+    trackingRef: "MSCU9022341",
+    plannedETA: "Mar 16, 2025",
+    revisedETA: "Mar 16, 2025",
+    lastSignal: "10h ago",
+    lastSignalSource: "MSC Portal" as SignalSource,
+    lat: 22.54,
+    lng: 114.06,
+  },
+  {
+    id: "BKG-92410",
+    mode: "Ocean" as TransportMode,
+    carrier: "CMA-CGM",
+    bookingRef: undefined,
+    containerType: "40' HC",
+    origin: "Mumbai, IN",
+    destination: "Los Angeles, US",
+    plant: "LAX Distribution Center",
+    bookingStatus: "Exception" as BookingStatus,
+    requestedDate: "Mar 13, 2025 04:00",
+    targetShipDate: "Mar 19, 2025",
+    severity: "High" as Severity,
+    exceptionType: "Credentials Expired" as BookingExceptionType,
+    approvalType: "None" as ApprovalType,
+    lane: "BOM→LAX",
+    sapOrderRef: "SAP-TM-44870",
+    agentSummary: "CMA-CGM portal login failed — API credentials expired. Agent attempted RPA fallback but portal session expired mid-form. Credential refresh required before booking can proceed.",
+    workflowSteps: makeWorkflowSteps(3, 3).map((s) => ({
+      ...s,
+      status: s.step < 3 ? "completed" as const : s.step === 3 ? "failed" as const : "pending" as const,
+      timestamp: s.step <= 3 ? `Mar 13, 04:0${s.step * 2}` : undefined,
+      detail: s.step === 3 ? "FAILED: CMA-CGM API credentials expired" : s.detail,
+    })),
+    carrierOptions: CARRIER_OPTIONS_BOM_LAX,
+    reasonChips: [{ label: "Creds Expired", type: "portal" as const }, { label: "Login Failed", type: "portal" as const }],
+    timeline: [
+      { timestamp: "Mar 13 04:00", event: "Shipment requirement ingested from SAP TM", location: "SAP TM", source: "SAP TM" as SignalSource, status: "ok" },
+      { timestamp: "Mar 13 04:04", event: "CMA-CGM selected — best rate for BOM→LAX", location: "AI Engine", source: "Agent" as SignalSource, status: "agent" },
+      { timestamp: "Mar 13 04:06", event: "EXCEPTION: CMA-CGM API credentials expired", location: "CMA-CGM Portal", source: "API Gateway" as SignalSource, status: "critical", anomaly: "API credentials expired — last renewed 90 days ago" },
+    ],
+    sources: [
+      { source: "SAP TM" as SignalSource, status: "Exception", timestamp: "Mar 13 04:06", freshness: "4h ago", aligned: true, fresh: false },
+    ],
+    currentStatus: "Exception — Credentials Expired",
+    recommendedAction: "Renew CMA-CGM API credentials or switch carrier",
+    notificationStatus: "Escalated",
+    otmStatus: "Needs Review",
+    etaConfidence: 30,
+    delayHours: 0,
+    trackingRef: "—",
+    plannedETA: "Mar 19, 2025",
+    revisedETA: "TBD",
+    lastSignal: "4h ago",
+    lastSignalSource: "API Gateway" as SignalSource,
+    lat: 19.08,
+    lng: 72.88,
+  },
+  {
+    id: "BKG-93001",
+    mode: "Road" as TransportMode,
+    carrier: "XPO Logistics",
+    bookingRef: "XPO-2025-08821",
+    containerType: "53' Dry Van",
+    origin: "Memphis, US",
+    destination: "Chicago, US",
+    plant: "ORD Warehouse Hub",
+    bookingStatus: "Notified" as BookingStatus,
+    requestedDate: "Mar 10, 2025 15:00",
+    targetShipDate: "Mar 11, 2025",
+    confirmedShipDate: "Mar 11, 2025",
+    severity: "Low" as Severity,
+    exceptionType: "None" as BookingExceptionType,
+    approvalType: "None" as ApprovalType,
+    lane: "MEM→ORD",
+    sapOrderRef: "SAP-TM-44760",
+    agentSummary: "Booking completed and all stakeholders notified. XPO Logistics selected for best availability. Delivered on schedule.",
+    workflowSteps: makeWorkflowSteps(8).map((s) => ({ ...s, status: "completed" as const, timestamp: `Mar 10, 1${5 + Math.floor(s.step * 0.1)}:${String(s.step * 3).padStart(2, "0")}` })),
+    carrierOptions: CARRIER_OPTIONS_MEM_ORD,
+    reasonChips: [{ label: "Auto-Booked", type: "booking" as const }, { label: "Delivered", type: "booking" as const }],
+    timeline: [
+      { timestamp: "Mar 10 15:00", event: "Shipment requirement ingested", location: "SAP TM", source: "SAP TM" as SignalSource, status: "ok" },
+      { timestamp: "Mar 10 15:05", event: "XPO Logistics selected — $900, 1d transit", location: "AI Engine", source: "Agent" as SignalSource, status: "agent" },
+      { timestamp: "Mar 10 15:10", event: "Booking confirmed — XPO-2025-08821", location: "XPO Portal", source: "API Gateway" as SignalSource, status: "ok" },
+      { timestamp: "Mar 10 15:15", event: "Plant team notified, SAP TM synced", location: "SAP TM", source: "Email" as SignalSource, status: "ok" },
+    ],
+    sources: [
+      { source: "SAP TM" as SignalSource, status: "Complete", timestamp: "Mar 10 15:15", freshness: "3d ago", aligned: true, fresh: true },
+    ],
+    currentStatus: "Booking Complete — Delivered",
+    recommendedAction: "No action required",
+    notificationStatus: "Sent",
+    otmStatus: "Synced",
+    etaConfidence: 100,
+    delayHours: 0,
+    trackingRef: "XPO-2025-08821",
+    plannedETA: "Mar 11, 2025",
+    revisedETA: "Mar 11, 2025",
+    lastSignal: "3d ago",
+    lastSignalSource: "API Gateway" as SignalSource,
+    lat: 35.15,
+    lng: -90.05,
   },
 ]
 
-export const EXCEPTION_DISTRIBUTION = [
-  { type: "Schedule Slippage", count: 8, color: "#DC2626" },
-  { type: "Missing Signal", count: 3, color: "#9CA3AF" },
-  { type: "Long Dwell", count: 5, color: "#6366F1" },
-  { type: "Route Deviation", count: 2, color: "#F97316" },
-  { type: "Weather Disruption", count: 6, color: "#3B82F6" },
-  { type: "Traffic Disruption", count: 4, color: "#F59E0B" },
-  { type: "Customs Hold", count: 7, color: "#D97706" },
-  { type: "Conflicting Sources", count: 3, color: "#6B7280" },
-]
+// Backward compat alias
+export const SHIPMENTS = BOOKING_REQUESTS
 
-// ─── Agent Activity Log ──────────────────────────────────────────────────────
+// ── Agent Activities ─────────────────────────────────────────────────────
 
-export type AgentActionType = "detected" | "recalculated" | "notified" | "flagged" | "recommended" | "synced"
+export type AgentActionType =
+  | "ingested"
+  | "carrier_eval"
+  | "portal_login"
+  | "booking_submit"
+  | "doc_upload"
+  | "confirmed"
+  | "notified"
+  | "flagged"
+  | "recommended"
 
 export interface AgentActivity {
   id: string
@@ -497,834 +998,682 @@ export interface AgentActivity {
 }
 
 export const AGENT_ACTIVITIES: AgentActivity[] = [
+  { id: "AA-013", timestamp: "Mar 13, 08:07", actionType: "flagged", description: "Portal exception — CMA-CGM eBusiness unreachable after 3 API retries + RPA fallback. Recommending carrier switch for BKG-60441.", shipmentId: "BKG-60441", lane: "MEM→ORD" },
+  { id: "AA-014", timestamp: "Mar 13, 05:02", actionType: "flagged", description: "Validation failed — 3 mandatory fields missing (cargo_weight, commodity_code, ready_date) for BKG-88442. Booking blocked.", shipmentId: "BKG-88442", lane: "HKG→RTM" },
+  { id: "AA-001", timestamp: "Mar 13, 08:01", actionType: "ingested", description: "Ingested shipment requirement from SAP TM — BKG-60441 (MEM→ORD, Road, 53' Dry Van)", shipmentId: "BKG-60441", lane: "MEM→ORD" },
+  { id: "AA-002", timestamp: "Mar 13, 07:42", actionType: "booking_submit", description: "Completing booking form on MSC portal — BKG-20334 (40' STD, MSC Gulsun sailing Mar 18)", shipmentId: "BKG-20334", lane: "SZX→ORD" },
+  { id: "AA-003", timestamp: "Mar 13, 06:04", actionType: "flagged", description: "Carrier override approval requested — Hapag-Lloyd vs DHL Freight preference on YYZ→DTW", shipmentId: "BKG-40672", lane: "YYZ→DTW" },
+  { id: "AA-004", timestamp: "Mar 13, 05:24", actionType: "doc_upload", description: "Documents uploaded for BKG-88442 — SLI, certificate of origin sent to Hapag-Lloyd portal", shipmentId: "BKG-88442", lane: "HKG→RTM" },
+  { id: "AA-005", timestamp: "Mar 13, 05:04", actionType: "carrier_eval", description: "Carrier evaluation: Hapag-Lloyd selected for HKG→RTM — $2,950, 91% SLA, available capacity", shipmentId: "BKG-88442", lane: "HKG→RTM" },
+  { id: "AA-006", timestamp: "Mar 12, 16:08", actionType: "flagged", description: "Rate mismatch flagged — CMA-CGM spot $3,800 vs contract $3,200 (+19%) on BOM→LAX", shipmentId: "BKG-70991", lane: "BOM→LAX" },
+  { id: "AA-007", timestamp: "Mar 12, 14:33", actionType: "flagged", description: "Exception: All 4 carriers at full capacity on BOM→RTM — spot market check recommended", shipmentId: "BKG-30188", lane: "BOM→RTM" },
+  { id: "AA-008", timestamp: "Mar 12, 09:23", actionType: "notified", description: "Plant team & SAP TM updated — BKG-10421 confirmed (Maersk MAEU2450891, sailing Mar 15)", shipmentId: "BKG-10421", lane: "SHA→LAX" },
+  { id: "AA-009", timestamp: "Mar 12, 09:18", actionType: "confirmed", description: "Booking confirmed — Maersk ref MAEU2450891 for SHA→LAX, 40' HC", shipmentId: "BKG-10421", lane: "SHA→LAX" },
+  { id: "AA-010", timestamp: "Mar 12, 09:05", actionType: "carrier_eval", description: "Carrier evaluation: Maersk selected for SHA→LAX — $2,850, 92% SLA, best rate-to-SLA ratio", shipmentId: "BKG-10421", lane: "SHA→LAX" },
+  { id: "AA-011", timestamp: "Mar 11, 14:33", actionType: "recommended", description: "Re-routing recommended — Maersk rejected BKG-50219, MSC next sailing Mar 20 (+4d)", shipmentId: "BKG-50219", lane: "MAA→IAH" },
+  { id: "AA-012", timestamp: "Mar 11, 11:10", actionType: "portal_login", description: "RPA logged into Maersk booking portal for BKG-50219 (MAA→IAH)", shipmentId: "BKG-50219", lane: "MAA→IAH" },
+  { id: "AA-015", timestamp: "Mar 13, 07:24", actionType: "booking_submit", description: "Completing booking form on DHL portal — BKG-91587 (Flatbed, YYZ→DTW, priority standard)", shipmentId: "BKG-91587", lane: "YYZ→DTW" },
+  { id: "AA-016", timestamp: "Mar 13, 04:06", actionType: "flagged", description: "Credential exception — CMA-CGM API token expired. Booking BKG-92410 (BOM→LAX) blocked at portal login.", shipmentId: "BKG-92410", lane: "BOM→LAX" },
+  { id: "AA-017", timestamp: "Mar 12, 22:25", actionType: "doc_upload", description: "Documents uploaded for BKG-92015 — SLI + packing list sent to MSC portal (SZX→ORD)", shipmentId: "BKG-92015", lane: "SZX→ORD" },
+  { id: "AA-018", timestamp: "Mar 11, 06:08", actionType: "confirmed", description: "Zero-touch booking complete — FedEx Freight BKG-91003 confirmed in 8 min (MEM→ORD, $820)", shipmentId: "BKG-91003", lane: "MEM→ORD" },
+  { id: "AA-019", timestamp: "Mar 10, 15:15", actionType: "notified", description: "All stakeholders notified — BKG-93001 delivered on schedule (XPO Logistics, MEM→ORD)", shipmentId: "BKG-93001", lane: "MEM→ORD" },
+  { id: "AA-020", timestamp: "Mar 10, 11:31", actionType: "confirmed", description: "Recurring booking confirmed — Maersk MAEU2451102 for SHA→LAX (40' HC, sailing Mar 14)", shipmentId: "BKG-91204", lane: "SHA→LAX" },
+]
+
+// ── Booking Exception Distribution ───────────────────────────────────────
+
+export const EXCEPTION_DISTRIBUTION = [
+  { type: "Portal Unavailable", count: 2, color: "#8b5cf6" },
+  { type: "Missing Allocation", count: 1, color: "#f59e0b" },
+  { type: "Rate Mismatch", count: 1, color: "#f97316" },
+  { type: "Carrier Rejection", count: 1, color: "#ef4444" },
+  { type: "Missing Booking Fields", count: 1, color: "#6366f1" },
+]
+
+// ── Booking Pipeline Stages (replaces CORRIDORS) ─────────────────────────
+
+export const CORRIDORS = [
   {
-    id: "AA-001",
-    timestamp: "Mar 12, 10:15",
-    actionType: "detected",
-    description: "Detected ETA drift on SHP-10421 (+18h) — port congestion at WBCT Terminal, Los Angeles",
-    shipmentId: "SHP-10421",
-    lane: "SHA→LAX",
+    label: "Pending / Queued",
+    shipments: BOOKING_REQUESTS.filter((b) => b.bookingStatus === "Pending"),
+    color: "blue",
+    metric: "Awaiting agent processing",
   },
   {
-    id: "AA-002",
-    timestamp: "Mar 12, 10:16",
-    actionType: "recalculated",
-    description: "Recalculated ETA for SHP-10421: Mar 12 08:00 → Mar 13 02:00 (confidence: 79%)",
-    shipmentId: "SHP-10421",
+    label: "In Progress",
+    shipments: BOOKING_REQUESTS.filter((b) => b.bookingStatus === "In Progress" || b.bookingStatus === "Confirmed" || b.bookingStatus === "Notified"),
+    color: "green",
+    metric: "Agent executing / completed",
   },
   {
-    id: "AA-003",
-    timestamp: "Mar 12, 09:05",
-    actionType: "recalculated",
-    description: "Recalculated ETA for SHP-70991: Mar 12 06:00 → Mar 13 06:00 (+24h, confidence: 60%)",
-    shipmentId: "SHP-70991",
-  },
-  {
-    id: "AA-004",
-    timestamp: "Mar 12, 09:00",
-    actionType: "detected",
-    description: "Detected dwell threshold exceeded on SHP-70991 — 24h at DXB hub without outbound booking",
-    shipmentId: "SHP-70991",
-    lane: "BOM→LAX",
-  },
-  {
-    id: "AA-005",
-    timestamp: "Mar 11, 15:05",
-    actionType: "recalculated",
-    description: "Recalculated ETA for SHP-20334: Mar 11 14:00 → Mar 13 10:00 (+44h estimated hold)",
-    shipmentId: "SHP-20334",
-  },
-  {
-    id: "AA-006",
-    timestamp: "Mar 11, 14:05",
-    actionType: "flagged",
-    description: "Flagged conflicting signals on SHP-50219 — GPS says In Transit but forwarder email claims Arrived at Houston",
-    shipmentId: "SHP-50219",
-    lane: "MAA→HOU",
-  },
-  {
-    id: "AA-007",
-    timestamp: "Mar 11, 09:35",
-    actionType: "recalculated",
-    description: "Recalculated ETA for SHP-60441 (+6h) — traffic incident on I-40E near Flagstaff confirmed by Traffic API and GPS",
-    shipmentId: "SHP-60441",
-  },
-  {
-    id: "AA-008",
-    timestamp: "Mar 11, 06:20",
-    actionType: "recalculated",
-    description: "Recalculated ETA for SHP-40672 (+10h) — weather ground stop at PVG transfer hub",
-    shipmentId: "SHP-40672",
-  },
-  {
-    id: "AA-009",
-    timestamp: "Mar 11, 06:15",
-    actionType: "notified",
-    description: "Triggered critical escalation for SHP-40672 — Detroit Assembly Line 3 schedule at risk, plant management notified",
-    shipmentId: "SHP-40672",
-    lane: "CAN→DTW",
-  },
-  {
-    id: "AA-010",
-    timestamp: "Mar 11, 06:00",
-    actionType: "detected",
-    description: "Pulled weather data: severe storm warning at Shanghai PVG — ground stop affecting all outbound cargo",
-    shipmentId: "SHP-40672",
-  },
-  {
-    id: "AA-011",
-    timestamp: "Mar 10, 22:00",
-    actionType: "recommended",
-    description: "Recommended contacting Maersk vessel ops for SHP-30188 — AIS signal lost 9h ago in Arabian Sea",
-    shipmentId: "SHP-30188",
-    lane: "BOM→RTM",
-  },
-  {
-    id: "AA-012",
-    timestamp: "Mar 10, 18:00",
-    actionType: "detected",
-    description: "Detected lane pattern: SHA→LAX lane has 12 delays in 30 days at Los Angeles port — average +16h above baseline",
-    lane: "SHA→LAX",
-  },
-  {
-    id: "AA-013",
-    timestamp: "Mar 10, 14:00",
-    actionType: "synced",
-    description: "Synced 5 ETA updates to OTM for active shipments — 2 pending coordinator approval",
-  },
-  {
-    id: "AA-014",
-    timestamp: "Mar 10, 10:00",
-    actionType: "notified",
-    description: "Drafted delay notification for LAX Distribution Center team regarding SHA→LAX lane congestion pattern",
-    lane: "SHA→LAX",
-  },
-  {
-    id: "AA-015",
-    timestamp: "Mar 12, 08:45",
-    actionType: "recommended",
-    description: "Generated 3 reroute options for SHP-40672 via HKG/PEK bypass — awaiting coordinator approval",
-    shipmentId: "SHP-40672",
-    lane: "CAN→DTW",
-  },
-  {
-    id: "AA-016",
-    timestamp: "Mar 12, 07:30",
-    actionType: "synced",
-    description: "Queried COSCO vessel portal for SHP-10421 — no berth update; retry scheduled in 2h",
-    shipmentId: "SHP-10421",
-  },
-  {
-    id: "AA-017",
-    timestamp: "Mar 11, 23:15",
-    actionType: "detected",
-    description: "Recovered AIS signal for SHP-30188 — vessel at 14.2°N 62.8°E, speed 11.4 kn, heading 322°",
-    shipmentId: "SHP-30188",
-    lane: "BOM→RTM",
-  },
-  {
-    id: "AA-018",
-    timestamp: "Mar 11, 23:20",
-    actionType: "recalculated",
-    description: "Recalculated ETA for SHP-30188 via AIS recovery: +12h adjustment — new ETA Mar 16 06:00 (confidence 58%)",
-    shipmentId: "SHP-30188",
+    label: "Exceptions / Approvals",
+    shipments: BOOKING_REQUESTS.filter((b) => b.bookingStatus === "Exception" || b.bookingStatus === "Awaiting Approval"),
+    color: "amber",
+    metric: "Needs human input",
   },
 ]
 
-// ─── Reroute Options ─────────────────────────────────────────────────────────
+// ── Carrier Scorecards ───────────────────────────────────────────────────
 
-export interface RerouteOption {
-  id: string
-  label: string
-  via: string
-  etaDeltaHours: number
-  additionalCostUSD: number
+export interface CarrierScorecard {
   carrier: string
-  confidence: number
-  recommended: boolean
-  note: string
+  modes: TransportMode[]
+  contractRate: string
+  spotRate: string
+  avgTransitDays: number
+  capacity: "Available" | "Limited" | "Full"
+  slaScore: number
+  bookingSuccessRate: number
+  laneCoverage: number
+  rating: "Preferred" | "Standard" | "Monitor"
+  trend: "up" | "down" | "stable"
+  otpHistory: number[]
 }
 
-export const REROUTE_OPTIONS: Partial<Record<string, RerouteOption[]>> = {
-  "SHP-40672": [
-    {
-      id: "A",
-      label: "Original Route",
-      via: "SHA → PVG → ORD → DTW",
-      etaDeltaHours: 10,
-      additionalCostUSD: 0,
-      carrier: "FedEx International",
-      confidence: 45,
-      recommended: false,
-      note: "PVG ground stop expected to lift by 18:00 UTC. High uncertainty on timing.",
-    },
-    {
-      id: "B",
-      label: "HKG Bypass",
-      via: "SHA → HKG → LAX → DTW",
-      etaDeltaHours: 6,
-      additionalCostUSD: 2400,
-      carrier: "FedEx International",
-      confidence: 88,
-      recommended: true,
-      note: "HKG operates normally. LAX→DTW transfer confirmed. Best ETA vs. cost trade-off.",
-    },
-    {
-      id: "C",
-      label: "PEK Diversion",
-      via: "SHA → PEK → ORD → DTW",
-      etaDeltaHours: 8,
-      additionalCostUSD: 800,
-      carrier: "FedEx International",
-      confidence: 70,
-      recommended: false,
-      note: "PEK capacity limited but available. Middle option on cost vs. ETA delta.",
-    },
-  ],
-  "SHP-70991": [
-    {
-      id: "A",
-      label: "Hold at DXB",
-      via: "DXB → JFK → LAX",
-      etaDeltaHours: 36,
-      additionalCostUSD: 0,
-      carrier: "Emirates SkyCargo",
-      confidence: 40,
-      recommended: false,
-      note: "Hub capacity advisory still active. Estimated additional 2-day hold at DXB.",
-    },
-    {
-      id: "B",
-      label: "BOM Reroute via FRA",
-      via: "BOM → FRA → LAX",
-      etaDeltaHours: 12,
-      additionalCostUSD: 3100,
-      carrier: "Emirates SkyCargo EK7723+EK7731",
-      confidence: 85,
-      recommended: true,
-      note: "Pharma cold-chain (2–8°C) maintained throughout. Earliest departure Mar 13.",
-    },
-    {
-      id: "C",
-      label: "BOM via AUH",
-      via: "BOM → AUH → JFK → LAX",
-      etaDeltaHours: 20,
-      additionalCostUSD: 1600,
-      carrier: "Etihad Airways Cargo",
-      confidence: 72,
-      recommended: false,
-      note: "Etihad AUH slot available Mar 13. Carrier switch adds rebooking complexity.",
-    },
-  ],
-  "SHP-60441": [
-    {
-      id: "A",
-      label: "Wait on I-40E",
-      via: "I-40E (current)",
-      etaDeltaHours: 6,
-      additionalCostUSD: 0,
-      carrier: "Midwest Express Freight",
-      confidence: 55,
-      recommended: false,
-      note: "Incident near Flagstaff. Clearance estimate: 4–8h. High variance.",
-    },
-    {
-      id: "B",
-      label: "US-89 → I-17 Bypass",
-      via: "I-40W → US-89S → I-17N → I-40E",
-      etaDeltaHours: 3,
-      additionalCostUSD: 220,
-      carrier: "Midwest Express Freight",
-      confidence: 91,
-      recommended: true,
-      note: "62-mile detour but avoids incident entirely. GPS confirms clear routing.",
-    },
-    {
-      id: "C",
-      label: "NM-6 → I-25 Alternate",
-      via: "I-40 → NM-6 → I-25N → I-40E",
-      etaDeltaHours: 4,
-      additionalCostUSD: 310,
-      carrier: "Midwest Express Freight",
-      confidence: 76,
-      recommended: false,
-      note: "Longer mileage but fully clear. Option if US-89 develops congestion.",
-    },
-  ],
-}
-
-// ─── Supporting Documents ────────────────────────────────────────────────────
-
-export type DocStatus = "verified" | "received" | "pending" | "missing" | "na"
-
-export interface ShipmentDocument {
-  docType: string
-  status: DocStatus
-  source: string
-  receivedAt?: string
-  notes?: string
-}
-
-export interface ShipmentDocSet {
-  shipmentId: string
-  docs: ShipmentDocument[]
-}
-
-export const SHIPMENT_DOCUMENTS: ShipmentDocSet[] = [
-  {
-    shipmentId: "SHP-10421",
-    docs: [
-      { docType: "Bill of Lading", status: "verified", source: "CargoSmart", receivedAt: "Mar 05, 09:30" },
-      { docType: "Commercial Invoice", status: "verified", source: "Carrier Portal", receivedAt: "Mar 04, 17:00" },
-      { docType: "Packing List", status: "verified", source: "Carrier Portal", receivedAt: "Mar 04, 17:05" },
-      { docType: "ISF Filing (10+2)", status: "received", source: "UiPath", receivedAt: "Mar 03, 14:00", notes: "Filed — awaiting CBP acknowledgement" },
-      { docType: "Certificate of Origin", status: "received", source: "Email", receivedAt: "Mar 04, 10:00" },
-      { docType: "Dangerous Goods Decl.", status: "na", source: "—" },
-    ],
-  },
-  {
-    shipmentId: "SHP-20334",
-    docs: [
-      { docType: "Bill of Lading", status: "verified", source: "Flexport", receivedAt: "Mar 06, 08:00" },
-      { docType: "Commercial Invoice", status: "received", source: "Carrier Portal", receivedAt: "Mar 06, 09:00" },
-      { docType: "Packing List", status: "received", source: "Email", receivedAt: "Mar 06, 09:05" },
-      { docType: "ISF Filing (10+2)", status: "verified", source: "UiPath", receivedAt: "Mar 04, 11:00" },
-      { docType: "TSCA Compliance Cert.", status: "pending", source: "—", notes: "Required for CBP hold release — broker coordinating" },
-      { docType: "Certificate of Origin", status: "received", source: "Email", receivedAt: "Mar 05, 14:00" },
-    ],
-  },
-  {
-    shipmentId: "SHP-30178",
-    docs: [
-      { docType: "Bill of Lading", status: "missing", source: "—", notes: "Last known location: carrier portal — signal lost Mar 14" },
-      { docType: "Commercial Invoice", status: "received", source: "Email", receivedAt: "Mar 08, 11:00" },
-      { docType: "Packing List", status: "received", source: "Email", receivedAt: "Mar 08, 11:05" },
-      { docType: "ISF Filing (10+2)", status: "verified", source: "UiPath", receivedAt: "Mar 07, 09:00" },
-      { docType: "Certificate of Origin", status: "pending", source: "—", notes: "Requested from shipper — no response" },
-    ],
-  },
-  {
-    shipmentId: "SHP-40672",
-    docs: [
-      { docType: "Air Waybill (AWB)", status: "verified", source: "Carrier Portal", receivedAt: "Mar 11, 06:00" },
-      { docType: "Commercial Invoice", status: "verified", source: "Carrier Portal", receivedAt: "Mar 10, 17:00" },
-      { docType: "Packing List", status: "verified", source: "Carrier Portal", receivedAt: "Mar 10, 17:05" },
-      { docType: "MSDS / SDS", status: "pending", source: "—", notes: "Required for DG pre-clearance at LAX — shipper to provide" },
-      { docType: "DG Declaration", status: "pending", source: "—", notes: "Awaiting MSDS before filing" },
-      { docType: "Certificate of Origin", status: "received", source: "Email", receivedAt: "Mar 10, 12:00" },
-    ],
-  },
-  {
-    shipmentId: "SHP-50219",
-    docs: [
-      { docType: "Bill of Lading", status: "verified", source: "MSC Portal", receivedAt: "Mar 01, 14:00" },
-      { docType: "Commercial Invoice", status: "received", source: "Email", receivedAt: "Mar 01, 15:00", notes: "Version mismatch with carrier portal copy — broker to reconcile" },
-      { docType: "Packing List", status: "received", source: "Email", receivedAt: "Mar 01, 15:05" },
-      { docType: "ISF Filing (10+2)", status: "verified", source: "UiPath", receivedAt: "Feb 28, 10:00" },
-      { docType: "Certificate of Origin", status: "verified", source: "Email", receivedAt: "Mar 01, 09:00" },
-    ],
-  },
-  {
-    shipmentId: "SHP-60441",
-    docs: [
-      { docType: "Bill of Lading", status: "verified", source: "Kuehne+Nagel", receivedAt: "Mar 07, 13:00" },
-      { docType: "Commercial Invoice", status: "verified", source: "Carrier Portal", receivedAt: "Mar 07, 14:00" },
-      { docType: "Packing List", status: "verified", source: "Carrier Portal", receivedAt: "Mar 07, 14:05" },
-      { docType: "Certificate of Origin", status: "verified", source: "Email", receivedAt: "Mar 06, 16:00" },
-    ],
-  },
-  {
-    shipmentId: "SHP-70991",
-    docs: [
-      { docType: "Air Waybill (AWB)", status: "verified", source: "Carrier Portal", receivedAt: "Mar 09, 11:00" },
-      { docType: "Commercial Invoice", status: "received", source: "Email", receivedAt: "Mar 09, 12:00" },
-      { docType: "Packing List", status: "received", source: "Email", receivedAt: "Mar 09, 12:05" },
-      { docType: "MSDS / SDS", status: "verified", source: "Email", receivedAt: "Mar 08, 16:00" },
-      { docType: "DG Declaration", status: "received", source: "Carrier Portal", receivedAt: "Mar 09, 10:00", notes: "Under DXB customs review" },
-      { docType: "Certificate of Origin", status: "received", source: "Email", receivedAt: "Mar 09, 09:00" },
-    ],
-  },
+export const CARRIER_SCORECARDS: CarrierScorecard[] = [
+  { carrier: "Maersk", modes: ["Ocean"], contractRate: "$2,800–3,400", spotRate: "$2,850–3,500", avgTransitDays: 17, capacity: "Available", slaScore: 92, bookingSuccessRate: 96, laneCoverage: 85, rating: "Preferred", trend: "stable", otpHistory: [94, 93, 95, 92, 94, 96] },
+  { carrier: "MSC", modes: ["Ocean"], contractRate: "$2,100–3,150", spotRate: "$2,100–3,200", avgTransitDays: 20, capacity: "Available", slaScore: 87, bookingSuccessRate: 91, laneCoverage: 80, rating: "Standard", trend: "up", otpHistory: [85, 87, 86, 89, 91, 91] },
+  { carrier: "Hapag-Lloyd", modes: ["Ocean", "Road"], contractRate: "$1,700–2,900", spotRate: "$1,650–2,950", avgTransitDays: 18, capacity: "Available", slaScore: 89, bookingSuccessRate: 93, laneCoverage: 72, rating: "Preferred", trend: "up", otpHistory: [86, 88, 89, 90, 91, 93] },
+  { carrier: "CMA-CGM", modes: ["Ocean"], contractRate: "$2,400–3,400", spotRate: "$2,450–3,800", avgTransitDays: 19, capacity: "Limited", slaScore: 88, bookingSuccessRate: 89, laneCoverage: 78, rating: "Standard", trend: "down", otpHistory: [91, 90, 88, 87, 89, 86] },
+  { carrier: "FedEx Freight", modes: ["Road", "Air"], contractRate: "$800–1,200", spotRate: "$850–1,300", avgTransitDays: 2, capacity: "Available", slaScore: 96, bookingSuccessRate: 98, laneCoverage: 45, rating: "Preferred", trend: "stable", otpHistory: [97, 96, 97, 96, 98, 97] },
+  { carrier: "XPO Logistics", modes: ["Road"], contractRate: "$850–1,900", spotRate: "$920–2,000", avgTransitDays: 2, capacity: "Available", slaScore: 91, bookingSuccessRate: 94, laneCoverage: 38, rating: "Standard", trend: "stable", otpHistory: [92, 91, 93, 90, 94, 93] },
+  { carrier: "DHL Freight", modes: ["Road", "Air"], contractRate: "$1,100–1,800", spotRate: "$1,200–1,900", avgTransitDays: 2, capacity: "Available", slaScore: 94, bookingSuccessRate: 96, laneCoverage: 55, rating: "Preferred", trend: "stable", otpHistory: [95, 94, 95, 93, 96, 94] },
 ]
 
-// ─── Inbox Emails ─────────────────────────────────────────────────────────────
+// ── Inbox Emails ─────────────────────────────────────────────────────────
 
-export type EmailTag = "carrier" | "customs" | "weather" | "compliance" | "advisory" | "agent"
+export type EmailTag = "sap" | "carrier" | "booking" | "rejection" | "rate" | "agent"
 
 export interface InboxEmail {
   id: string
   from: string
   fromName: string
   subject: string
-  preview: string
   body: string
   timestamp: string
   read: boolean
-  shipmentId?: string
   tag: EmailTag
+  tags: EmailTag[]
+  shipmentId?: string
+  shipmentRef?: string
+}
+
+// Helper to derive fromName from email
+function emailName(email: string) {
+  return email.split("@")[0].replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
 export const INBOX_EMAILS: InboxEmail[] = [
   {
-    id: "EM-007",
-    from: "procurement@globalparts.com",
-    fromName: "Global Parts Procurement",
-    subject: "New Purchase Order Confirmed — PO-88321 / MSC CHLOE V.423E",
-    preview: "Hi team, PO-88321 for 240 units Tier-1 battery modules has been confirmed. Carrier reference SHP-50219 / MSC CHLOE V.423E. Please add to ETA monitoring...",
-    body: `Hi Operations Team,
-
-PO-88321 for 240 units Tier-1 battery modules (Chennai plant, Lot C-2025-03) has been confirmed and is now in transit.
-
-Carrier Reference: SHP-50219
-Vessel: MSC CHLOE V.423E
-Booking: MSCUQ882103
-Route: Chennai (INNSA) → Houston (USTXH)
-ETD Chennai: Mar 12, 2025
-ETA Houston: Mar 18, 2025
-Port of Load: Nhava Sheva (INNSA)
-
-Please add shipment reference SHP-50219 to the ETA monitoring system and advise on current status and any exceptions. This order is tied to the Q2 battery assembly schedule.
-
-Regards,
-Sarah Chen
-Global Parts Procurement`,
-    timestamp: "Mar 12, 11:30",
-    read: false,
-    tag: "agent",
-  },
-  {
     id: "EM-001",
-    from: "noreply@cosco.com",
-    fromName: "COSCO Shipping",
-    subject: "ETA Advisory — COSU8812045 — Port Congestion at Los Angeles",
-    preview: "Dear Shipper, Please be advised that vessel COSCO GLORY has arrived at San Pedro Bay but is experiencing extended wait time for berth assignment...",
-    body: `Dear Shipper,
-
-Please be advised that vessel COSCO GLORY (Voyage 2024W12) has arrived at San Pedro Bay but is experiencing extended wait time for berth assignment due to significant congestion at WBCT Terminal.
-
-Current Status: Vessel at anchor — Position: 33.7° N, 118.3° W
-Expected Berth Assignment: Mar 13, 2025 ~02:00 local
-Revised Cargo Available Date: Mar 13, 2025 ~10:00 local
-
-Your shipment COSU8812045 is on board and will be discharged once berth is confirmed. Our operations team is monitoring closely.
-
-We apologize for the inconvenience. Please contact your local COSCO agent for further queries.
-
-Best regards,
-COSCO Shipping Operations`,
-    timestamp: "Mar 12, 09:45",
+    from: "sap-workflow@company.com",
+    fromName: emailName("sap-workflow@company.com"),
+    subject: "New Shipment Requirement — SAP-TM-44850 (MEM→ORD)",
+    body: "A new shipment requirement has been created in SAP TM.\n\nOrder: SAP-TM-44850\nOrigin: Memphis, US\nDestination: Chicago, US\nMode: Road\nTarget Ship Date: Mar 15, 2025\nContainer: 53' Dry Van\nPriority: Standard\n\nPlease ensure booking is completed before target date.",
+    timestamp: "Mar 13, 08:00",
     read: false,
-    shipmentId: "SHP-10421",
-    tag: "carrier",
+    tag: "sap",
+    tags: ["sap"],
+    shipmentId: "BKG-60441",
+    shipmentRef: "BKG-60441",
   },
   {
     id: "EM-002",
-    from: "cbp.autimated@dhs.gov",
-    fromName: "U.S. Customs and Border Protection",
-    subject: "HOLD NOTICE — Shipment SHP-20334 — TSCA Section 6 Review",
-    preview: "This is an automated notice from U.S. Customs and Border Protection. Entry #ORD-2024-98812 has been selected for TSCA Section 6 compliance review...",
-    body: `AUTOMATED NOTICE — U.S. Customs and Border Protection
-
-Entry Number: ORD-2024-98812
-Carrier: United Airlines Cargo
-Commodity: Electronics Components
-Port of Entry: Chicago O'Hare (ORD)
-
-This shipment has been selected for TSCA Section 6 compliance review for electronics cargo originating from Shenzhen, China.
-
-Required Documentation:
-- TSCA Compliance Certificate (Section 6(a))
-- Supplier Declaration of Compliance
-- SDS/MSDS for applicable substances
-
-Please submit documentation to your licensed customs broker within 48 hours to avoid extended hold. Failure to provide documentation may result in shipment refusal.
-
-For inquiries: cbp-ord@dhs.gov`,
-    timestamp: "Mar 11, 16:20",
+    from: "bookings@maersk.com",
+    fromName: "Maersk Bookings",
+    subject: "Booking Confirmation — MAEU2450891 (Shanghai → Los Angeles)",
+    body: "Dear Customer,\n\nYour booking has been confirmed.\n\nBooking Ref: MAEU2450891\nVessel: Maersk Elba\nSailing: Mar 15, 2025\nOrigin: Shanghai, CN\nDestination: Los Angeles, US\nContainer: 40' HC\n\nPlease ensure cargo is available at terminal by Mar 14, 2025 12:00.",
+    timestamp: "Mar 12, 09:18",
     read: true,
-    shipmentId: "SHP-20334",
-    tag: "customs",
+    tag: "carrier",
+    tags: ["carrier", "booking"],
+    shipmentId: "BKG-10421",
+    shipmentRef: "BKG-10421",
   },
   {
     id: "EM-003",
-    from: "ops-alerts@fedex.com",
-    fromName: "FedEx Cargo Operations",
-    subject: "Flight Disruption — SQ7301 Cancelled — Cargo Rebooking in Progress",
-    preview: "Dear Customer, We regret to inform you that FedEx flight operating as SQ7301 PVG→LAX scheduled for Mar 11 has been cancelled due to severe weather...",
-    body: `Dear Customer,
-
-We regret to inform you that FedEx cargo operating on SQ7301 (PVG→LAX, Mar 11 departure) has been cancelled due to a severe weather ground stop at Shanghai Pudong International Airport (PVG).
-
-Your Shipment: AWB 7489 2234 5521
-Status: Held at PVG — Rebooking in progress
-Next Available Departure: Mar 12, 22:00 (pending slot confirmation)
-Revised ETA Los Angeles: Mar 13, 10:00 (estimated)
-
-We are working with ground handling to expedite loading on the next available departure. You will receive an updated AWB scan notification once cargo is loaded.
-
-We sincerely apologize for this disruption. For urgent inquiries, please contact FedEx International Priority support.
-
-FedEx Cargo Operations`,
-    timestamp: "Mar 11, 07:15",
-    read: false,
-    shipmentId: "SHP-40672",
-    tag: "weather",
+    from: "bookings@maersk.com",
+    fromName: "Maersk Bookings",
+    subject: "Booking Request Declined — MAA→IAH (Vessel Full)",
+    body: "Dear Customer,\n\nWe regret to inform you that your booking request for the following shipment has been declined due to vessel capacity constraints.\n\nRoute: Chennai → Houston\nRequested Sailing: Mar 16, 2025\nReason: Vessel fully allocated\n\nPlease consider our next available sailing on Mar 20, 2025 or contact our booking desk for alternatives.",
+    timestamp: "Mar 11, 14:30",
+    read: true,
+    tag: "rejection",
+    tags: ["carrier", "rejection"],
+    shipmentId: "BKG-50219",
+    shipmentRef: "BKG-50219",
   },
   {
     id: "EM-004",
-    from: "alerts@maersk.com",
-    fromName: "Maersk Line",
-    subject: "Port Advisory: West Coast Port Congestion — March 2025",
-    preview: "Maersk wishes to advise all customers of ongoing congestion at major West Coast ports including Los Angeles/Long Beach. Vessel dwell times are averaging...",
-    body: `CUSTOMER ADVISORY — Maersk Line
-Reference: MCO-2025-03-WC
-
-Maersk wishes to advise all customers of ongoing congestion at major West Coast ports including Los Angeles/Long Beach. Current conditions:
-
-• Average vessel anchorage wait: 2–4 days
-• WBCT Terminal particularly impacted (22+ vessel queue)
-• Peak import season compounding existing congestion
-• Expected relief: Mid-March as import volumes normalize
-
-We recommend:
-1. Advising consignees of likely delays
-2. Booking inland transport with flexibility (48h buffer)
-3. Contacting your local Maersk office for demurrage waivers
-
-This advisory applies to all westbound Trans-Pacific services.
-
-Maersk Customer Operations`,
-    timestamp: "Mar 10, 14:00",
-    read: true,
-    tag: "advisory",
+    from: "rates@cmacgm.com",
+    fromName: "CMA-CGM Rates",
+    subject: "Rate Advisory — BOM→LAX Spot Rates Updated",
+    body: "Dear Valued Customer,\n\nPlease note that spot rates for Mumbai → Los Angeles have been updated effective immediately.\n\n40' Reefer: $3,800 (prev: $3,400)\n40' HC: $3,200 (prev: $2,900)\n20' STD: $2,100 (prev: $1,900)\n\nThese rates are valid until Mar 20, 2025. Contract rates remain unchanged.\n\nFor booking inquiries, please contact your account manager.",
+    timestamp: "Mar 12, 15:45",
+    read: false,
+    tag: "rate",
+    tags: ["carrier", "rate"],
+    shipmentId: "BKG-70991",
+    shipmentRef: "BKG-70991",
   },
   {
     id: "EM-005",
-    from: "cargo@emirates.com",
-    fromName: "Emirates SkyCargo",
-    subject: "Re: SHP-70991 — Cargo Rebooking — BOM-DXB-LAX",
-    preview: "Dear Valued Customer, This is to inform you that your shipment AWB 176-21093445 was offloaded from EK8821 (DXB→LAX) on Mar 12 due to capacity constraints...",
-    body: `Dear Valued Customer,
-
-This is to inform you that your shipment AWB 176-21093445 was offloaded from EK8821 (DXB→LAX) on Mar 12 due to capacity constraints at Dubai hub.
-
-Shipment Details:
-AWB: 176-21093445
-Route: BOM → DXB → LAX
-Weight: 847 kg / 6.2 CBM
-Commodity: Electronic Components
-
-Rebooking Status:
-You have been confirmed on EK8833 (DXB→LAX) departing Mar 13, 02:00 GST
-Revised ETA Los Angeles: Mar 13, 16:00 local time
-
-We apologize for this inconvenience. As a courtesy, we will waive the storage charges for the additional hold period at DXB.
-
-Emirates SkyCargo Customer Experience`,
-    timestamp: "Mar 12, 08:30",
-    read: false,
-    shipmentId: "SHP-70991",
-    tag: "carrier",
+    from: "sap-workflow@company.com",
+    fromName: emailName("sap-workflow@company.com"),
+    subject: "New Shipment Requirement — SAP-TM-44855 (HKG→RTM)",
+    body: "A new shipment requirement has been created in SAP TM.\n\nOrder: SAP-TM-44855\nOrigin: Hong Kong, CN\nDestination: Rotterdam, NL\nMode: Ocean\nTarget Ship Date: Mar 17, 2025\nContainer: 40' HC\nPriority: Standard\n\nPlease ensure booking is completed before target date.",
+    timestamp: "Mar 13, 05:00",
+    read: true,
+    tag: "sap",
+    tags: ["sap"],
+    shipmentId: "BKG-88442",
+    shipmentRef: "BKG-88442",
   },
   {
     id: "EM-006",
-    from: "noreply@weatherrouting.com",
-    fromName: "WeatherRouting Inc.",
-    subject: "Marine Weather Alert — Arabian Sea — Vessel Signal Advisory",
-    preview: "NAVIGATIONAL ADVISORY: Tropical low-pressure system developing in northern Arabian Sea. Vessels transiting BOM-RTM route via Lakshadweep Sea should expect...",
-    body: `MARINE WEATHER ADVISORY
-Issued: Mar 10, 2025 18:00 UTC
-Area: Arabian Sea (Northern) — Lakshadweep Sea
-
-TROPICAL LOW PRESSURE SYSTEM developing approx. 14°N 68°E. Expected to strengthen over next 48-72 hours.
-
-AFFECTED ROUTES:
-• BOM → RTM (via Suez/Red Sea)
-• Chennai → Mediterranean lanes
-
-FORECAST:
-Wind: 25–35 knots (seas 3–5m)
-Visibility: Moderate, occasional reduced in squalls
-Movement: WNW at 10 knots
-
-MARINERS: Exercise extreme caution. AIS signal reliability may be reduced in this region. Recommend alternative routing north of affected area.
-
-This advisory is relevant to SHP-30178 operating on the BOM→RTM lane.
-
-WeatherRouting Inc. — Marine Operations`,
-    timestamp: "Mar 10, 20:00",
+    from: "agent-noreply@company.com",
+    fromName: "Booking Agent",
+    subject: "Agent Alert — Capacity Exception on BOM→RTM",
+    body: "Zero Touch Booking Agent has flagged an exception:\n\nBooking: BKG-30188\nRoute: Mumbai → Rotterdam\nIssue: All 4 carriers (Maersk, MSC, Hapag-Lloyd, CMA-CGM) report full capacity for target sailing window.\n\nRecommended Actions:\n1. Check spot market for available capacity\n2. Consider Colombo transshipment routing\n3. Defer to next sailing window (Mar 24)\n\nPlease review in the Exception Workbench.",
+    timestamp: "Mar 12, 14:10",
     read: false,
-    shipmentId: "SHP-30178",
-    tag: "weather",
+    tag: "agent",
+    tags: ["agent"],
+    shipmentId: "BKG-30188",
+    shipmentRef: "BKG-30188",
+  },
+  {
+    id: "EM-007",
+    from: "edi-gateway@company.com",
+    fromName: emailName("edi-gateway@company.com"),
+    subject: "EDI 315 — Booking Status Update from Hapag-Lloyd",
+    body: "EDI Transaction received:\n\nType: 315 (Booking Status)\nCarrier: Hapag-Lloyd\nBooking: BKG-88442\nStatus: Documents received, confirmation pending\nTimestamp: Mar 13 05:20 UTC\n\nThis is an automated message from the EDI gateway.",
+    timestamp: "Mar 13, 05:20",
+    read: true,
+    tag: "carrier",
+    tags: ["carrier", "booking"],
+    shipmentId: "BKG-88442",
+    shipmentRef: "BKG-88442",
+  },
+  {
+    id: "EM-008",
+    from: "planner@company.com",
+    fromName: "Sarah Kim",
+    subject: "RE: Urgent — IAH Production Needs MAA Shipment",
+    body: "Team,\n\nThe IAH Petrochem Hub production line depends on the Chennai shipment (BKG-50219). The Maersk rejection puts us at risk of a 4-day delay.\n\nCan we authorize an expedited booking with MSC or explore air freight as a backup? Production impact estimated at $45K/day.\n\nPlease prioritize resolution.\n\nRegards,\nSarah Kim\nSupply Chain Planning",
+    timestamp: "Mar 11, 16:00",
+    read: true,
+    tag: "booking",
+    tags: ["booking"],
+    shipmentId: "BKG-50219",
+    shipmentRef: "BKG-50219",
+  },
+  {
+    id: "EM-009",
+    from: "sap-workflow@company.com",
+    fromName: emailName("sap-workflow@company.com"),
+    subject: "New Shipment Requirement — SAP-TM-44840 (YYZ→DTW)",
+    body: "A new shipment requirement has been created in SAP TM.\n\nOrder: SAP-TM-44840\nOrigin: Toronto, CA\nDestination: Detroit, US\nMode: Road\nTarget Ship Date: Mar 14, 2025\nContainer: Flatbed\nPriority: Medium\n\nNote: Historical carrier preference — DHL Freight on this lane.",
+    timestamp: "Mar 13, 06:00",
+    read: true,
+    tag: "sap",
+    tags: ["sap"],
+    shipmentId: "BKG-40672",
+    shipmentRef: "BKG-40672",
+  },
+  {
+    id: "EM-010",
+    from: "agent-noreply@company.com",
+    fromName: "Booking Agent",
+    subject: "Booking Completed — BKG-10421 (SHA→LAX) — Zero Touch",
+    body: "Zero Touch Booking Agent completed a booking autonomously:\n\nBooking: BKG-10421\nRoute: Shanghai → Los Angeles\nCarrier: Maersk\nRef: MAEU2450891\nVessel: Maersk Elba, Sailing Mar 15\nContainer: 40' HC\nRate: $2,850 (within contract)\n\nTotal time: 23 minutes (SAP ingestion to confirmation)\nHuman interventions: 0\n\nPlant team notified. SAP TM & OTM updated.",
+    timestamp: "Mar 12, 09:25",
+    read: true,
+    tag: "agent",
+    tags: ["agent", "booking"],
+    shipmentId: "BKG-10421",
+    shipmentRef: "BKG-10421",
+  },
+  {
+    id: "EM-011",
+    from: "msc-bookings@msc.com",
+    fromName: "MSC Bookings",
+    subject: "Booking Acknowledgment — SZX→ORD (Processing)",
+    body: "Dear Customer,\n\nWe have received your booking request for the following:\n\nRoute: Shenzhen → Chicago (via transpacific service)\nVessel: MSC Gulsun\nSailing: Mar 18, 2025\nContainer: 40' STD\n\nYour booking is currently being processed. Confirmation will follow within 24 hours.\n\nMSC Booking Desk",
+    timestamp: "Mar 13, 07:45",
+    read: false,
+    tag: "carrier",
+    tags: ["carrier", "booking"],
+    shipmentId: "BKG-20334",
+    shipmentRef: "BKG-20334",
+  },
+  {
+    id: "EM-012",
+    from: "agent-noreply@company.com",
+    fromName: "Booking Agent",
+    subject: "Approval Required — Carrier Override (BKG-40672)",
+    body: "Zero Touch Booking Agent requires your approval:\n\nBooking: BKG-40672\nRoute: Toronto → Detroit\nAI Selection: Hapag-Lloyd ($1,650 — below contract)\nHistorical Preference: DHL Freight ($1,800)\n\nReason for hold: Historical carrier preference differs from AI recommendation.\n\nPlease approve or override in the Booking Dashboard.",
+    timestamp: "Mar 13, 06:05",
+    read: false,
+    tag: "agent",
+    tags: ["agent"],
+    shipmentId: "BKG-40672",
+    shipmentRef: "BKG-40672",
+  },
+  {
+    id: "EM-013",
+    from: "agent-noreply@company.com",
+    fromName: "Booking Agent",
+    subject: "Portal Exception — CMA-CGM Unreachable (BKG-60441)",
+    body: "Zero Touch Booking Agent has encountered a portal exception:\n\nBooking: BKG-60441\nRoute: Memphis → Chicago\nCarrier: CMA-CGM\n\nIssue: CMA-CGM eBusiness portal is unreachable.\n- API timeout after 3 attempts (30s each)\n- RPA fallback: portal login page unresponsive\n\nRecommended Actions:\n1. Switch to FedEx Freight ($850, 96% SLA)\n2. Contact IT for CMA-CGM portal investigation\n3. Retry after portal maintenance window\n\nPlease review in the Exception Workbench.",
+    timestamp: "Mar 13, 08:08",
+    read: false,
+    tag: "agent",
+    tags: ["agent"],
+    shipmentId: "BKG-60441",
+    shipmentRef: "BKG-60441",
+  },
+  {
+    id: "EM-014",
+    from: "agent-noreply@company.com",
+    fromName: "Booking Agent",
+    subject: "Data Exception — Missing Mandatory Fields (BKG-88442)",
+    body: "Zero Touch Booking Agent has blocked a booking due to incomplete data:\n\nBooking: BKG-88442\nRoute: Hong Kong → Rotterdam\nCarrier: Hapag-Lloyd\n\nMissing mandatory fields:\n- Cargo Weight (kg)\n- HS Commodity Code\n- Cargo Ready Date\n\nBooking cannot proceed until these fields are populated.\n\nRecommended Actions:\n1. Pull data from SAP Master Data\n2. Contact shipment planner for manual entry\n3. Use Agent auto-fill with estimated values\n\nPlease complete the fields in the Exception Workbench.",
+    timestamp: "Mar 13, 05:03",
+    read: false,
+    tag: "agent",
+    tags: ["agent"],
+    shipmentId: "BKG-88442",
+    shipmentRef: "BKG-88442",
   },
 ]
 
-// ─── Carrier Scorecards ────────────────────────────────────────────────────────
+// ── Booking Documents ────────────────────────────────────────────────────
 
-export type CarrierRating = "preferred" | "monitor" | "caution"
-export type PerformanceTrend = "improving" | "declining" | "stable"
+export type DocumentStatus = "verified" | "received" | "pending" | "missing" | "na"
 
-export interface CarrierScorecard {
-  carrier: string
-  modes: TransportMode[]
-  activeShipments: number
-  otpPercent: number           // on-time performance %
-  avgDelayHours: number
-  exceptionRate: number        // % of shipments with exceptions
-  trackingCompliance: number   // % with tracking events
-  trend: PerformanceTrend
-  rating: CarrierRating
-  lanes: string[]
-}
-
-export const CARRIER_SCORECARDS: CarrierScorecard[] = [
-  {
-    carrier: "COSCO Shipping",
-    modes: ["Ocean"],
-    activeShipments: 2,
-    otpPercent: 62,
-    avgDelayHours: 22,
-    exceptionRate: 50,
-    trackingCompliance: 94,
-    trend: "declining",
-    rating: "monitor",
-    lanes: ["SHA→LAX", "SHA→LGB"],
-  },
-  {
-    carrier: "Maersk Line",
-    modes: ["Ocean"],
-    activeShipments: 1,
-    otpPercent: 71,
-    avgDelayHours: 14,
-    exceptionRate: 30,
-    trackingCompliance: 98,
-    trend: "stable",
-    rating: "preferred",
-    lanes: ["BOM→RTM"],
-  },
-  {
-    carrier: "United Airlines Cargo",
-    modes: ["Air"],
-    activeShipments: 1,
-    otpPercent: 44,
-    avgDelayHours: 44,
-    exceptionRate: 100,
-    trackingCompliance: 89,
-    trend: "declining",
-    rating: "caution",
-    lanes: ["SZX→ORD"],
-  },
-  {
-    carrier: "FedEx International",
-    modes: ["Air"],
-    activeShipments: 1,
-    otpPercent: 55,
-    avgDelayHours: 10,
-    exceptionRate: 100,
-    trackingCompliance: 97,
-    trend: "stable",
-    rating: "monitor",
-    lanes: ["CAN→DTW"],
-  },
-  {
-    carrier: "Amazon Freight",
-    modes: ["Road"],
-    activeShipments: 1,
-    otpPercent: 82,
-    avgDelayHours: 6,
-    exceptionRate: 100,
-    trackingCompliance: 100,
-    trend: "stable",
-    rating: "preferred",
-    lanes: ["LAX→CHI"],
-  },
-  {
-    carrier: "MSC Mediterranean",
-    modes: ["Ocean"],
-    activeShipments: 1,
-    otpPercent: 67,
-    avgDelayHours: 18,
-    exceptionRate: 100,
-    trackingCompliance: 91,
-    trend: "improving",
-    rating: "monitor",
-    lanes: ["MAA→HOU"],
-  },
-  {
-    carrier: "Emirates SkyCargo",
-    modes: ["Air"],
-    activeShipments: 1,
-    otpPercent: 58,
-    avgDelayHours: 24,
-    exceptionRate: 100,
-    trackingCompliance: 93,
-    trend: "declining",
-    rating: "caution",
-    lanes: ["BOM→LAX"],
-  },
-]
-
-// ─── Port Intelligence ─────────────────────────────────────────────────────────
-
-export type CongestionLevel = "Low" | "Medium" | "High" | "Critical"
-
-export interface PortStatus {
-  code: string
+export interface BookingDocument {
   name: string
-  country: string
-  congestionLevel: CongestionLevel
-  vesselQueue: number
-  avgBerthWait: string
-  avgDwell: string
-  trend: "improving" | "worsening" | "stable"
-  affectedLanes: string[]
-  note: string
+  status: DocumentStatus
+  uploadDate?: string
+  ref?: string
 }
 
-export const PORT_STATUS: PortStatus[] = [
+export interface BookingDocSet {
+  bookingId: string
+  carrier: string
+  lane: string
+  documents: BookingDocument[]
+}
+
+export const BOOKING_DOCUMENTS: BookingDocSet[] = [
   {
-    code: "USLAX",
-    name: "Los Angeles / Long Beach",
-    country: "US",
-    congestionLevel: "High",
-    vesselQueue: 22,
-    avgBerthWait: "18–24h",
-    avgDwell: "4.2 days",
-    trend: "worsening",
-    affectedLanes: ["SHA→LAX", "CAN→LAX"],
-    note: "WBCT Terminal — peak import season, 22 vessels at anchor",
+    bookingId: "BKG-10421",
+    carrier: "Maersk",
+    lane: "SHA→LAX",
+    documents: [
+      { name: "Booking Confirmation", status: "verified", uploadDate: "Mar 12", ref: "MAEU2450891" },
+      { name: "Vessel Schedule", status: "verified", uploadDate: "Mar 12", ref: "Maersk Elba — Mar 15" },
+      { name: "Container Allocation", status: "verified", uploadDate: "Mar 12", ref: "40' HC — MSKU1234567" },
+      { name: "Shipper's Letter of Instruction", status: "verified", uploadDate: "Mar 12" },
+      { name: "Packing List", status: "verified", uploadDate: "Mar 12" },
+      { name: "Rate Sheet", status: "verified", uploadDate: "Mar 12", ref: "$2,850/40'HC" },
+    ],
   },
   {
-    code: "CNPVG",
-    name: "Shanghai Pudong (PVG)",
-    country: "CN",
-    congestionLevel: "Critical",
-    vesselQueue: 0,
-    avgBerthWait: "Ground Stop",
-    avgDwell: "N/A",
-    trend: "worsening",
-    affectedLanes: ["CAN→DTW", "SHA→LAX"],
-    note: "Typhoon remnant — outbound cargo flights suspended until Mar 11 18:00 UTC",
+    bookingId: "BKG-20334",
+    carrier: "MSC",
+    lane: "SZX→ORD",
+    documents: [
+      { name: "Booking Confirmation", status: "pending" },
+      { name: "Vessel Schedule", status: "received", uploadDate: "Mar 13", ref: "MSC Gulsun — Mar 18" },
+      { name: "Container Allocation", status: "pending" },
+      { name: "Shipper's Letter of Instruction", status: "received", uploadDate: "Mar 13" },
+      { name: "Packing List", status: "pending" },
+      { name: "Rate Sheet", status: "verified", uploadDate: "Mar 13", ref: "$3,200/40'STD" },
+    ],
   },
   {
-    code: "NLRTM",
-    name: "Rotterdam",
-    country: "NL",
-    congestionLevel: "Low",
-    vesselQueue: 2,
-    avgBerthWait: "2–4h",
-    avgDwell: "1.8 days",
-    trend: "stable",
-    affectedLanes: ["BOM→RTM", "SHA→RTM"],
-    note: "Normal operations — ECT Delta Terminal at 88% capacity",
+    bookingId: "BKG-30188",
+    carrier: "—",
+    lane: "BOM→RTM",
+    documents: [
+      { name: "Booking Confirmation", status: "missing" },
+      { name: "Vessel Schedule", status: "missing" },
+      { name: "Container Allocation", status: "missing" },
+      { name: "Shipper's Letter of Instruction", status: "received", uploadDate: "Mar 12" },
+      { name: "Packing List", status: "received", uploadDate: "Mar 12" },
+      { name: "Rate Sheet", status: "na" },
+    ],
   },
   {
-    code: "AEDXB",
-    name: "Dubai / Jebel Ali",
-    country: "AE",
-    congestionLevel: "Medium",
-    vesselQueue: 6,
-    avgBerthWait: "8–12h",
-    avgDwell: "2.9 days",
-    trend: "stable",
-    affectedLanes: ["BOM→LAX", "SIN→EU"],
-    note: "DXB air hub at 85% capacity — minor rebooking delays expected",
+    bookingId: "BKG-50219",
+    carrier: "Maersk (Rejected)",
+    lane: "MAA→IAH",
+    documents: [
+      { name: "Booking Confirmation", status: "missing" },
+      { name: "Rejection Notice", status: "verified", uploadDate: "Mar 11", ref: "Vessel fully allocated" },
+      { name: "Container Allocation", status: "missing" },
+      { name: "Shipper's Letter of Instruction", status: "received", uploadDate: "Mar 11" },
+      { name: "Packing List", status: "received", uploadDate: "Mar 11" },
+      { name: "Rate Sheet", status: "verified", uploadDate: "Mar 11", ref: "$2,600/40'HC" },
+    ],
   },
   {
-    code: "INBOM",
-    name: "Mumbai (JNPT)",
-    country: "IN",
-    congestionLevel: "Medium",
-    vesselQueue: 9,
-    avgBerthWait: "10–16h",
-    avgDwell: "3.1 days",
-    trend: "improving",
-    affectedLanes: ["BOM→RTM", "BOM→LAX"],
-    note: "Customs pre-clearance delays for select HTS categories",
+    bookingId: "BKG-88442",
+    carrier: "Hapag-Lloyd",
+    lane: "HKG→RTM",
+    documents: [
+      { name: "Booking Confirmation", status: "pending" },
+      { name: "Vessel Schedule", status: "received", uploadDate: "Mar 13", ref: "Hapag-Lloyd Express — Mar 17" },
+      { name: "Container Allocation", status: "received", uploadDate: "Mar 13", ref: "40' HC" },
+      { name: "Shipper's Letter of Instruction", status: "verified", uploadDate: "Mar 13" },
+      { name: "Certificate of Origin", status: "verified", uploadDate: "Mar 13" },
+      { name: "Rate Sheet", status: "verified", uploadDate: "Mar 13", ref: "$2,950/40'HC" },
+    ],
   },
 ]
 
-// ─── Lane Performance ──────────────────────────────────────────────────────────
+// ── Carrier Portal Status (replaces weather/port data) ───────────────────
+
+export interface PortalStatus {
+  portal: string
+  carrier: string
+  status: "Online" | "Degraded" | "Offline"
+  apiAvailable: boolean
+  rpaAvailable: boolean
+  lastChecked: string
+  credentialStatus: "Valid" | "Expiring Soon" | "Expired"
+  uptime: number
+  notes?: string
+}
+
+export const PORTAL_STATUSES: PortalStatus[] = [
+  { portal: "Maersk Booking Portal", carrier: "Maersk", status: "Online", apiAvailable: true, rpaAvailable: true, lastChecked: "2m ago", credentialStatus: "Valid", uptime: 99.8 },
+  { portal: "MSC Online Booking", carrier: "MSC", status: "Online", apiAvailable: true, rpaAvailable: true, lastChecked: "3m ago", credentialStatus: "Valid", uptime: 99.2 },
+  { portal: "Hapag-Lloyd Portal", carrier: "Hapag-Lloyd", status: "Online", apiAvailable: true, rpaAvailable: true, lastChecked: "1m ago", credentialStatus: "Expiring Soon", uptime: 98.5, notes: "API credentials expire in 5 days — renewal initiated" },
+  { portal: "CMA-CGM eBusiness", carrier: "CMA-CGM", status: "Degraded", apiAvailable: false, rpaAvailable: false, lastChecked: "2m ago", credentialStatus: "Valid", uptime: 94.2, notes: "Portal experiencing intermittent outages — API endpoints returning timeouts. Maintenance window expected." },
+  { portal: "SAP TM Gateway", carrier: "SAP", status: "Online", apiAvailable: true, rpaAvailable: false, lastChecked: "1m ago", credentialStatus: "Valid", uptime: 99.9 },
+  { portal: "OTM Integration", carrier: "OTM", status: "Online", apiAvailable: true, rpaAvailable: false, lastChecked: "1m ago", credentialStatus: "Valid", uptime: 99.7 },
+]
+
+// ── D&D Risk (repurposed as Pending Approval summary) ────────────────────
+
+export interface DDRisk {
+  shipmentId: string
+  type: string
+  status: "pending" | "approved" | "resolved"
+  detail: string
+  urgency: "High" | "Medium" | "Low"
+}
+
+export const DD_RISKS: DDRisk[] = [
+  { shipmentId: "BKG-40672", type: "Carrier Override", status: "pending", detail: "Hapag-Lloyd vs DHL Freight — router approval needed", urgency: "Medium" },
+  { shipmentId: "BKG-50219", type: "Booking Rejection", status: "pending", detail: "Maersk rejected — re-routing to MSC (+4d) or expedite", urgency: "High" },
+  { shipmentId: "BKG-70991", type: "Spot Booking", status: "pending", detail: "CMA-CGM $3,800 vs contract $3,200 — planner approval", urgency: "High" },
+]
+
+// ── Reroute / Alternate Carrier Options ──────────────────────────────────
+
+export interface RerouteOption {
+  id: string
+  carrier: string
+  route: string
+  transitDays: number
+  rate: number
+  savings: string
+  available: boolean
+}
+
+export const REROUTE_OPTIONS: Record<string, RerouteOption[]> = {
+  "BKG-50219": [
+    { id: "R1", carrier: "MSC", route: "MAA→IAH (direct)", transitDays: 27, rate: 2500, savings: "-4% vs contract", available: true },
+    { id: "R2", carrier: "CMA-CGM", route: "MAA→IAH via Colombo", transitDays: 30, rate: 2750, savings: "+8% vs contract", available: true },
+    { id: "R3", carrier: "Air Freight (FedEx)", route: "MAA→IAH (air expedite)", transitDays: 3, rate: 12500, savings: "Premium — $12.5K", available: true },
+  ],
+  "BKG-30188": [
+    { id: "R4", carrier: "Spot Market", route: "BOM→RTM (spot vessel)", transitDays: 24, rate: 3200, savings: "+40% above contract", available: true },
+    { id: "R5", carrier: "Maersk", route: "BOM→CMB→RTM (transshipment)", transitDays: 28, rate: 2800, savings: "+27% above contract", available: true },
+    { id: "R6", carrier: "Defer", route: "BOM→RTM (next sailing Mar 24)", transitDays: 21, rate: 2200, savings: "On contract", available: true },
+  ],
+  "BKG-60441": [
+    { id: "R7", carrier: "FedEx Freight", route: "MEM→ORD (direct)", transitDays: 1, rate: 850, savings: "-6% vs CMA-CGM quote", available: true },
+    { id: "R8", carrier: "XPO Logistics", route: "MEM→ORD (direct)", transitDays: 1, rate: 920, savings: "Same as CMA-CGM quote", available: true },
+    { id: "R9", carrier: "J.B. Hunt", route: "MEM→ORD (direct)", transitDays: 1, rate: 880, savings: "-4% vs CMA-CGM quote", available: true },
+  ],
+  "BKG-70991": [
+    { id: "R10", carrier: "Maersk", route: "BOM→LAX (direct)", transitDays: 24, rate: 3500, savings: "+3% vs contract", available: true },
+    { id: "R11", carrier: "MSC", route: "BOM→LAX (via Singapore)", transitDays: 26, rate: 3600, savings: "+9% vs contract", available: false },
+    { id: "R12", carrier: "Accept CMA-CGM Spot", route: "BOM→LAX (direct)", transitDays: 22, rate: 3800, savings: "+19% vs contract", available: true },
+  ],
+}
+
+// ── Sent Emails ──────────────────────────────────────────────────────────
+
+export interface SentEmailItem {
+  id: string
+  to: string
+  subject: string
+  body: string
+  timestamp: string
+  type: "plant" | "carrier" | "escalation" | "sap"
+}
+
+export const STATIC_SENT_EMAILS: SentEmailItem[] = [
+  {
+    id: "SE-001",
+    to: "lax-dc-ops@company.com",
+    subject: "Booking Confirmed — BKG-10421 (SHA→LAX, Maersk)",
+    body: "Booking BKG-10421 has been confirmed.\n\nCarrier: Maersk\nVessel: Maersk Elba\nSailing: Mar 15, 2025\nContainer: 40' HC — MSKU1234567\nBooking Ref: MAEU2450891\n\nPlease ensure receiving dock is prepared.\n\nThis notification was sent by the Zero Touch Booking Agent.",
+    timestamp: "Mar 12, 09:20",
+    type: "plant",
+  },
+  {
+    id: "SE-002",
+    to: "sap-integration@company.com",
+    subject: "SAP TM Update — BKG-10421 Booking Confirmed",
+    body: "SAP TM order SAP-TM-44821 has been updated with booking confirmation.\n\nBooking Ref: MAEU2450891\nCarrier: Maersk\nSailing: Mar 15, 2025\nStatus: Confirmed\n\nOTM record updated simultaneously.",
+    timestamp: "Mar 12, 09:23",
+    type: "sap",
+  },
+  {
+    id: "SE-003",
+    to: "vp-ops@company.com",
+    subject: "ESCALATION — BKG-50219 Carrier Rejection (MAA→IAH)",
+    body: "Escalation: Maersk has rejected booking BKG-50219 (Chennai → Houston) due to vessel capacity.\n\nImpact: IAH Petrochem Hub production line — estimated $45K/day delay cost.\nFallback: MSC next sailing Mar 20 (+4 days) at $2,500\nExpedited: Air freight via FedEx at $12,500\n\nRouter approval required for alternate carrier selection.\n\nZero Touch Booking Agent",
+    timestamp: "Mar 11, 14:35",
+    type: "escalation",
+  },
+  {
+    id: "SE-004",
+    to: "bookings@maersk.com",
+    subject: "Booking Inquiry — MAA→IAH Alternate Sailing",
+    body: "Dear Maersk Booking Desk,\n\nFollowing the rejection of our booking for Chennai → Houston (ref: BKG-50219), we would like to inquire about:\n\n1. Next available sailing with capacity on MAA→IAH\n2. Any upcoming vessel additions on this route\n3. Alternative routing options (e.g., via Colombo)\n\nPlease advise at your earliest convenience.\n\nRegards,\nZero Touch Booking Agent\nOn behalf of Routing Team",
+    timestamp: "Mar 11, 14:40",
+    type: "carrier",
+  },
+]
+
+// ── Lane Performance (for analytics) ─────────────────────────────────────
 
 export interface LanePerformance {
   lane: string
   mode: TransportMode
-  origin: string
-  destination: string
-  otifPercent: number
-  avgTransitDays: number
-  activeShipments: number
-  avgDelayHours: number
-  riskLevel: "Low" | "Medium" | "High" | "Critical"
+  bookingsPerMonth: number
+  avgTurnaroundHrs: number
+  zeroTouchRate: number
   preferredCarrier: string
+  contractRate: string
 }
 
 export const LANE_PERFORMANCE: LanePerformance[] = [
-  { lane: "SHA→LAX", mode: "Ocean", origin: "Shanghai, CN", destination: "Los Angeles, US", otifPercent: 45, avgTransitDays: 14, activeShipments: 2, avgDelayHours: 28, riskLevel: "High", preferredCarrier: "Maersk" },
-  { lane: "BOM→RTM", mode: "Ocean", origin: "Mumbai, IN", destination: "Rotterdam, NL", otifPercent: 58, avgTransitDays: 22, activeShipments: 1, avgDelayHours: 19, riskLevel: "High", preferredCarrier: "Maersk" },
-  { lane: "CAN→DTW", mode: "Air", origin: "Guangzhou, CN", destination: "Detroit, US", otifPercent: 31, avgTransitDays: 1, activeShipments: 1, avgDelayHours: 10, riskLevel: "Critical", preferredCarrier: "Delta Cargo" },
-  { lane: "SZX→ORD", mode: "Air", origin: "Shenzhen, CN", destination: "Chicago, US", otifPercent: 52, avgTransitDays: 1, activeShipments: 1, avgDelayHours: 44, riskLevel: "High", preferredCarrier: "FedEx Intl" },
-  { lane: "LAX→CHI", mode: "Road", origin: "Los Angeles, US", destination: "Chicago, US", otifPercent: 83, avgTransitDays: 2, activeShipments: 1, avgDelayHours: 6, riskLevel: "Medium", preferredCarrier: "Amazon Freight" },
-  { lane: "MAA→HOU", mode: "Ocean", origin: "Chennai, IN", destination: "Houston, US", otifPercent: 67, avgTransitDays: 25, activeShipments: 1, avgDelayHours: 12, riskLevel: "Medium", preferredCarrier: "MSC" },
-  { lane: "BOM→LAX", mode: "Air", origin: "Mumbai, IN", destination: "Los Angeles, US", otifPercent: 54, avgTransitDays: 2, activeShipments: 1, avgDelayHours: 24, riskLevel: "High", preferredCarrier: "Emirates SkyCargo" },
+  { lane: "SHA→LAX", mode: "Ocean", bookingsPerMonth: 24, avgTurnaroundHrs: 0.4, zeroTouchRate: 92, preferredCarrier: "Maersk", contractRate: "$2,800" },
+  { lane: "SZX→ORD", mode: "Ocean", bookingsPerMonth: 18, avgTurnaroundHrs: 0.5, zeroTouchRate: 88, preferredCarrier: "MSC", contractRate: "$3,150" },
+  { lane: "BOM→RTM", mode: "Ocean", bookingsPerMonth: 12, avgTurnaroundHrs: 1.2, zeroTouchRate: 75, preferredCarrier: "Hapag-Lloyd", contractRate: "$2,300" },
+  { lane: "HKG→RTM", mode: "Ocean", bookingsPerMonth: 15, avgTurnaroundHrs: 0.6, zeroTouchRate: 87, preferredCarrier: "Hapag-Lloyd", contractRate: "$2,900" },
+  { lane: "BOM→LAX", mode: "Ocean", bookingsPerMonth: 8, avgTurnaroundHrs: 2.1, zeroTouchRate: 62, preferredCarrier: "Maersk", contractRate: "$3,400" },
+  { lane: "MAA→IAH", mode: "Ocean", bookingsPerMonth: 10, avgTurnaroundHrs: 1.5, zeroTouchRate: 70, preferredCarrier: "Maersk", contractRate: "$2,550" },
+  { lane: "MEM→ORD", mode: "Road", bookingsPerMonth: 30, avgTurnaroundHrs: 0.2, zeroTouchRate: 96, preferredCarrier: "FedEx Freight", contractRate: "$800" },
+  { lane: "YYZ→DTW", mode: "Road", bookingsPerMonth: 20, avgTurnaroundHrs: 0.3, zeroTouchRate: 85, preferredCarrier: "DHL Freight", contractRate: "$1,750" },
 ]
 
-// ─── Detention & Demurrage Risk ────────────────────────────────────────────────
+// ── Carrier Policies (for exception workbench) ────────────────────────
 
-export interface DDRisk {
-  shipmentId: string
+export interface CarrierPolicy {
   carrier: string
-  port: string
-  mode: TransportMode
-  daysExposed: number
-  dailyRateUSD: number
-  totalExposureUSD: number
-  status: "accumulating" | "at-risk" | "resolved"
-  note: string
+  maxWeightKg: number
+  equipmentTypes: string[]
+  prohibitedCargo: string[]
+  bookingCutoffHours: number
+  specialNotes?: string
 }
 
-export const DD_RISKS: DDRisk[] = [
-  {
-    shipmentId: "SHP-10421",
-    carrier: "COSCO",
-    port: "Los Angeles (WBCT)",
-    mode: "Ocean",
-    daysExposed: 2,
-    dailyRateUSD: 350,
-    totalExposureUSD: 700,
-    status: "accumulating",
-    note: "Vessel at anchor since Mar 12 06:00. Free time expires Mar 13.",
+export const CARRIER_POLICIES: Record<string, CarrierPolicy> = {
+  "Maersk": {
+    carrier: "Maersk",
+    maxWeightKg: 28000,
+    equipmentTypes: ["20' STD", "40' STD", "40' HC", "40' Reefer", "45' HC"],
+    prohibitedCargo: ["Lithium batteries (Class 9 restricted)", "Loose scrap metal", "Personal effects (non-commercial)"],
+    bookingCutoffHours: 48,
+    specialNotes: "VGM submission required 24h before vessel cutoff. Hazmat requires separate DG booking form.",
   },
-  {
-    shipmentId: "SHP-40672",
-    carrier: "FedEx International",
-    port: "Shanghai PVG",
-    mode: "Air",
-    daysExposed: 1,
-    dailyRateUSD: 850,
-    totalExposureUSD: 850,
-    status: "accumulating",
-    note: "Ground stop cargo held in temp facility. Storage fees accruing.",
+  "MSC": {
+    carrier: "MSC",
+    maxWeightKg: 30480,
+    equipmentTypes: ["20' STD", "40' STD", "40' HC", "40' Reefer", "Open Top"],
+    prohibitedCargo: ["Weapons/ammunition", "Radioactive materials", "Unmarked chemicals"],
+    bookingCutoffHours: 72,
+    specialNotes: "Transhipment bookings require minimum 7-day advance notice. Late bookings incur 15% surcharge.",
   },
-  {
-    shipmentId: "SHP-70991",
-    carrier: "Emirates SkyCargo",
-    port: "Dubai DXB Hub",
-    mode: "Air",
-    daysExposed: 3,
-    dailyRateUSD: 620,
-    totalExposureUSD: 1860,
-    status: "at-risk",
-    note: "Dwell exceeds 72h. Hub transfer delayed by capacity constraints.",
+  "Hapag-Lloyd": {
+    carrier: "Hapag-Lloyd",
+    maxWeightKg: 32500,
+    equipmentTypes: ["20' STD", "40' STD", "40' HC", "40' Reefer", "Flat Rack", "Open Top"],
+    prohibitedCargo: ["Ivory products", "Counterfeit goods", "Sanctioned country cargo"],
+    bookingCutoffHours: 48,
+    specialNotes: "Quick Quotes available for spot bookings. Equipment guarantee available at premium rate.",
   },
-  {
-    shipmentId: "SHP-30188",
-    carrier: "Maersk Line",
-    port: "Arabian Sea (AIS Loss)",
-    mode: "Ocean",
-    daysExposed: 0,
-    dailyRateUSD: 275,
-    totalExposureUSD: 0,
-    status: "at-risk",
-    note: "AIS signal lost. Port entry fees may apply on arrival.",
+  "CMA-CGM": {
+    carrier: "CMA-CGM",
+    maxWeightKg: 30000,
+    equipmentTypes: ["20' STD", "40' STD", "40' HC", "40' Reefer"],
+    prohibitedCargo: ["Asbestos", "Used tires (non-processed)", "E-waste without certification"],
+    bookingCutoffHours: 48,
+    specialNotes: "eSolutions API available for automated bookings. Reefer monitoring included for pharma grade containers.",
   },
+  "FedEx Freight": {
+    carrier: "FedEx Freight",
+    maxWeightKg: 20000,
+    equipmentTypes: ["53' Dry Van", "Flatbed", "LTL", "Temperature Controlled"],
+    prohibitedCargo: ["Explosives", "Compressed gases (without DOT certification)", "Live animals"],
+    bookingCutoffHours: 24,
+    specialNotes: "Same-day pickup available for Priority Freight. Guaranteed delivery windows for Premium service.",
+  },
+}
+
+// ── Backward-compat aliases used by various components ────────────────
+
+export type DocStatus = DocumentStatus
+export type CarrierRating = CarrierScorecard["rating"]
+export type PerformanceTrend = CarrierScorecard["trend"]
+
+// LANE_INSIGHTS used by lane-insight-banner.tsx
+export const LANE_INSIGHTS = [
+  { insight: "SHA→LAX lane has 92% zero-touch booking rate — highest in the portfolio. Maersk contract rate $2,800 is 3% below spot market." },
+  { insight: "BOM→RTM lane experiencing allocation shortages. Recommend pre-booking 2 weeks ahead or diversifying to Hapag-Lloyd as backup." },
+  { insight: "MEM→ORD domestic route achieving 96% zero-touch rate with FedEx Freight — ideal candidate for full autonomous mode." },
+  { insight: "BOM→LAX lane has highest manual intervention rate (38%) due to frequent rate mismatches. Consider renegotiating CMA-CGM contract." },
+]
+
+// SHIPMENT_DOCUMENTS alias for components using old name
+export const SHIPMENT_DOCUMENTS = BOOKING_DOCUMENTS.map((d) => ({
+  shipmentId: d.bookingId,
+  docs: d.documents.map((doc) => ({
+    docType: doc.name,
+    status: doc.status,
+    source: d.carrier,
+    receivedAt: doc.uploadDate,
+    notes: doc.ref ?? "",
+  })),
+}))
+
+// ── Dashboard & Analytics Charts ─────────────────────────────────────────
+
+// Booking workflow funnel — shows how bookings flow through the agent pipeline
+export const BOOKING_FUNNEL = [
+  { stage: "Ingested", count: 8, color: "#3B82F6" },
+  { stage: "Carrier Selected", count: 6, color: "#6366F1" },
+  { stage: "Booking Submitted", count: 4, color: "#8B5CF6" },
+  { stage: "Confirmed", count: 3, color: "#22C55E" },
+  { stage: "Exception", count: 5, color: "#EF4444" },
+]
+
+// 7-day exception resolution trend
+export const EXCEPTION_TREND = [
+  { day: "Mon", raised: 3, resolved: 2 },
+  { day: "Tue", raised: 1, resolved: 3 },
+  { day: "Wed", raised: 4, resolved: 2 },
+  { day: "Thu", raised: 2, resolved: 4 },
+  { day: "Fri", raised: 1, resolved: 1 },
+  { day: "Sat", raised: 0, resolved: 1 },
+  { day: "Sun", raised: 2, resolved: 0 },
+]
+
+// Agent vs Human handling split
+export const AGENT_HANDLING = [
+  { name: "Zero-Touch (Agent)", value: 3, color: "#22C55E" },
+  { name: "Human Override", value: 2, color: "#F59E0B" },
+  { name: "Exception (Pending)", value: 3, color: "#EF4444" },
+]
+
+// SLA compliance per exception type (aligned to 5 requirement categories)
+export const EXCEPTION_SLA = [
+  { type: "Missing Allocation",  sla: 85, target: 90, color: "#F59E0B" },
+  { type: "Portal/API Unavail.", sla: 92, target: 90, color: "#8B5CF6" },
+  { type: "Rate Mismatch",       sla: 78, target: 90, color: "#EF4444" },
+  { type: "Missing Fields",      sla: 95, target: 90, color: "#6366F1" },
+  { type: "Carrier Rejection",   sla: 88, target: 90, color: "#DC2626" },
+]
+
+// ── Dashboard AI Insight Cards ──────────────────────────────────────────
+
+// Critical exceptions needing human attention
+export const CRITICAL_EXCEPTIONS = [
+  { id: "BKG-50219", lane: "MAA→IAH", type: "Carrier Rejection", severity: "Critical" as Severity, carrier: "Maersk", summary: "Vessel capacity exceeded — reroute to alternate carrier or split shipment" },
+  { id: "BKG-60441", lane: "MEM→ORD", type: "Portal Unavailable", severity: "High" as Severity, carrier: "CMA-CGM", summary: "API timeout after 3 retries — manual booking or fallback carrier needed" },
+  { id: "BKG-70991", lane: "BOM→LAX", type: "Rate Mismatch", severity: "High" as Severity, carrier: "CMA-CGM", summary: "Spot rate 19% above contract — requires approval or rate negotiation" },
+  { id: "BKG-92410", lane: "BOM→LAX", type: "Portal Unavailable", severity: "High" as Severity, carrier: "CMA-CGM", summary: "CMA-CGM portal session expired mid-booking — re-auth required to resume submission" },
+  { id: "BKG-30188", lane: "BOM→HAM", type: "Missing Allocation", severity: "High" as Severity, carrier: "Hapag-Lloyd", summary: "No capacity available on lane — 3 alternate routes identified, awaiting approval" },
+  { id: "BKG-88442", lane: "BOM→FRA", type: "Missing Booking Fields", severity: "Medium" as Severity, carrier: "Maersk", summary: "3 mandatory fields missing from SAP export — booking blocked pending data correction" },
+]
+
+// Most frequently booked routes (rolling 30 days)
+export const FREQUENT_ROUTES = [
+  { lane: "MEM→ORD", mode: "Road" as TransportMode, bookings: 34, carrier: "FedEx Freight", zeroTouch: 96, avgCost: "$820" },
+  { lane: "SHA→LAX", mode: "Ocean" as TransportMode, bookings: 28, carrier: "Maersk", zeroTouch: 92, avgCost: "$2,850" },
+  { lane: "SZX→ORD", mode: "Ocean" as TransportMode, bookings: 22, carrier: "MSC", zeroTouch: 88, avgCost: "$3,200" },
+  { lane: "YYZ→DTW", mode: "Road" as TransportMode, bookings: 20, carrier: "DHL Freight", zeroTouch: 85, avgCost: "$1,780" },
+  { lane: "BOM→RTM", mode: "Ocean" as TransportMode, bookings: 15, carrier: "Hapag-Lloyd", zeroTouch: 78, avgCost: "$2,400" },
+  { lane: "GRU→MIA", mode: "Air" as TransportMode, bookings: 18, carrier: "LATAM Cargo", zeroTouch: 72, avgCost: "$4,200" },
+  { lane: "PVG→LAX", mode: "Ocean" as TransportMode, bookings: 16, carrier: "COSCO", zeroTouch: 85, avgCost: "$3,050" },
+]
+
+// AI-suggested upcoming bookings based on historical patterns
+export const SUGGESTED_BOOKINGS = [
+  { lane: "SHA→LAX", mode: "Ocean" as TransportMode, reason: "Weekly recurring — last booking Mar 6, next due Mar 13", carrier: "Maersk", estRate: "$2,800", confidence: 94 },
+  { lane: "BOM→RTM", mode: "Ocean" as TransportMode, reason: "Bi-weekly pattern detected — allocation window closing in 48h", carrier: "Hapag-Lloyd", estRate: "$2,350", confidence: 87 },
+  { lane: "SZX→ORD", mode: "Ocean" as TransportMode, reason: "Q1 volume spike predicted — pre-book to lock contract rate", carrier: "MSC", estRate: "$3,100", confidence: 82 },
+  { lane: "MEM→ORD", mode: "Road" as TransportMode, reason: "Daily recurring — next window opens tomorrow 06:00 CST", carrier: "FedEx Freight", estRate: "$840", confidence: 98 },
+  { lane: "YYZ→DTW", mode: "Road" as TransportMode, reason: "Monthly contract renewal — current booking expires Mar 20", carrier: "DHL Freight", estRate: "$1,750", confidence: 79 },
+]
+
+// Extended booking funnel with more granular stages
+export const BOOKING_FUNNEL_EXTENDED = [
+  { stage: "SAP Ingested", count: 14, color: "#94A3B8" },
+  { stage: "Validated", count: 13, color: "#3B82F6" },
+  { stage: "Carrier Selected", count: 12, color: "#6366F1" },
+  { stage: "Portal Login", count: 10, color: "#8B5CF6" },
+  { stage: "Submitted", count: 8, color: "#A855F7" },
+  { stage: "Confirmed", count: 6, color: "#22C55E" },
+  { stage: "Exception", count: 6, color: "#EF4444" },
 ]

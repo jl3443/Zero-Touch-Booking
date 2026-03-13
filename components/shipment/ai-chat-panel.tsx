@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { Brain, X, Send, ChevronRight, AlertTriangle, Clock } from "lucide-react"
-import { SHIPMENTS, type Shipment } from "@/lib/mock-data"
+import { SHIPMENTS, CARRIER_SCORECARDS, DD_RISKS, LANE_PERFORMANCE, type Shipment } from "@/lib/mock-data"
 import { ShipmentDrawer } from "./shipment-drawer"
 import { type SentEmailItem } from "./email-sent-page"
 import { cn } from "@/lib/utils"
@@ -27,92 +27,105 @@ interface AIResponseData {
 function generateAIResponse(query: string): AIResponseData {
   const q = query.toLowerCase()
 
-  const delayed = SHIPMENTS.filter((s) => s.delayHours > 0).sort((a, b) => b.delayHours - a.delayHours)
-  const critical = SHIPMENTS.filter((s) => s.severity === "Critical")
-  const high = SHIPMENTS.filter((s) => s.severity === "High")
-  const weatherTraffic = SHIPMENTS.filter(
-    (s) => s.exceptionType === "Weather Disruption" || s.exceptionType === "Traffic Disruption"
-  )
-  const customsHold = SHIPMENTS.filter((s) => s.exceptionType === "Customs Hold")
+  const withExceptions = SHIPMENTS.filter((s) => s.exceptionType !== "None")
+  const confirmed = SHIPMENTS.filter((s) => s.bookingStatus === "Confirmed" || s.bookingStatus === "Notified")
+  const pending = SHIPMENTS.filter((s) => s.bookingStatus === "Pending" || s.bookingStatus === "In Progress")
+  const awaitingApproval = SHIPMENTS.filter((s) => s.bookingStatus === "Awaiting Approval")
 
-  if (q.includes("eta") || q.includes("update") || q.includes("delay") || q.includes("延误") || q.includes("迟")) {
+  // Exception queries
+  if (q.includes("exception") || q.includes("error") || q.includes("issue") || q.includes("problem") || q.includes("attention")) {
     return {
-      heading: "Shipments Requiring ETA Update",
-      summary: `${delayed.length} shipments have active delays totaling +${delayed.reduce((sum, s) => sum + s.delayHours, 0)}h across the portfolio. Recommended to review and push revised ETAs to OTM.`,
-      lines: delayed.map((s) => ({
-        id: s.id,
-        delay: s.delayHours,
-        severity: s.severity,
-        exception: s.exceptionType,
-        note: s.revisedETA.replace("2025 ", ""),
-      })),
-      footer: "Action: Open each shipment → OTM & Notifications tab → Approve OTM Update",
-    }
-  }
-
-  if (q.includes("risk") || q.includes("critical") || q.includes("风险") || q.includes("危") || q.includes("urgent")) {
-    const riskShipments = [...critical, ...high.filter((s) => s.criticalMaterial)]
-    return {
-      heading: "High-Risk Shipments",
-      summary: `${critical.length} Critical and ${high.length} High severity shipments detected. ${critical.filter((s) => s.criticalMaterial).length + high.filter((s) => s.criticalMaterial).length} flagged as Critical Material with production line risk.`,
-      lines: riskShipments.map((s) => ({
-        id: s.id,
-        delay: s.delayHours,
-        severity: s.severity,
-        exception: s.exceptionType,
-        note: s.plant,
-      })),
-      footer: "Recommended: Escalate Critical Material shipments immediately via Exceptions page",
-    }
-  }
-
-  if (
-    q.includes("weather") ||
-    q.includes("traffic") ||
-    q.includes("storm") ||
-    q.includes("天气") ||
-    q.includes("disruption")
-  ) {
-    return {
-      heading: "Weather & Traffic Disruptions",
-      summary: `${weatherTraffic.length} shipments impacted by weather or traffic events. PVG ground stop (typhoon remnant) is the highest-impact active disruption.`,
-      lines: weatherTraffic.map((s) => ({
-        id: s.id,
-        delay: s.delayHours,
-        severity: s.severity,
-        exception: s.exceptionType,
-        note: s.disruptionContext?.split(".")[0] ?? s.currentStatus,
-      })),
-      footer: "See Weather / Traffic page for full disruption context and lane risk summary",
-    }
-  }
-
-  if (q.includes("customs") || q.includes("hold") || q.includes("清关") || q.includes("海关")) {
-    return {
-      heading: "Customs Hold Shipments",
-      summary: `${customsHold.length} shipment(s) under customs hold. These require immediate broker coordination to avoid further slippage.`,
-      lines: customsHold.map((s) => ({
+      heading: "Bookings with Exceptions",
+      summary: `${withExceptions.length} booking${withExceptions.length !== 1 ? "s" : ""} have active exceptions requiring attention. Review recommended actions below.`,
+      lines: withExceptions.map((s) => ({
         id: s.id,
         delay: s.delayHours,
         severity: s.severity,
         exception: s.exceptionType,
         note: s.recommendedAction,
       })),
-      footer: "Action: Coordinate with customs broker and provide missing documentation",
+      footer: "Action: Open each booking to review exception details and take recommended action",
     }
   }
 
+  // Carrier / rate queries
+  if (q.includes("carrier") || q.includes("rate") || q.includes("comparison") || q.includes("compare")) {
+    const topCarriers = CARRIER_SCORECARDS.slice(0, 5)
+    return {
+      heading: "Carrier Comparison",
+      summary: `${CARRIER_SCORECARDS.length} carriers in the network. Top performers by SLA: ${topCarriers.sort((a, b) => b.slaScore - a.slaScore).slice(0, 3).map((c) => `${c.carrier} (${c.slaScore}%)`).join(", ")}.`,
+      lines: topCarriers.map((c) => ({
+        id: c.carrier,
+        delay: 0,
+        severity: c.rating === "Preferred" ? "Low" : "Medium",
+        exception: c.rating,
+        note: `Contract: ${c.contractRate} \u00b7 SLA: ${c.slaScore}% \u00b7 Success: ${c.bookingSuccessRate}%`,
+      })),
+      footer: "Tip: Ask about a specific carrier or lane for detailed performance data",
+    }
+  }
+
+  // Approval / pending queries
+  if (q.includes("approval") || q.includes("pending") || q.includes("awaiting")) {
+    return {
+      heading: "Pending Approvals",
+      summary: `${DD_RISKS.length} booking${DD_RISKS.length !== 1 ? "s" : ""} awaiting planner or manager approval. ${DD_RISKS.filter((r) => r.urgency === "High").length} flagged as high urgency.`,
+      lines: DD_RISKS.map((r) => ({
+        id: r.shipmentId,
+        delay: 0,
+        severity: r.urgency === "High" ? "High" : "Medium",
+        exception: r.type,
+        note: r.detail,
+      })),
+      footer: "Action: Review and approve or reject each item in the Exceptions workbench",
+    }
+  }
+
+  // Booking / status overview queries
+  if (q.includes("booking") || q.includes("status") || q.includes("overview") || q.includes("all")) {
+    return {
+      heading: "Booking Portfolio Overview",
+      summary: `${SHIPMENTS.length} active bookings: ${confirmed.length} confirmed, ${pending.length} in progress, ${awaitingApproval.length} awaiting approval, ${withExceptions.length} with exceptions.`,
+      lines: SHIPMENTS.slice(0, 5).map((s) => ({
+        id: s.id,
+        delay: s.delayHours,
+        severity: s.severity,
+        exception: s.bookingStatus,
+        note: s.currentStatus,
+      })),
+      footer: `Tip: Ask about "exceptions", "carriers", "approvals", or "lane performance" for targeted insights`,
+    }
+  }
+
+  // Lane performance queries
+  if (q.includes("lane") || q.includes("performance") || q.includes("zero-touch") || q.includes("zero touch") || q.includes("turnaround")) {
+    const topLanes = LANE_PERFORMANCE.sort((a, b) => b.zeroTouchRate - a.zeroTouchRate).slice(0, 5)
+    return {
+      heading: "Lane Performance Summary",
+      summary: `${LANE_PERFORMANCE.length} active lanes monitored. Average zero-touch rate: ${Math.round(LANE_PERFORMANCE.reduce((sum, l) => sum + l.zeroTouchRate, 0) / LANE_PERFORMANCE.length)}%. Best performer: ${topLanes[0].lane} at ${topLanes[0].zeroTouchRate}%.`,
+      lines: topLanes.map((l) => ({
+        id: l.lane,
+        delay: 0,
+        severity: l.zeroTouchRate >= 85 ? "Low" : l.zeroTouchRate >= 70 ? "Medium" : "High",
+        exception: `${l.zeroTouchRate}% ZT`,
+        note: `${l.preferredCarrier} \u00b7 ${l.bookingsPerMonth}/mo \u00b7 ${l.avgTurnaroundHrs}h turnaround`,
+      })),
+      footer: "Lanes below 70% zero-touch rate are candidates for workflow optimization",
+    }
+  }
+
+  // Default: general overview
   return {
-    heading: "Portfolio Status Overview",
-    summary: `Monitoring ${SHIPMENTS.length} active shipments. ${critical.length} Critical, ${high.length} High severity. Total delay exposure: +${delayed.reduce((sum, s) => sum + s.delayHours, 0)}h across ${delayed.length} shipments.`,
+    heading: "Booking System Overview",
+    summary: `Monitoring ${SHIPMENTS.length} active bookings across ${LANE_PERFORMANCE.length} lanes with ${CARRIER_SCORECARDS.length} carriers. ${withExceptions.length} exceptions active, ${DD_RISKS.length} pending approvals.`,
     lines: SHIPMENTS.slice(0, 5).map((s) => ({
       id: s.id,
       delay: s.delayHours,
       severity: s.severity,
-      exception: s.exceptionType,
+      exception: s.bookingStatus,
       note: s.currentStatus,
     })),
-    footer: `Tip: Ask about "delays", "risk", "weather disruptions", or "customs holds" for targeted insights`,
+    footer: `Tip: Ask about "exceptions", "carrier comparison", "pending approvals", "bookings", or "lane performance"`,
   }
 }
 
@@ -124,10 +137,10 @@ const SEV_COLOR: Record<string, string> = {
 }
 
 const SUGGESTION_CHIPS = [
-  "Which orders need ETA update?",
-  "Show high-risk shipments",
-  "Any weather disruptions?",
-  "Customs holds status",
+  "Which bookings need attention?",
+  "Show carrier comparison",
+  "Any booking exceptions?",
+  "Pending approvals status",
 ]
 
 // ── Chat types ─────────────────────────────────────────────────────────────────
@@ -144,7 +157,7 @@ interface ChatMessage {
 interface AIChatPanelProps {
   open: boolean
   onClose: () => void
-  onOpenWeather?: (shipmentId: string) => void
+  onOpenWeather?: (id: string) => void
   onSendNotification?: (email: SentEmailItem) => void
 }
 
@@ -202,7 +215,7 @@ export function AIChatPanel({ open, onClose, onOpenWeather, onSendNotification }
             </div>
             <div>
               <p className="text-sm font-semibold text-gray-800 leading-none">AI Assistant</p>
-              <p className="text-[10px] text-indigo-500 mt-0.5">Shipment intelligence agent</p>
+              <p className="text-[10px] text-indigo-500 mt-0.5">Booking intelligence agent</p>
             </div>
           </div>
           <button
@@ -218,7 +231,7 @@ export function AIChatPanel({ open, onClose, onOpenWeather, onSendNotification }
           {messages.length === 0 && (
             <div className="space-y-3 pt-2">
               <p className="text-[11px] text-gray-400 text-center">
-                Ask about your shipments, exceptions, or delays
+                Ask about your bookings, carriers, exceptions, or approvals
               </p>
               <div className="grid grid-cols-2 gap-2">
                 {SUGGESTION_CHIPS.map((chip) => (
@@ -255,9 +268,12 @@ export function AIChatPanel({ open, onClose, onOpenWeather, onSendNotification }
                               onClick={() => {
                                 if (shipment) setSelectedShipment(shipment)
                               }}
-                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg bg-white hover:bg-blue-50 hover:border-blue-200 border border-gray-100 transition-colors text-left"
+                              className={cn(
+                                "w-full flex items-center gap-2 px-2 py-1.5 rounded-lg bg-white hover:bg-blue-50 hover:border-blue-200 border border-gray-100 transition-colors text-left",
+                                !shipment && "cursor-default"
+                              )}
                             >
-                              <span className="font-mono font-bold text-blue-700 text-[10px] w-16 shrink-0">
+                              <span className="font-mono font-bold text-blue-700 text-[10px] w-20 shrink-0">
                                 {line.id}
                               </span>
                               <span
@@ -274,7 +290,7 @@ export function AIChatPanel({ open, onClose, onOpenWeather, onSendNotification }
                                 </span>
                               )}
                               <span className="text-[9px] text-gray-400 flex-1 truncate">{line.note}</span>
-                              <ChevronRight size={9} className="text-gray-300 shrink-0" />
+                              {shipment && <ChevronRight size={9} className="text-gray-300 shrink-0" />}
                             </button>
                           )
                         })}
@@ -323,7 +339,7 @@ export function AIChatPanel({ open, onClose, onOpenWeather, onSendNotification }
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleQuery(inputValue)
               }}
-              placeholder="Ask about your shipments..."
+              placeholder="Ask about your bookings..."
               className="flex-1 text-xs bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-400 transition-colors placeholder:text-gray-400"
             />
             <button

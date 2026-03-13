@@ -1,14 +1,13 @@
 "use client"
 
 import { useState } from "react"
-import { SHIPMENTS, SHIPMENT_DOCUMENTS, type DocStatus } from "@/lib/mock-data"
-import { ModeBadge, SeverityBadge } from "./shared"
+import { BOOKING_DOCUMENTS, type DocumentStatus } from "@/lib/mock-data"
 import { cn } from "@/lib/utils"
 import {
-  FileText, CheckCircle2, AlertCircle, Clock, Minus, ChevronDown, ChevronRight,
+  FileText, CheckCircle2, AlertCircle, Clock, Minus, ChevronDown, ChevronRight, Download,
 } from "lucide-react"
 
-const STATUS_CONFIG: Record<DocStatus, { label: string; icon: React.ReactNode; color: string; bg: string }> = {
+const STATUS_CONFIG: Record<DocumentStatus, { label: string; icon: React.ReactNode; color: string; bg: string }> = {
   verified: {
     label: "Verified",
     icon: <CheckCircle2 size={12} />,
@@ -42,10 +41,10 @@ const STATUS_CONFIG: Record<DocStatus, { label: string; icon: React.ReactNode; c
 }
 
 export function DocumentsPage() {
-  const [openShipments, setOpenShipments] = useState<Set<string>>(new Set(["SHP-20334", "SHP-40672"]))
+  const [openBookings, setOpenBookings] = useState<Set<string>>(new Set(["BKG-10421", "BKG-20334"]))
 
   const toggle = (id: string) => {
-    setOpenShipments((prev) => {
+    setOpenBookings((prev) => {
       const next = new Set(prev)
       next.has(id) ? next.delete(id) : next.add(id)
       return next
@@ -53,7 +52,7 @@ export function DocumentsPage() {
   }
 
   // Summary counts
-  const allDocs = SHIPMENT_DOCUMENTS.flatMap((s) => s.docs)
+  const allDocs = BOOKING_DOCUMENTS.flatMap((d) => d.documents)
   const missingCount = allDocs.filter((d) => d.status === "missing").length
   const pendingCount = allDocs.filter((d) => d.status === "pending").length
   const verifiedCount = allDocs.filter((d) => d.status === "verified").length
@@ -69,8 +68,8 @@ export function DocumentsPage() {
               <FileText size={16} className="text-blue-600" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-gray-800">Supporting Documents</h2>
-              <p className="text-xs text-gray-400">Compliance docs across all active shipments</p>
+              <h2 className="text-lg font-semibold text-gray-800">Booking Documents</h2>
+              <p className="text-xs text-gray-400">Supporting documents across all active bookings</p>
             </div>
           </div>
           <div className="flex items-center gap-3 text-xs">
@@ -86,30 +85,28 @@ export function DocumentsPage() {
           </div>
         </div>
 
-        {/* Shipment accordions */}
+        {/* Booking document accordions */}
         <div className="space-y-2">
-          {SHIPMENT_DOCUMENTS.map((docSet) => {
-            const shipment = SHIPMENTS.find((s) => s.id === docSet.shipmentId)
-            if (!shipment) return null
-            const isOpen = openShipments.has(docSet.shipmentId)
-            const missing = docSet.docs.filter((d) => d.status === "missing").length
-            const pending = docSet.docs.filter((d) => d.status === "pending").length
-            const verified = docSet.docs.filter((d) => d.status === "verified").length
-            const total = docSet.docs.filter((d) => d.status !== "na").length
+          {BOOKING_DOCUMENTS.map((docSet) => {
+            const isOpen = openBookings.has(docSet.bookingId)
+            const missing = docSet.documents.filter((d) => d.status === "missing").length
+            const pending = docSet.documents.filter((d) => d.status === "pending").length
+            const verified = docSet.documents.filter((d) => d.status === "verified").length
+            const total = docSet.documents.filter((d) => d.status !== "na").length
             const pct = total > 0 ? Math.round((verified / total) * 100) : 100
 
             return (
-              <div key={docSet.shipmentId} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div key={docSet.bookingId} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                 {/* Accordion header */}
                 <button
-                  onClick={() => toggle(docSet.shipmentId)}
+                  onClick={() => toggle(docSet.bookingId)}
                   className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
                 >
                   {isOpen ? <ChevronDown size={14} className="text-gray-400 shrink-0" /> : <ChevronRight size={14} className="text-gray-400 shrink-0" />}
-                  <span className="font-mono font-bold text-blue-700 text-sm w-24 shrink-0">{shipment.id}</span>
-                  <ModeBadge mode={shipment.mode} />
-                  <SeverityBadge severity={shipment.severity} />
-                  <span className="text-xs text-gray-500 font-medium truncate flex-1">{shipment.carrier} · {shipment.origin} → {shipment.destination}</span>
+                  <span className="font-mono font-bold text-blue-700 text-sm w-24 shrink-0">{docSet.bookingId}</span>
+                  <span className="text-xs text-gray-500 font-medium truncate flex-1">
+                    {docSet.carrier} &middot; {docSet.lane}
+                  </span>
 
                   {/* Mini progress */}
                   <div className="flex items-center gap-2 shrink-0">
@@ -143,20 +140,19 @@ export function DocumentsPage() {
                         <tr className="bg-gray-50 border-b border-gray-100">
                           <th className="px-4 py-2 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Document</th>
                           <th className="px-4 py-2 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Status</th>
-                          <th className="px-4 py-2 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Source</th>
-                          <th className="px-4 py-2 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Received</th>
-                          <th className="px-4 py-2 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Notes</th>
+                          <th className="px-4 py-2 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Upload Date</th>
+                          <th className="px-4 py-2 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Reference</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {docSet.docs.map((doc, i) => {
+                        {docSet.documents.map((doc, i) => {
                           const cfg = STATUS_CONFIG[doc.status]
                           return (
                             <tr key={i} className={cn(
                               "border-b border-gray-50",
                               doc.status === "missing" ? "bg-red-50/40" : doc.status === "pending" ? "bg-amber-50/30" : ""
                             )}>
-                              <td className="px-4 py-2.5 font-medium text-gray-700">{doc.docType}</td>
+                              <td className="px-4 py-2.5 font-medium text-gray-700">{doc.name}</td>
                               <td className="px-4 py-2.5">
                                 <span className={cn(
                                   "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold",
@@ -166,9 +162,8 @@ export function DocumentsPage() {
                                   {cfg.label}
                                 </span>
                               </td>
-                              <td className="px-4 py-2.5 text-gray-500">{doc.source}</td>
-                              <td className="px-4 py-2.5 font-mono text-gray-500">{doc.receivedAt || "—"}</td>
-                              <td className="px-4 py-2.5 text-gray-400 italic">{doc.notes || "—"}</td>
+                              <td className="px-4 py-2.5 font-mono text-gray-500">{doc.uploadDate || "\u2014"}</td>
+                              <td className="px-4 py-2.5 text-gray-400 italic">{doc.ref || "\u2014"}</td>
                             </tr>
                           )
                         })}

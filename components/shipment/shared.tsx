@@ -1,8 +1,11 @@
 "use client"
 
 import { cn } from "@/lib/utils"
-import type { ExceptionType, ReasonChip, Severity, TransportMode } from "@/lib/mock-data"
+import type { BookingExceptionType, BookingStatus, ReasonChip, Severity, TransportMode } from "@/lib/mock-data"
 import { Plane, Ship, Truck } from "lucide-react"
+
+// Keep old type alias for any legacy imports
+export type ExceptionType = BookingExceptionType
 
 // ─── Severity Badge ───────────────────────────────────────────────────────────
 export function SeverityBadge({ severity }: { severity: Severity }) {
@@ -45,17 +48,55 @@ export function ModeBadge({ mode }: { mode: TransportMode }) {
   )
 }
 
-// ─── Exception Badge ──────────────────────────────────────────────────────────
-export function ExceptionBadge({ type }: { type: ExceptionType }) {
-  const map: Record<ExceptionType, string> = {
-    "Schedule Slippage": "bg-red-50 text-red-700 border-red-200",
-    "Missing Signal": "bg-gray-100 text-gray-600 border-gray-300",
-    "Long Dwell": "bg-purple-50 text-purple-700 border-purple-200",
-    "Route Deviation": "bg-red-50 text-red-700 border-red-300",
-    "Weather Disruption": "bg-blue-50 text-blue-700 border-blue-200",
-    "Traffic Disruption": "bg-amber-50 text-amber-700 border-amber-200",
-    "Customs Hold": "bg-amber-50 text-amber-800 border-amber-300",
-    "Conflicting Sources": "bg-gray-50 text-gray-700 border-gray-300",
+// ─── Booking Status Badge ─────────────────────────────────────────────────────
+export function BookingStatusBadge({ status }: { status: BookingStatus }) {
+  const map: Record<BookingStatus, string> = {
+    "Pending": "bg-gray-100 text-gray-700 border-gray-300",
+    "In Progress": "bg-blue-50 text-blue-700 border-blue-200",
+    "Carrier Selected": "bg-indigo-50 text-indigo-700 border-indigo-200",
+    "Portal Login": "bg-cyan-50 text-cyan-700 border-cyan-200",
+    "Booking Submitted": "bg-sky-50 text-sky-700 border-sky-200",
+    "Docs Uploaded": "bg-violet-50 text-violet-700 border-violet-200",
+    "Confirmed": "bg-green-50 text-green-700 border-green-200",
+    "Notified": "bg-green-100 text-green-800 border-green-300",
+    "Exception": "bg-red-50 text-red-700 border-red-200",
+    "Awaiting Approval": "bg-amber-50 text-amber-700 border-amber-200",
+  }
+  return (
+    <span className={cn("inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium whitespace-nowrap", map[status])}>
+      {status}
+    </span>
+  )
+}
+
+// ─── Carrier Badge ────────────────────────────────────────────────────────────
+export function CarrierBadge({ carrier }: { carrier: string }) {
+  const map: Record<string, string> = {
+    "Maersk": "bg-sky-700 text-white",
+    "MSC": "bg-blue-700 text-white",
+    "Hapag-Lloyd": "bg-orange-600 text-white",
+    "CMA-CGM": "bg-red-700 text-white",
+    "FedEx Freight": "bg-purple-600 text-white",
+    "DHL Freight": "bg-yellow-500 text-yellow-900",
+    "XPO Logistics": "bg-indigo-600 text-white",
+    "J.B. Hunt": "bg-teal-600 text-white",
+  }
+  return (
+    <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wide", map[carrier] ?? "bg-gray-200 text-gray-700")}>
+      {carrier}
+    </span>
+  )
+}
+
+// ─── Exception Badge (repurposed for booking exceptions) ──────────────────────
+export function ExceptionBadge({ type }: { type: BookingExceptionType }) {
+  const map: Record<BookingExceptionType, string> = {
+    "Missing Allocation": "bg-amber-50 text-amber-700 border-amber-200",
+    "Portal Unavailable": "bg-purple-50 text-purple-700 border-purple-200",
+    "Rate Mismatch": "bg-red-50 text-red-700 border-red-200",
+    "Missing Booking Fields": "bg-indigo-50 text-indigo-700 border-indigo-200",
+    "Carrier Rejection": "bg-red-50 text-red-800 border-red-300",
+    "Credentials Expired": "bg-gray-100 text-gray-600 border-gray-300",
     "None": "bg-blue-50 text-blue-600 border-blue-200",
   }
   return (
@@ -68,14 +109,14 @@ export function ExceptionBadge({ type }: { type: ExceptionType }) {
 // ─── Reason Chips ─────────────────────────────────────────────────────────────
 export function ReasonChips({ chips }: { chips: ReasonChip[] }) {
   const colorMap: Record<ReasonChip["type"], string> = {
-    weather: "bg-blue-100 text-blue-800",
-    traffic: "bg-orange-100 text-orange-800",
-    signal: "bg-gray-100 text-gray-700",
-    port: "bg-teal-100 text-teal-800",
-    flight: "bg-purple-100 text-purple-800",
-    customs: "bg-amber-100 text-amber-800",
-    deviation: "bg-red-100 text-red-800",
-    confidence: "bg-gray-100 text-gray-600",
+    carrier: "bg-blue-100 text-blue-800",
+    rate: "bg-amber-100 text-amber-800",
+    capacity: "bg-teal-100 text-teal-800",
+    portal: "bg-purple-100 text-purple-800",
+    document: "bg-indigo-100 text-indigo-800",
+    approval: "bg-orange-100 text-orange-800",
+    sap: "bg-gray-100 text-gray-700",
+    booking: "bg-sky-100 text-sky-800",
   }
   return (
     <div className="flex flex-wrap gap-1">
@@ -90,12 +131,12 @@ export function ReasonChips({ chips }: { chips: ReasonChip[] }) {
 
 // ─── Delay Display ───────────────────────────────────────────────────────────
 export function DelayDisplay({ hours }: { hours: number }) {
-  if (hours === 0) return <span className="text-gray-400 text-xs">No delay</span>
+  if (hours === 0) return <span className="text-gray-400 text-xs">On Time</span>
   const color = hours >= 12 ? "text-red-600" : hours >= 6 ? "text-amber-600" : "text-yellow-700"
-  return <span className={cn("font-mono text-sm font-semibold", color)}>+{hours}h</span>
+  return <span className={cn("font-mono text-sm font-semibold", color)}>+{hours}d</span>
 }
 
-// ─── Confidence Bar ───────────────────────────────────────────────────────────
+// ─── Confidence Bar (repurposed as booking progress) ────────────────────────
 export function ConfidenceBar({ score }: { score: number }) {
   const color = score >= 75 ? "bg-green-500" : score >= 50 ? "bg-amber-500" : "bg-red-500"
   return (
@@ -125,19 +166,20 @@ export function OTMStatusBadge({ status }: { status: "Synced" | "Pending Update"
 // ─── Source Badge ─────────────────────────────────────────────────────────────
 export function SourceBadge({ source }: { source: string }) {
   const map: Record<string, string> = {
-    CargoSmart: "bg-blue-600 text-white",
+    "SAP TM": "bg-blue-600 text-white",
+    "OTM": "bg-indigo-600 text-white",
     "Maersk Portal": "bg-sky-700 text-white",
     "MSC Portal": "bg-blue-700 text-white",
-    Flexport: "bg-indigo-500 text-white",
-    "Kuehne+Nagel": "bg-cyan-700 text-white",
-    GPS: "bg-green-600 text-white",
-    "Carrier Portal": "bg-indigo-600 text-white",
-    Email: "bg-gray-500 text-white",
-    UiPath: "bg-purple-600 text-white",
-    "Weather API": "bg-sky-500 text-white",
-    "Traffic API": "bg-orange-500 text-white",
+    "Hapag-Lloyd Portal": "bg-orange-600 text-white",
+    "CMA-CGM Portal": "bg-red-700 text-white",
+    "RPA Bot": "bg-purple-600 text-white",
+    "Email": "bg-gray-500 text-white",
+    "EDI": "bg-teal-600 text-white",
+    "API Gateway": "bg-cyan-600 text-white",
+    "Agent": "bg-slate-700 text-white",
     "System Alert": "bg-red-500 text-white",
-    Agent: "bg-slate-700 text-white",
+    "Rate Engine": "bg-amber-600 text-white",
+    "Document System": "bg-violet-600 text-white",
   }
   return (
     <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wide", map[source] ?? "bg-gray-200 text-gray-700")}>

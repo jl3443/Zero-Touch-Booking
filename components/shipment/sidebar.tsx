@@ -3,9 +3,10 @@
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 import {
-  LayoutDashboard, BarChart2, Ship, AlertTriangle,
-  CloudLightning, GitBranch, Mail, Inbox, Send, Brain,
+  LayoutDashboard, BarChart2, Anchor, AlertTriangle,
+  Monitor, GitBranch, Mail, Inbox, Send, Brain,
   ChevronDown, ChevronRight, FileStack, User, Award, ScanSearch,
+  Route,
 } from "lucide-react"
 import { type Persona } from "./login-page"
 
@@ -30,27 +31,28 @@ interface SidebarProps {
   persona?: Persona
 }
 
-export function Sidebar({ view, onViewChange, exceptionsCount = 7, unreadInboxCount = 3, persona }: SidebarProps) {
-  const [shipmentOpen, setShipmentOpen] = useState(true)
-  const [emailOpen, setEmailOpen] = useState(true)
+export function Sidebar({ view, onViewChange, exceptionsCount = 4, unreadInboxCount = 3, persona }: SidebarProps) {
+  const [exceptionOpen, setExceptionOpen] = useState(true)
+  const [opsOpen, setOpsOpen] = useState(false)
+  const [emailOpen, setEmailOpen] = useState(false)
 
   return (
     <aside className="w-[260px] bg-[#0A0A0B] text-[#A1A1AA] flex flex-col shrink-0 border-r border-gray-800">
       {/* Logo */}
       <div className="px-4 py-5 flex items-center gap-3 border-b border-gray-800">
         <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
-          <FileStack className="w-5 h-5 text-white" />
+          <Route className="w-5 h-5 text-white" />
         </div>
         <div className="text-[14px] font-semibold text-white leading-tight">
-          Operations Readiness<br />
-          <span className="text-[11px] font-normal text-gray-400">ETA Control Tower</span>
+          Booking Automation<br />
+          <span className="text-[11px] font-normal text-gray-400">Zero Touch Agent</span>
         </div>
       </div>
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
 
-        <SectionLabel>Portfolio</SectionLabel>
+        <SectionLabel>Overview</SectionLabel>
 
         <NavItem
           label="Dashboard"
@@ -64,47 +66,35 @@ export function Sidebar({ view, onViewChange, exceptionsCount = 7, unreadInboxCo
           active={view === "analytics"}
           onClick={() => onViewChange("analytics")}
         />
-        <NavItem
-          label="Carrier Scorecards"
-          icon={<Award size={15} />}
-          active={view === "carrier-scorecard"}
-          onClick={() => onViewChange("carrier-scorecard")}
-        />
-        <NavItem
-          label="Track Shipment"
-          icon={<ScanSearch size={15} />}
-          active={view === "tracking-search"}
-          onClick={() => onViewChange("tracking-search")}
-        />
 
         <div className="pt-2 pb-1" />
 
-        <SectionLabel>Shipment Order</SectionLabel>
+        <SectionLabel>Exception Workflow</SectionLabel>
 
         <NavParent
-          label="Shipment Overview"
-          icon={<Ship size={15} />}
-          open={shipmentOpen}
-          onToggle={() => setShipmentOpen(!shipmentOpen)}
+          label="Exception Handling"
+          icon={<AlertTriangle size={15} />}
+          open={exceptionOpen}
+          onToggle={() => setExceptionOpen(!exceptionOpen)}
         />
 
-        {shipmentOpen && (
+        {exceptionOpen && (
           <div className="ml-3 border-l border-gray-800 pl-3 space-y-0.5">
             <NavSubItem
-              label="Exceptions"
+              label="Exception Workbench"
               icon={<AlertTriangle size={13} />}
               active={view === "exceptions"}
               onClick={() => onViewChange("exceptions")}
               badge={exceptionsCount}
             />
             <NavSubItem
-              label="Weather / Traffic"
-              icon={<CloudLightning size={13} />}
+              label="Portal Status"
+              icon={<Monitor size={13} />}
               active={view === "weather-traffic"}
               onClick={() => onViewChange("weather-traffic")}
             />
             <NavSubItem
-              label="Timeline"
+              label="Booking Timeline"
               icon={<GitBranch size={13} />}
               active={view === "timeline"}
               onClick={() => onViewChange("timeline")}
@@ -114,7 +104,41 @@ export function Sidebar({ view, onViewChange, exceptionsCount = 7, unreadInboxCo
 
         <div className="pt-2 pb-1" />
 
-        <SectionLabel>Email</SectionLabel>
+        <SectionLabel>Booking Operations</SectionLabel>
+
+        <NavParent
+          label="Operations"
+          icon={<Anchor size={15} />}
+          open={opsOpen}
+          onToggle={() => setOpsOpen(!opsOpen)}
+        />
+
+        {opsOpen && (
+          <div className="ml-3 border-l border-gray-800 pl-3 space-y-0.5">
+            <NavSubItem
+              label="Search Bookings"
+              icon={<ScanSearch size={13} />}
+              active={view === "tracking-search"}
+              onClick={() => onViewChange("tracking-search")}
+            />
+            <NavSubItem
+              label="Carrier Selection"
+              icon={<Award size={13} />}
+              active={view === "carrier-scorecard"}
+              onClick={() => onViewChange("carrier-scorecard")}
+            />
+            <NavSubItem
+              label="Documents"
+              icon={<FileStack size={13} />}
+              active={view === "documents"}
+              onClick={() => onViewChange("documents")}
+            />
+          </div>
+        )}
+
+        <div className="pt-2 pb-1" />
+
+        <SectionLabel>Communication</SectionLabel>
 
         <NavParent
           label="Email"
@@ -164,8 +188,8 @@ export function Sidebar({ view, onViewChange, exceptionsCount = 7, unreadInboxCo
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <div className="text-xs font-semibold text-white truncate">{persona?.role ?? "Coordinator"}</div>
-            <div className="text-[10px] text-gray-500 truncate">{persona?.email ?? "coordinator@company.com"}</div>
+            <div className="text-xs font-semibold text-white truncate">{persona?.role ?? "Router"}</div>
+            <div className="text-[10px] text-gray-500 truncate">{persona?.email ?? "router@company.com"}</div>
           </div>
         </div>
       </div>

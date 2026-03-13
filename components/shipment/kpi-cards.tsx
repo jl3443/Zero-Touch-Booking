@@ -1,7 +1,7 @@
 "use client"
 
 import { cn } from "@/lib/utils"
-import { AlertTriangle, Radio, TrendingUp, Package, Clock, CheckCircle2 } from "lucide-react"
+import { AlertTriangle, Clock, TrendingUp, Package, CheckCircle2, ShieldAlert } from "lucide-react"
 
 interface KPICardsProps {
   activeFilter: string | null
@@ -10,9 +10,9 @@ interface KPICardsProps {
   etaUpdatedCount?: number
 }
 
-export function KPICards({ activeFilter, onFilterChange, onExceptionsClick, etaUpdatedCount = 5 }: KPICardsProps) {
+export function KPICards({ activeFilter, onFilterChange, onExceptionsClick, etaUpdatedCount = 3 }: KPICardsProps) {
   const handleClick = (filter: string) => {
-    if (filter === "at-risk" || filter === "critical" || filter === "missing-signal") {
+    if (filter === "exceptions" || filter === "awaiting-approval") {
       onExceptionsClick?.()
       return
     }
@@ -23,54 +23,53 @@ export function KPICards({ activeFilter, onFilterChange, onExceptionsClick, etaU
     <div className="space-y-2">
       {/* Summary sentence */}
       <p className="text-sm text-gray-600">
-        <span className="font-semibold text-gray-800">7</span> active shipments,{" "}
-        <span className="font-semibold text-amber-700">6</span> at risk,{" "}
-        <span className="font-semibold text-red-700">1</span> critical
+        <span className="font-semibold text-gray-800">8</span> active bookings,{" "}
+        <span className="font-semibold text-red-700">3</span> exceptions,{" "}
+        <span className="font-semibold text-amber-700">1</span> awaiting approval
       </p>
 
       {/* Single compact row */}
       <div className="grid grid-cols-6 gap-2">
         <CompactKPICard
-          label="At-Risk"
-          value={6}
-          trend="▲ +2"
+          label="Pending Bookings"
+          value={2}
           accent="amber"
-          icon={<AlertTriangle size={14} />}
-          active={activeFilter === "at-risk"}
-          onClick={() => handleClick("at-risk")}
+          icon={<Clock size={14} />}
+          active={activeFilter === "pending"}
+          onClick={() => handleClick("pending")}
         />
         <CompactKPICard
-          label="Critical"
-          value={1}
-          accent="red"
-          icon={<TrendingUp size={14} />}
-          active={activeFilter === "critical"}
-          onClick={() => handleClick("critical")}
-        />
-        <CompactKPICard
-          label="Missing Signal"
-          value={1}
+          label="Booking Exceptions"
+          value={3}
           trend="▲ +1"
+          accent="red"
+          icon={<AlertTriangle size={14} />}
+          active={activeFilter === "exceptions"}
+          onClick={() => handleClick("exceptions")}
+        />
+        <CompactKPICard
+          label="Awaiting Approval"
+          value={1}
           accent="gray"
-          icon={<Radio size={14} />}
-          active={activeFilter === "missing-signal"}
-          onClick={() => handleClick("missing-signal")}
+          icon={<ShieldAlert size={14} />}
+          active={activeFilter === "awaiting-approval"}
+          onClick={() => handleClick("awaiting-approval")}
         />
         <CompactKPICard
           label="Total Active"
-          value={7}
+          value={8}
           icon={<Package size={14} />}
         />
         <CompactKPICard
-          label="ETA Updated (24h)"
+          label="Auto-Booked (24h)"
           value={etaUpdatedCount}
-          icon={<Clock size={14} />}
+          icon={<CheckCircle2 size={14} />}
         />
         <CompactKPICard
-          label="On-Time %"
-          value="14%"
-          valueColor="text-red-600"
-          icon={<CheckCircle2 size={14} />}
+          label="On-Time Booking %"
+          value="87%"
+          valueColor="text-green-600"
+          icon={<TrendingUp size={14} />}
         />
       </div>
     </div>

@@ -21,7 +21,7 @@ const PERSONAS: Persona[] = [
     color: "bg-violet-600",
   },
   {
-    role: "Shipment Coordinator",
+    role: "Shipment Planner",
     name: "Maria Santos",
     email: "m.santos@logistics.co",
     initials: "MS",
@@ -70,31 +70,31 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         {/* Brand */}
         <div className="flex items-center gap-3 relative z-10">
           <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shrink-0 shadow-lg shadow-blue-900">
-            <Package size={18} className="text-white" />
+            <Route size={18} className="text-white" />
           </div>
           <div>
-            <p className="text-white font-semibold text-sm leading-tight">ETA Control Tower</p>
-            <p className="text-blue-400 text-[11px] mt-0.5">AI-Powered Shipment Intelligence</p>
+            <p className="text-white font-semibold text-sm leading-tight">Zero Touch Booking Agent</p>
+            <p className="text-blue-400 text-[11px] mt-0.5">AI-Powered Booking Automation</p>
           </div>
         </div>
 
         {/* Headline */}
         <div className="mt-auto mb-auto pt-16 relative z-10">
           <h1 className="text-[2.4rem] font-bold text-white leading-tight tracking-tight">
-            Proactive<br />
+            Autonomous<br />
             Shipment<br />
-            <span className="text-blue-400">Exception Control</span>
+            <span className="text-blue-400">Booking</span>
           </h1>
           <p className="text-slate-400 text-sm leading-relaxed mt-5 max-w-[300px]">
-            AI-powered platform for real-time ETA monitoring, cross-carrier signal aggregation, and exception resolution across global trade lanes.
+            AI-powered platform for end-to-end autonomous booking execution, carrier selection, and proactive booking status tracking across global trade lanes.
           </p>
 
           <ul className="mt-7 space-y-3">
             {[
-              "Real-time ETA drift detection & alerts",
-              "Multi-carrier & forwarder signal aggregation",
-              "AI-driven exception resolution workflows",
-              "Automated OTM sync & carrier notifications",
+              "End-to-end autonomous booking execution",
+              "AI carrier selection by rate, SLA & capacity",
+              "RPA-powered carrier portal integration",
+              "Proactive booking status tracking & alerts",
             ].map((item) => (
               <li key={item} className="flex items-start gap-2.5 text-[13px] text-slate-300">
                 <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0 mt-1.5" />
@@ -107,7 +107,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         {/* Footer */}
         <div className="border-t border-slate-800 pt-4 relative z-10">
           <p className="text-slate-600 text-[11px]">Demo environment · All data is fictitious</p>
-          <p className="text-slate-700 text-[10px] mt-0.5">ETA Control Tower v1.0 · Powered by AI</p>
+          <p className="text-slate-700 text-[10px] mt-0.5">Zero Touch Booking Agent v1.0 · Powered by AI</p>
         </div>
       </div>
 

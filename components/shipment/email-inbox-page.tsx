@@ -6,17 +6,17 @@ import { cn } from "@/lib/utils"
 import { Mail, MailOpen, Tag, Clock, Package, ChevronLeft, Brain, AlertTriangle, CheckCircle2, ArrowRight } from "lucide-react"
 
 const TAG_CONFIG: Record<EmailTag, { label: string; color: string }> = {
-  carrier:    { label: "Carrier",    color: "bg-blue-50 border-blue-200 text-blue-700" },
-  customs:    { label: "Customs",    color: "bg-red-50 border-red-200 text-red-700" },
-  weather:    { label: "Weather",    color: "bg-cyan-50 border-cyan-200 text-cyan-700" },
-  compliance: { label: "Compliance", color: "bg-purple-50 border-purple-200 text-purple-700" },
-  advisory:   { label: "Advisory",   color: "bg-amber-50 border-amber-200 text-amber-700" },
-  agent:      { label: "Agent",      color: "bg-indigo-50 border-indigo-200 text-indigo-700" },
+  sap:       { label: "SAP",       color: "bg-blue-50 border-blue-200 text-blue-700" },
+  carrier:   { label: "Carrier",   color: "bg-teal-50 border-teal-200 text-teal-700" },
+  booking:   { label: "Booking",   color: "bg-indigo-50 border-indigo-200 text-indigo-700" },
+  rejection: { label: "Rejection", color: "bg-red-50 border-red-200 text-red-700" },
+  rate:      { label: "Rate",      color: "bg-amber-50 border-amber-200 text-amber-700" },
+  agent:     { label: "Agent",     color: "bg-purple-50 border-purple-200 text-purple-700" },
 }
 
-// Extracts the first SHP-XXXXX from an email body
-function extractShipmentId(body: string): string | null {
-  const match = body.match(/SHP-\d+/)
+// Extracts the first BKG-XXXXX from an email body
+function extractBookingId(body: string): string | null {
+  const match = body.match(/BKG-\d+/)
   return match ? match[0] : null
 }
 
@@ -28,8 +28,13 @@ interface EmailInboxPageProps {
 export function EmailInboxPage({ onOpenTracking, onMarkRead }: EmailInboxPageProps) {
   const [emails, setEmails] = useState<InboxEmail[]>(INBOX_EMAILS)
   const [selected, setSelected] = useState<InboxEmail | null>(null)
+  const [activeTagFilter, setActiveTagFilter] = useState<EmailTag | null>(null)
   const [analyzingEmail, setAnalyzingEmail] = useState<string | null>(null)
   const [analyzedEmails, setAnalyzedEmails] = useState<Record<string, string>>({})
+
+  const filteredEmails = activeTagFilter
+    ? emails.filter((e) => e.tag === activeTagFilter || e.tags.includes(activeTagFilter))
+    : emails
 
   const unreadCount = emails.filter((e) => !e.read).length
 
@@ -42,7 +47,7 @@ export function EmailInboxPage({ onOpenTracking, onMarkRead }: EmailInboxPagePro
   const handleAnalyze = (email: InboxEmail) => {
     setAnalyzingEmail(email.id)
     setTimeout(() => {
-      const extracted = extractShipmentId(email.body)
+      const extracted = extractBookingId(email.body)
       if (extracted) {
         setAnalyzedEmails((prev) => ({ ...prev, [email.id]: extracted }))
       }
@@ -51,9 +56,12 @@ export function EmailInboxPage({ onOpenTracking, onMarkRead }: EmailInboxPagePro
   }
 
   // Determine if the selected email should show the AI analysis banner
-  const showAnalysisBanner = selected && !selected.shipmentId && extractShipmentId(selected.body) !== null
+  const showAnalysisBanner = selected && !selected.shipmentId && extractBookingId(selected.body) !== null
   const isAnalyzing = selected ? analyzingEmail === selected.id : false
   const analysisResult = selected ? analyzedEmails[selected.id] : null
+
+  // All unique tags for filter bar
+  const allTags = Object.keys(TAG_CONFIG) as EmailTag[]
 
   return (
     <div className="flex-1 overflow-hidden bg-[#F8F9FA] flex flex-col">
@@ -66,7 +74,7 @@ export function EmailInboxPage({ onOpenTracking, onMarkRead }: EmailInboxPagePro
             </div>
             <div>
               <h2 className="text-lg font-semibold text-gray-800">Inbox</h2>
-              <p className="text-xs text-gray-400">Carrier advisories, customs notices, and alerts</p>
+              <p className="text-xs text-gray-400">SAP requirements, carrier confirmations, and agent alerts</p>
             </div>
           </div>
           {unreadCount > 0 && (
@@ -74,6 +82,40 @@ export function EmailInboxPage({ onOpenTracking, onMarkRead }: EmailInboxPagePro
               {unreadCount} unread
             </span>
           )}
+        </div>
+
+        {/* Tag filter bar */}
+        <div className="flex items-center gap-1.5 mb-3">
+          <button
+            onClick={() => setActiveTagFilter(null)}
+            className={cn(
+              "text-[10px] font-semibold border rounded-full px-2.5 py-1 transition-colors",
+              activeTagFilter === null
+                ? "bg-gray-800 text-white border-gray-800"
+                : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+            )}
+          >
+            All ({emails.length})
+          </button>
+          {allTags.map((tag) => {
+            const count = emails.filter((e) => e.tag === tag || e.tags.includes(tag)).length
+            if (count === 0) return null
+            const cfg = TAG_CONFIG[tag]
+            return (
+              <button
+                key={tag}
+                onClick={() => setActiveTagFilter(activeTagFilter === tag ? null : tag)}
+                className={cn(
+                  "text-[10px] font-semibold border rounded-full px-2.5 py-1 transition-colors",
+                  activeTagFilter === tag
+                    ? cfg.color
+                    : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                )}
+              >
+                {cfg.label} ({count})
+              </button>
+            )
+          })}
         </div>
       </div>
 
@@ -85,11 +127,11 @@ export function EmailInboxPage({ onOpenTracking, onMarkRead }: EmailInboxPagePro
         )}>
           <div className="px-3 py-2 border-b border-gray-100 bg-gray-50">
             <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-              {emails.length} messages
+              {filteredEmails.length} messages
             </span>
           </div>
           <div className="overflow-y-auto flex-1">
-            {emails.map((email) => {
+            {filteredEmails.map((email) => {
               const tagCfg = TAG_CONFIG[email.tag]
               const isSelected = selected?.id === email.id
               return (
@@ -128,8 +170,8 @@ export function EmailInboxPage({ onOpenTracking, onMarkRead }: EmailInboxPagePro
                             {email.shipmentId}
                           </span>
                         )}
-                        {/* Prominent AI Ready badge for unregistered order emails */}
-                        {!email.shipmentId && extractShipmentId(email.body) && (
+                        {/* AI Ready badge for emails without registered booking */}
+                        {!email.shipmentId && extractBookingId(email.body) && (
                           <span className="text-[9px] text-white bg-indigo-600 flex items-center gap-0.5 font-semibold rounded-full px-1.5 py-0.5">
                             <Brain size={8} /> AI Analyze
                           </span>
@@ -163,10 +205,21 @@ export function EmailInboxPage({ onOpenTracking, onMarkRead }: EmailInboxPagePro
                 <span className={cn("text-[10px] font-semibold border rounded-full px-2 py-0.5", TAG_CONFIG[selected.tag].color)}>
                   <Tag size={9} className="inline mr-1" />{TAG_CONFIG[selected.tag].label}
                 </span>
+                {/* Show all secondary tags */}
+                {selected.tags
+                  .filter((t) => t !== selected.tag)
+                  .map((t) => (
+                    <span key={t} className={cn("text-[10px] font-semibold border rounded-full px-2 py-0.5", TAG_CONFIG[t].color)}>
+                      {TAG_CONFIG[t].label}
+                    </span>
+                  ))}
                 {selected.shipmentId && (
-                  <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-0.5">
+                  <button
+                    onClick={() => onOpenTracking?.(selected.shipmentId!)}
+                    className="flex items-center gap-1 text-[10px] font-mono font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-0.5 hover:bg-blue-100 transition-colors cursor-pointer"
+                  >
                     <Package size={9} /> {selected.shipmentId}
-                  </span>
+                  </button>
                 )}
               </div>
             </div>
@@ -183,7 +236,7 @@ export function EmailInboxPage({ onOpenTracking, onMarkRead }: EmailInboxPagePro
                   <div className="flex items-center gap-2">
                     <Brain size={15} className="text-indigo-500 animate-pulse shrink-0" />
                     <div>
-                      <p className="text-xs font-semibold text-indigo-700">Analyzing order reference…</p>
+                      <p className="text-xs font-semibold text-indigo-700">Analyzing booking reference...</p>
                       <div className="flex items-end gap-[3px] mt-0.5">
                         {[0, 150, 300].map((d) => (
                           <span
@@ -200,8 +253,8 @@ export function EmailInboxPage({ onOpenTracking, onMarkRead }: EmailInboxPagePro
                     <div className="flex items-center gap-2">
                       <AlertTriangle size={14} className="text-amber-600 shrink-0" />
                       <div>
-                        <p className="text-xs font-semibold text-amber-800">Order reference detected. AI analysis ready.</p>
-                        <p className="text-[11px] text-amber-600">Shipment ID found in body — not yet registered in system</p>
+                        <p className="text-xs font-semibold text-amber-800">Booking reference detected. AI analysis ready.</p>
+                        <p className="text-[11px] text-amber-600">Booking ID found in body -- not yet linked in system</p>
                       </div>
                     </div>
                     <button
@@ -225,21 +278,18 @@ export function EmailInboxPage({ onOpenTracking, onMarkRead }: EmailInboxPagePro
                 <div className="space-y-1 text-[11px] text-green-700 pl-5">
                   <div className="flex items-center gap-1">
                     <CheckCircle2 size={10} className="text-green-500" />
-                    <span>Tracking ID identified: <span className="font-mono font-bold text-green-800">{analysisResult}</span></span>
+                    <span>Booking ID identified: <span className="font-mono font-bold text-green-800">{analysisResult}</span></span>
                   </div>
                   <div className="flex items-center gap-1">
                     <CheckCircle2 size={10} className="text-green-500" />
-                    <span>Shipment added to monitoring</span>
-                  </div>
-                  <div className="mt-1 text-[10px] text-green-600">
-                    Chennai, India → Houston, TX · MSC (Ocean) · Medium severity
+                    <span>Booking linked to monitoring</span>
                   </div>
                 </div>
                 <button
                   onClick={() => onOpenTracking?.(analysisResult)}
                   className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-blue-700 hover:text-blue-900 transition-colors"
                 >
-                  Open Full Tracking <ArrowRight size={12} />
+                  Open Booking Detail <ArrowRight size={12} />
                 </button>
               </div>
             )}

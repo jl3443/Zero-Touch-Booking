@@ -16,8 +16,8 @@ const ibmPlexMono = IBM_Plex_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'Shipment Tracking Agent | Multi-Modal Visibility & ETA Control Tower',
-  description: 'AI-assisted shipment tracking control tower for ocean, road, and air shipments. Real-time ETA management, exception detection, and proactive alerts.',
+  title: 'Zero Touch Booking Agent | AI-Driven Freight Booking Automation',
+  description: 'AI-powered freight booking agent with autonomous exception handling. Real-time carrier portal monitoring, zero-touch booking execution, and intelligent human-in-the-loop escalation.',
   generator: 'v0.app',
 }
 

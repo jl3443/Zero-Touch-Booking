@@ -1,12 +1,15 @@
 "use client"
 
 import { useState } from "react"
-import { SHIPMENTS, type ExceptionType, type Severity, type TransportMode, type Shipment } from "@/lib/mock-data"
-import { SeverityBadge, ModeBadge, ExceptionBadge, DelayDisplay, ReasonChips, SourceBadge } from "./shared"
+import { BOOKING_REQUESTS, type BookingExceptionType, type Severity, type TransportMode, type BookingRequest } from "@/lib/mock-data"
+import { SeverityBadge, ModeBadge, ExceptionBadge, BookingStatusBadge, ReasonChips, CarrierBadge } from "./shared"
 import { ChevronDown, ChevronUp, Filter } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-type SortField = "id" | "delay" | "severity" | "lastSignal"
+// Keep Shipment alias for backward compat
+type Shipment = BookingRequest
+
+type SortField = "id" | "severity" | "status" | "targetDate"
 
 interface ShipmentTableProps {
   searchQuery: string
@@ -17,52 +20,75 @@ interface ShipmentTableProps {
 
 const MODE_OPTIONS: TransportMode[] = ["Ocean", "Road", "Air"]
 const SEVERITY_OPTIONS: Severity[] = ["Critical", "High", "Medium", "Low"]
-const EXCEPTION_OPTIONS: ExceptionType[] = [
-  "Schedule Slippage", "Missing Signal", "Long Dwell", "Route Deviation",
-  "Weather Disruption", "Traffic Disruption", "Customs Hold", "Conflicting Sources",
+const EXCEPTION_OPTIONS: BookingExceptionType[] = [
+  "Missing Allocation", "Portal Unavailable", "Rate Mismatch",
+  "Missing Booking Fields", "Carrier Rejection", "Credentials Expired",
 ]
 
 const SEVERITY_ORDER: Record<Severity, number> = { Critical: 0, High: 1, Medium: 2, Low: 3 }
+const STATUS_ORDER: Record<string, number> = {
+  Exception: 0, "Awaiting Approval": 1, Pending: 2, "In Progress": 3,
+  "Carrier Selected": 4, "Portal Login": 5, "Booking Submitted": 6,
+  "Docs Uploaded": 7, Confirmed: 8, Notified: 9,
+}
 
-// Dynamic risk score — inspired by project44 risk scoring model
-function computeRiskScore(s: Shipment): number {
-  const base: Record<Severity, number> = { Critical: 88, High: 65, Medium: 38, Low: 15 }
-  const exceptionBonus: Partial<Record<ExceptionType, number>> = {
-    "Customs Hold": 12, "Missing Signal": 10, "Long Dwell": 8,
-    "Route Deviation": 7, "Weather Disruption": 6, "Traffic Disruption": 4,
-    "Schedule Slippage": 3, "Conflicting Sources": 5,
-  }
-  const delayBonus = Math.min(Math.floor(s.delayHours / 5), 15)
-  return Math.min(base[s.severity] + delayBonus + (exceptionBonus[s.exceptionType] ?? 0), 99)
+// Booking priority score
+function computeBookingPriority(s: BookingRequest): number {
+  const statusBase: Record<string, number> = { Exception: 85, "Awaiting Approval": 70, Pending: 50, "In Progress": 30, Confirmed: 10 }
+  const severityBonus: Record<Severity, number> = { Critical: 15, High: 10, Medium: 5, Low: 0 }
+  const base = statusBase[s.bookingStatus] ?? 20
+  return Math.min(base + severityBonus[s.severity], 99)
+}
+
+// Workflow step progress display
+function WorkflowProgress({ steps }: { steps: BookingRequest["workflowSteps"] }) {
+  const completed = steps.filter((s) => s.status === "completed").length
+  const failed = steps.some((s) => s.status === "failed")
+  const total = steps.length
+  const pct = Math.round((completed / total) * 100)
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+        <div
+          className={cn("h-full rounded-full transition-all", failed ? "bg-red-500" : completed === total ? "bg-green-500" : "bg-blue-500")}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <span className={cn("text-[10px] font-mono", failed ? "text-red-600" : "text-gray-500")}>{completed}/{total}</span>
+    </div>
+  )
 }
 
 export function ShipmentTable({ searchQuery, activeFilter, onSelectShipment, selectedId }: ShipmentTableProps) {
   const [modeFilter, setModeFilter] = useState<TransportMode | "All">("All")
   const [severityFilter, setSeverityFilter] = useState<Severity | "All">("All")
-  const [exceptionFilter, setExceptionFilter] = useState<ExceptionType | "All">("All")
+  const [exceptionFilter, setExceptionFilter] = useState<BookingExceptionType | "All">("All")
   const [sortField, setSortField] = useState<SortField>("severity")
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc")
 
-  const filtered = SHIPMENTS.filter((s) => {
+  const filtered = BOOKING_REQUESTS.filter((s) => {
     if (modeFilter !== "All" && s.mode !== modeFilter) return false
     if (severityFilter !== "All" && s.severity !== severityFilter) return false
     if (exceptionFilter !== "All" && s.exceptionType !== exceptionFilter) return false
-    if (activeFilter === "critical" && s.severity !== "Critical") return false
-    if (activeFilter === "missing-signal" && s.exceptionType !== "Missing Signal") return false
+    if (activeFilter === "exceptions" && s.bookingStatus !== "Exception") return false
+    if (activeFilter === "awaiting-approval" && s.bookingStatus !== "Awaiting Approval") return false
+    if (activeFilter === "pending" && s.bookingStatus !== "Pending" && s.bookingStatus !== "In Progress") return false
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
       if (
         !s.id.toLowerCase().includes(q) &&
         !s.carrier.toLowerCase().includes(q) &&
         !s.destination.toLowerCase().includes(q) &&
-        !s.trackingRef.toLowerCase().includes(q)
+        !s.lane.toLowerCase().includes(q) &&
+        !s.sapOrderRef.toLowerCase().includes(q)
       ) return false
     }
     return true
   }).sort((a, b) => {
     let cmp = 0
     if (sortField === "severity") cmp = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]
-    else if (sortField === "delay") cmp = a.delayHours - b.delayHours
+    else if (sortField === "status") cmp = (STATUS_ORDER[a.bookingStatus] ?? 5) - (STATUS_ORDER[b.bookingStatus] ?? 5)
     else if (sortField === "id") cmp = a.id.localeCompare(b.id)
     return sortDir === "asc" ? cmp : -cmp
   })
@@ -89,7 +115,7 @@ export function ShipmentTable({ searchQuery, activeFilter, onSelectShipment, sel
         <div className="w-px h-4 bg-gray-300" />
         <FilterGroup label="Exception" options={["All", ...EXCEPTION_OPTIONS]} value={exceptionFilter} onChange={setExceptionFilter} />
 
-        <span className="ml-auto text-xs text-gray-400">{filtered.length} shipment{filtered.length !== 1 ? "s" : ""}</span>
+        <span className="ml-auto text-xs text-gray-400">{filtered.length} booking{filtered.length !== 1 ? "s" : ""}</span>
       </div>
 
       {/* Table */}
@@ -97,25 +123,24 @@ export function ShipmentTable({ searchQuery, activeFilter, onSelectShipment, sel
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50/50">
-              <Th onClick={() => handleSort("id")} sortIcon={<SortIcon field="id" />}>Shipment ID</Th>
+              <Th onClick={() => handleSort("id")} sortIcon={<SortIcon field="id" />}>Booking ID</Th>
               <Th>Mode</Th>
-              <Th>Carrier</Th>
               <Th>Origin → Destination</Th>
-              <Th>Current Status</Th>
-              <Th>Planned ETA</Th>
-              <Th>Revised ETA</Th>
-              <Th onClick={() => handleSort("delay")} sortIcon={<SortIcon field="delay" />}>Delay</Th>
-              <Th>Risk Score</Th>
-              <Th>Exception Type</Th>
+              <Th>Carrier</Th>
+              <Th onClick={() => handleSort("status")} sortIcon={<SortIcon field="status" />}>Status</Th>
+              <Th>Workflow</Th>
+              <Th>Container</Th>
+              <Th>Target Ship</Th>
+              <Th>Exception</Th>
               <Th onClick={() => handleSort("severity")} sortIcon={<SortIcon field="severity" />}>Severity</Th>
-              <Th>Last Signal</Th>
-              <Th>Recommended Action</Th>
+              <Th>SAP Ref</Th>
+              <Th>Action</Th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={12} className="text-center py-10 text-gray-400">No shipments match the current filters.</td>
+                <td colSpan={12} className="text-center py-10 text-gray-400">No bookings match the current filters.</td>
               </tr>
             )}
             {filtered.map((s, i) => (
@@ -133,45 +158,27 @@ export function ShipmentTable({ searchQuery, activeFilter, onSelectShipment, sel
                   <span className="font-mono font-semibold text-blue-700">{s.id}</span>
                 </td>
                 <td className="px-3 py-2.5"><ModeBadge mode={s.mode} /></td>
-                <td className="px-3 py-2.5 text-gray-700 font-medium">{s.carrier}</td>
                 <td className="px-3 py-2.5">
                   <div className="flex items-center gap-1 text-gray-600 whitespace-nowrap">
-                    <span className="truncate max-w-[110px]" title={s.origin}>{s.origin.split(",")[0]}</span>
+                    <span className="truncate max-w-[90px]" title={s.origin}>{s.origin.split(",")[0]}</span>
                     <span className="text-gray-400">→</span>
-                    <span className="truncate max-w-[110px]" title={s.destination}>{s.destination.split(",")[0]}</span>
+                    <span className="truncate max-w-[90px]" title={s.destination}>{s.destination.split(",")[0]}</span>
                   </div>
                 </td>
-                <td className="px-3 py-2.5 max-w-[160px]">
-                  <span className="text-gray-600 truncate block" title={s.currentStatus}>{s.currentStatus}</span>
-                </td>
-                <td className="px-3 py-2.5 font-mono text-gray-600 whitespace-nowrap">{s.plannedETA.replace("2025 ", "")}</td>
-                <td className="px-3 py-2.5 font-mono whitespace-nowrap">
-                  <span className={cn(s.delayHours > 0 ? "text-red-600 font-semibold" : "text-gray-600")}>
-                    {s.revisedETA.replace("2025 ", "")}
-                  </span>
-                </td>
-                <td className="px-3 py-2.5"><DelayDisplay hours={s.delayHours} /></td>
                 <td className="px-3 py-2.5">
-                  {(() => {
-                    const score = computeRiskScore(s)
-                    const color = score >= 75 ? "text-red-700 bg-red-50 border-red-200" : score >= 50 ? "text-amber-700 bg-amber-50 border-amber-200" : "text-green-700 bg-green-50 border-green-200"
-                    return (
-                      <span className={cn("inline-block text-[10px] font-bold border rounded-full px-2 py-0.5 tabular-nums", color)}>
-                        {score}
-                      </span>
-                    )
-                  })()}
+                  {s.carrier !== "—" ? <CarrierBadge carrier={s.carrier} /> : <span className="text-gray-400">—</span>}
                 </td>
-                <td className="px-3 py-2.5"><ExceptionBadge type={s.exceptionType} /></td>
+                <td className="px-3 py-2.5"><BookingStatusBadge status={s.bookingStatus} /></td>
+                <td className="px-3 py-2.5"><WorkflowProgress steps={s.workflowSteps} /></td>
+                <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{s.containerType}</td>
+                <td className="px-3 py-2.5 font-mono text-gray-600 whitespace-nowrap">{s.targetShipDate}</td>
+                <td className="px-3 py-2.5">
+                  {s.exceptionType !== "None" ? <ExceptionBadge type={s.exceptionType} /> : <span className="text-gray-400">—</span>}
+                </td>
                 <td className="px-3 py-2.5"><SeverityBadge severity={s.severity} /></td>
+                <td className="px-3 py-2.5 font-mono text-[10px] text-gray-500">{s.sapOrderRef}</td>
                 <td className="px-3 py-2.5">
-                  <div className="flex items-center gap-1.5 whitespace-nowrap">
-                    <SourceBadge source={s.lastSignalSource} />
-                    <span className="text-gray-500">{s.lastSignal}</span>
-                  </div>
-                </td>
-                <td className="px-3 py-2.5">
-                  <span className="text-blue-700 font-medium hover:underline">{s.recommendedAction}</span>
+                  <span className="text-blue-700 font-medium hover:underline truncate block max-w-[140px]" title={s.recommendedAction}>{s.recommendedAction}</span>
                 </td>
               </tr>
             ))}

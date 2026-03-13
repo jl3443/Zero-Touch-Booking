@@ -56,7 +56,7 @@ export function TopBar({ onSearch, onToggleAIChat, aiChatOpen, canGoBack, onBack
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Search shipments by ID, carrier, route, status…"
+              placeholder="Search bookings by ID, carrier, lane, status…"
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value)

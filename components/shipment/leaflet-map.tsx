@@ -19,8 +19,10 @@ interface LeafletMapProps {
 export default function LeafletMap({ onShipmentClick }: LeafletMapProps) {
   return (
     <MapContainer
-      center={[25, 10]}
-      zoom={1}
+      center={[20, 0]}
+      zoom={0}
+      minZoom={0}
+      maxZoom={4}
       style={{ height: "100%", width: "100%" }}
       scrollWheelZoom={false}
       zoomControl={false}

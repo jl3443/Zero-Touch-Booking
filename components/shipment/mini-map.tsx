@@ -24,34 +24,37 @@ export function MiniMap({ onShipmentClick }: MiniMapProps) {
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden h-full flex flex-col" style={{ isolation: "isolate" }}>
       <div
-        className="flex items-center justify-between px-4 py-2.5 border-b border-gray-200 cursor-pointer hover:bg-gray-50"
+        className="flex items-center justify-between px-4 py-2 border-b border-gray-200 cursor-pointer hover:bg-gray-50"
         onClick={() => setCollapsed(!collapsed)}
       >
-        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-          Geographic Overview
+        <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider shrink-0 whitespace-nowrap">
+          Origin Map
         </h3>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 text-[10px] text-gray-400">
+        <div className="flex items-center gap-3 ml-3">
+          <div className="flex items-center gap-2.5 text-[9px] text-gray-400">
             <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> Critical
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0 inline-block" />
+              <span>Exc</span>
             </span>
             <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" /> High
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 inline-block" />
+              <span>Appr</span>
             </span>
             <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> Normal
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0 inline-block" />
+              <span>Active</span>
             </span>
           </div>
           {collapsed ? (
-            <ChevronDown size={13} className="text-gray-400" />
+            <ChevronDown size={12} className="text-gray-400 shrink-0" />
           ) : (
-            <ChevronUp size={13} className="text-gray-400" />
+            <ChevronUp size={12} className="text-gray-400 shrink-0" />
           )}
         </div>
       </div>
 
       {!collapsed && (
-        <div className="flex-1 min-h-0" style={{ minHeight: 180 }}>
+        <div style={{ height: 242 }}>
           <LeafletMap onShipmentClick={onShipmentClick} />
         </div>
       )}

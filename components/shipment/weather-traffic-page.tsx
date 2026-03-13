@@ -1,101 +1,68 @@
 "use client"
 
 import { useEffect, useRef } from "react"
-import { SHIPMENTS, PORT_STATUS, type CongestionLevel } from "@/lib/mock-data"
-import { ModeBadge, SeverityBadge } from "./shared"
+import { PORTAL_STATUSES, BOOKING_REQUESTS, type PortalStatus } from "@/lib/mock-data"
 import { cn } from "@/lib/utils"
-import { CloudLightning, AlertTriangle, MapPin, Clock, TrendingUp, TrendingDown, Minus, Anchor } from "lucide-react"
+import {
+  Globe, Shield, Clock, AlertTriangle, CheckCircle2, XCircle,
+  Wifi, WifiOff, Bot, Key, Server, Activity, Brain, Zap, Ban, Package,
+} from "lucide-react"
 
-const CONGESTION_CONFIG: Record<CongestionLevel, { color: string; dot: string; bar: string }> = {
-  Low:      { color: "text-green-700 bg-green-50 border-green-200",   dot: "bg-green-500",  bar: "bg-green-500" },
-  Medium:   { color: "text-amber-700 bg-amber-50 border-amber-200",   dot: "bg-amber-500",  bar: "bg-amber-400" },
-  High:     { color: "text-orange-700 bg-orange-50 border-orange-200", dot: "bg-orange-500", bar: "bg-orange-500" },
-  Critical: { color: "text-red-700 bg-red-50 border-red-200",         dot: "bg-red-500 animate-pulse", bar: "bg-red-500" },
+// ─── Status config ───────────────────────────────────────────────────────────
+
+const STATUS_CONFIG: Record<PortalStatus["status"], { color: string; dot: string; icon: React.ReactNode; label: string }> = {
+  Online:   { color: "text-green-700 bg-green-50 border-green-200",  dot: "bg-green-500",            icon: <CheckCircle2 size={12} className="text-green-600" />, label: "Online" },
+  Degraded: { color: "text-amber-700 bg-amber-50 border-amber-200",  dot: "bg-amber-500 animate-pulse", icon: <AlertTriangle size={12} className="text-amber-600" />, label: "Degraded" },
+  Offline:  { color: "text-red-700 bg-red-50 border-red-200",        dot: "bg-red-500 animate-pulse",   icon: <XCircle size={12} className="text-red-600" />, label: "Offline" },
 }
 
-const CONGESTION_LEVEL: Record<CongestionLevel, number> = { Low: 25, Medium: 55, High: 80, Critical: 98 }
-
-// Shipments with disruption context (weather or traffic)
-const DISRUPTION_TYPES: Record<string, { type: "weather" | "traffic" | "customs" | "port"; label: string; color: string; icon: React.ReactNode }> = {
-  "Weather Disruption": { type: "weather", label: "Weather", color: "text-blue-700 bg-blue-50 border-blue-200", icon: <CloudLightning size={12} /> },
-  "Traffic Disruption": { type: "traffic", label: "Traffic", color: "text-amber-700 bg-amber-50 border-amber-200", icon: <TrendingUp size={12} /> },
+const CRED_CONFIG: Record<PortalStatus["credentialStatus"], { color: string; label: string }> = {
+  Valid:          { color: "text-green-700 bg-green-50 border-green-200", label: "Valid" },
+  "Expiring Soon": { color: "text-amber-700 bg-amber-50 border-amber-200", label: "Expiring Soon" },
+  Expired:        { color: "text-red-700 bg-red-50 border-red-200",       label: "Expired" },
 }
 
-const activeDisruptions = SHIPMENTS.filter(
-  (s) => s.disruptionContext && (s.exceptionType === "Weather Disruption" || s.exceptionType === "Traffic Disruption")
+const UPTIME_COLOR = (pct: number) =>
+  pct >= 99.5 ? "bg-green-500" : pct >= 98 ? "bg-green-400" : pct >= 95 ? "bg-amber-400" : "bg-red-500"
+
+// Separate system portals from carrier portals
+const systemPortals = PORTAL_STATUSES.filter((p) => p.carrier === "SAP" || p.carrier === "OTM")
+const carrierPortals = PORTAL_STATUSES.filter((p) => p.carrier !== "SAP" && p.carrier !== "OTM")
+
+// Count statuses
+const onlineCount = PORTAL_STATUSES.filter((p) => p.status === "Online").length
+const degradedCount = PORTAL_STATUSES.filter((p) => p.status === "Degraded").length
+const offlineCount = PORTAL_STATUSES.filter((p) => p.status === "Offline").length
+
+// Agent capability counts (carrier portals only)
+const autoBookableCount = carrierPortals.filter((p) => p.apiAvailable && p.credentialStatus === "Valid").length
+const degradedPortalCount = carrierPortals.filter((p) => p.status === "Degraded").length
+const blockedCount = carrierPortals.filter((p) => p.status === "Offline" || p.credentialStatus === "Expired").length
+
+// Bookings affected by portal issues
+const affectedBookings = BOOKING_REQUESTS.filter((b) =>
+  b.exceptionType === "Portal Unavailable" || b.exceptionType === "Credentials Expired"
 )
 
-const WEATHER_ALERTS = [
-  {
-    id: "WA-001",
-    title: "Severe Storm System — Shanghai PVG Hub",
-    severity: "Critical" as const,
-    type: "weather",
-    area: "Shanghai Pudong International Airport (PVG)",
-    detail: "Typhoon remnant causing ground stop. All outbound cargo flights suspended. Expected clearance: Mar 11 18:00 UTC.",
-    affectedLanes: ["CAN→DTW", "SHA→LAX"],
-    affectedShipments: ["SHP-40672"],
-    validUntil: "Mar 11, 18:00 UTC",
-  },
-  {
-    id: "WA-002",
-    title: "Arabian Sea — Low Pressure System",
-    severity: "High" as const,
-    type: "weather",
-    area: "Northern Arabian Sea (14°N 68°E)",
-    detail: "Tropical low strengthening. Winds 25–35 knots, seas 3–5m. AIS reliability reduced. Mariners advised to reroute north.",
-    affectedLanes: ["BOM→RTM"],
-    affectedShipments: ["SHP-30178"],
-    validUntil: "Mar 12, 12:00 UTC",
-  },
-  {
-    id: "WA-003",
-    title: "I-40 East Incident — Flagstaff, AZ",
-    severity: "High" as const,
-    type: "traffic",
-    area: "I-40 East, near Flagstaff, AZ (MM 199)",
-    detail: "Multi-vehicle accident blocking 2 of 3 lanes. AZ DPS estimating 4-hour clearance. Alternate via I-17 adds +2h.",
-    affectedLanes: ["LAX→PHX"],
-    affectedShipments: ["SHP-60441"],
-    validUntil: "Mar 11, 14:00 local",
-  },
-  {
-    id: "WA-004",
-    title: "LA Port — WBCT Terminal Congestion",
-    severity: "Medium" as const,
-    type: "port",
-    area: "West Basin Container Terminal, Los Angeles Port",
-    detail: "22+ vessel queue at anchor. Average berth wait 18–24h. Peak import season expected to ease mid-March.",
-    affectedLanes: ["SHA→LAX"],
-    affectedShipments: ["SHP-10421"],
-    validUntil: "Ongoing",
-  },
-]
+// ─── Component ───────────────────────────────────────────────────────────────
 
-const TYPE_STYLES = {
-  weather: { bg: "border-l-blue-500", badge: "bg-blue-50 border-blue-200 text-blue-700", icon: <CloudLightning size={14} className="text-blue-600" /> },
-  traffic: { bg: "border-l-amber-500", badge: "bg-amber-50 border-amber-200 text-amber-700", icon: <TrendingUp size={14} className="text-amber-600" /> },
-  port: { bg: "border-l-purple-500", badge: "bg-purple-50 border-purple-200 text-purple-700", icon: <MapPin size={14} className="text-purple-600" /> },
-}
-
-const SEV_DOT: Record<string, string> = {
-  Critical: "bg-red-500",
-  High: "bg-amber-500",
-  Medium: "bg-yellow-400",
-}
-
-interface WeatherTrafficPageProps {
+interface CarrierPortalStatusPageProps {
   highlightShipmentId?: string
 }
 
-export function WeatherTrafficPage({ highlightShipmentId }: WeatherTrafficPageProps) {
+export function WeatherTrafficPage({ highlightShipmentId }: CarrierPortalStatusPageProps) {
   const highlightRef = useRef<HTMLDivElement | null>(null)
 
+  // Determine which portal to highlight based on a booking's carrier
+  const highlightCarrier = highlightShipmentId
+    ? BOOKING_REQUESTS.find((b) => b.id === highlightShipmentId)?.carrier
+    : null
+
   useEffect(() => {
-    if (highlightShipmentId && highlightRef.current) {
+    if (highlightCarrier && highlightRef.current) {
       highlightRef.current.scrollIntoView({ behavior: "smooth", block: "center" })
     }
-  }, [highlightShipmentId])
+  }, [highlightCarrier])
 
   return (
     <div className="flex-1 overflow-y-auto bg-[#F8F9FA]">
@@ -105,98 +72,168 @@ export function WeatherTrafficPage({ highlightShipmentId }: WeatherTrafficPagePr
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center">
-              <CloudLightning size={16} className="text-blue-600" />
+              <Globe size={16} className="text-blue-600" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-gray-800">Weather & Traffic</h2>
-              <p className="text-xs text-gray-400">Active disruptions affecting current shipment lanes · Updated Mar 12, 10:20</p>
+              <h2 className="text-lg font-semibold text-gray-800">Carrier Portal Status</h2>
+              <p className="text-xs text-gray-400">Carrier portals, system integrations, and credential health</p>
             </div>
           </div>
           <div className="flex items-center gap-2 text-xs">
-            <span className="flex items-center gap-1 text-red-600 font-semibold bg-red-50 border border-red-200 rounded-full px-2.5 py-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-              {WEATHER_ALERTS.filter((a) => a.severity === "Critical").length} Critical
+            <span className="flex items-center gap-1 text-green-600 font-semibold bg-green-50 border border-green-200 rounded-full px-2.5 py-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+              {onlineCount} Online
             </span>
-            <span className="flex items-center gap-1 text-amber-600 font-semibold bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1">
-              {WEATHER_ALERTS.filter((a) => a.severity === "High").length} High
-            </span>
+            {degradedCount > 0 && (
+              <span className="flex items-center gap-1 text-amber-600 font-semibold bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                {degradedCount} Degraded
+              </span>
+            )}
+            {offlineCount > 0 && (
+              <span className="flex items-center gap-1 text-red-600 font-semibold bg-red-50 border border-red-200 rounded-full px-2.5 py-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                {offlineCount} Offline
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Active alerts */}
-        <div className="space-y-3">
-          <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Active Disruption Alerts</h3>
-          {WEATHER_ALERTS.map((alert) => {
-            const typeStyle = TYPE_STYLES[alert.type as keyof typeof TYPE_STYLES] ?? TYPE_STYLES.weather
-            return (
-              <div
-                key={alert.id}
-                className={cn(
-                  "bg-white rounded-xl border border-l-4 border-gray-200 p-4",
-                  typeStyle.bg
-                )}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
-                    <div className={cn(
-                      "w-8 h-8 rounded-lg flex items-center justify-center border shrink-0 mt-0.5",
-                      typeStyle.badge
-                    )}>
-                      {typeStyle.icon}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <span className={cn("w-2 h-2 rounded-full shrink-0", SEV_DOT[alert.severity] ?? "bg-gray-400")} />
-                        <span className="font-semibold text-sm text-gray-800">{alert.title}</span>
-                        <span className={cn("text-[10px] font-semibold rounded-full border px-2 py-0.5", typeStyle.badge)}>
-                          {alert.type.charAt(0).toUpperCase() + alert.type.slice(1)}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-[11px] text-gray-400 mb-2">
-                        <MapPin size={10} />
-                        <span>{alert.area}</span>
-                      </div>
-                      <p className="text-xs text-gray-600 leading-relaxed">{alert.detail}</p>
-                      <div className="mt-2 flex items-center gap-4">
-                        <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
-                          <Clock size={10} />
-                          <span>Valid until: {alert.validUntil}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          {alert.affectedLanes.map((lane) => (
-                            <span key={lane} className="font-mono text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">{lane}</span>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="shrink-0">
-                    <div className="text-[10px] text-gray-400 mb-1 text-right">Affected</div>
-                    <div className="flex gap-1 flex-wrap justify-end">
-                      {alert.affectedShipments.map((id) => (
-                        <span key={id} className="font-mono text-[10px] text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded font-bold">
-                          {id}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+        {/* Agent Readiness Panel */}
+        <div className="bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-50 border border-indigo-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-4">
+            <Brain size={15} className="text-indigo-600" />
+            <h3 className="text-xs font-bold text-indigo-800 uppercase tracking-wider">Agent Booking Capability</h3>
+            <span className="ml-auto flex items-center gap-1.5 text-[11px] text-green-600 font-semibold bg-green-50 border border-green-200 rounded-full px-2.5 py-0.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+              Agent Active
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-white rounded-lg border border-green-200 px-4 py-3 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-green-50 border border-green-200 flex items-center justify-center shrink-0">
+                <Zap size={16} className="text-green-600" />
               </div>
-            )
-          })}
+              <div>
+                <div className="text-2xl font-bold text-green-700">{autoBookableCount}</div>
+                <div className="text-[11px] font-medium text-gray-600">Auto-bookable</div>
+                <div className="text-[10px] text-gray-400">API + valid credentials</div>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg border border-amber-200 px-4 py-3 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
+                <Activity size={16} className="text-amber-600" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-amber-600">{degradedPortalCount}</div>
+                <div className="text-[11px] font-medium text-gray-600">Degraded</div>
+                <div className="text-[10px] text-gray-400">RPA fallback active</div>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg border border-red-200 px-4 py-3 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-red-50 border border-red-200 flex items-center justify-center shrink-0">
+                <Ban size={16} className="text-red-500" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-red-600">{blockedCount}</div>
+                <div className="text-[11px] font-medium text-gray-600">Blocked</div>
+                <div className="text-[10px] text-gray-400">Manual booking required</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Affected bookings by portal issues */}
+          {affectedBookings.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-indigo-200">
+              <div className="flex items-center gap-2 mb-2">
+                <Package size={12} className="text-indigo-500" />
+                <span className="text-[11px] font-semibold text-indigo-700">{affectedBookings.length} Booking{affectedBookings.length !== 1 ? "s" : ""} Blocked by Portal/API Unavailability</span>
+                <span className="text-[9px] text-indigo-400 font-normal">· Req. type #2</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {affectedBookings.map((b) => (
+                  <div key={b.id} className="flex items-center gap-1.5 bg-white border border-red-200 rounded-full px-2.5 py-1 text-[10px]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+                    <span className="font-mono font-bold text-red-700">{b.id}</span>
+                    <span className="text-gray-500">{b.carrier}</span>
+                    <span className="text-red-500">· {b.exceptionType}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Shipment disruption details */}
+        {/* System Integration Cards (SAP TM / OTM) */}
         <div>
-          <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Shipment-Level Disruption Context</h3>
-          <div className="grid gap-3">
-            {activeDisruptions.map((s) => {
-              const exType = s.exceptionType as keyof typeof DISRUPTION_TYPES
-              const cfg = DISRUPTION_TYPES[exType]
-              const isHighlighted = s.id === highlightShipmentId
+          <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">System Integrations</h3>
+          <div className="grid grid-cols-2 gap-3">
+            {systemPortals.map((portal) => {
+              const statusCfg = STATUS_CONFIG[portal.status]
+              const credCfg = CRED_CONFIG[portal.credentialStatus]
+              return (
+                <div key={portal.portal} className="bg-white rounded-xl border border-gray-200 p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-200 flex items-center justify-center">
+                        <Server size={14} className="text-indigo-600" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-semibold text-gray-800">{portal.portal}</div>
+                        <div className="text-[10px] text-gray-400">{portal.carrier}</div>
+                      </div>
+                    </div>
+                    <span className={cn("inline-flex items-center gap-1 text-[10px] font-semibold border rounded-full px-2 py-0.5", statusCfg.color)}>
+                      <span className={cn("w-1.5 h-1.5 rounded-full", statusCfg.dot)} />
+                      {statusCfg.label}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-[11px]">
+                    <div className="flex items-center gap-1.5">
+                      <Wifi size={10} className={portal.apiAvailable ? "text-green-500" : "text-red-500"} />
+                      <span className="text-gray-500">API</span>
+                      <span className={cn("w-1.5 h-1.5 rounded-full", portal.apiAvailable ? "bg-green-500" : "bg-red-500")} />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Bot size={10} className={portal.rpaAvailable ? "text-green-500" : "text-gray-300"} />
+                      <span className="text-gray-500">RPA</span>
+                      <span className={cn("w-1.5 h-1.5 rounded-full", portal.rpaAvailable ? "bg-green-500" : "bg-gray-300")} />
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-[10px] text-gray-400">
+                      <Activity size={10} />
+                      <span>Uptime: <span className="font-mono font-semibold text-gray-700">{portal.uptime}%</span></span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[10px] text-gray-400">
+                      <Clock size={10} />
+                      <span>{portal.lastChecked}</span>
+                    </div>
+                  </div>
+
+                  {/* Uptime bar */}
+                  <div className="mt-2 w-full h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                    <div className={cn("h-full rounded-full transition-all", UPTIME_COLOR(portal.uptime))} style={{ width: `${portal.uptime}%` }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Carrier Portal Cards */}
+        <div>
+          <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Carrier Booking Portals</h3>
+          <div className="grid grid-cols-2 gap-3">
+            {carrierPortals.map((portal) => {
+              const statusCfg = STATUS_CONFIG[portal.status]
+              const credCfg = CRED_CONFIG[portal.credentialStatus]
+              const isHighlighted = highlightCarrier === portal.carrier
               return (
                 <div
-                  key={s.id}
+                  key={portal.portal}
                   ref={isHighlighted ? highlightRef : null}
                   className={cn(
                     "bg-white rounded-xl border p-4 transition-all duration-500",
@@ -205,128 +242,133 @@ export function WeatherTrafficPage({ highlightShipmentId }: WeatherTrafficPagePr
                       : "border-gray-200"
                   )}
                 >
-                  <div className="flex items-start gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-2 flex-wrap">
-                        <span className="font-mono font-bold text-blue-700 text-sm">{s.id}</span>
-                        {isHighlighted && (
-                          <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5">
-                            ← Navigated from shipment detail
-                          </span>
-                        )}
-                        <ModeBadge mode={s.mode} />
-                        <SeverityBadge severity={s.severity} />
-                        {cfg && (
-                          <span className={cn("inline-flex items-center gap-1 text-[10px] font-semibold rounded-full border px-2 py-0.5", cfg.color)}>
-                            {cfg.icon} {cfg.label}
-                          </span>
-                        )}
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center">
+                        <Globe size={14} className="text-blue-600" />
                       </div>
-                      <div className="text-xs text-gray-500 mb-2">{s.carrier} · {s.origin} → {s.destination}</div>
-                      <div className="rounded-lg bg-gray-50 border border-gray-200 p-3 text-xs text-gray-700 leading-relaxed">
-                        {s.disruptionContext}
-                      </div>
-                      <div className="mt-2 flex items-center gap-4 text-[11px]">
-                        <span className="text-gray-400">Planned: <span className="font-mono text-gray-600">{s.plannedETA.replace("2025 ", "")}</span></span>
-                        <span className="text-gray-400">→ Revised: <span className="font-mono text-red-600 font-semibold">{s.revisedETA.replace("2025 ", "")}</span></span>
-                        <span className="font-semibold text-red-600">+{s.delayHours}h</span>
+                      <div>
+                        <div className="text-sm font-semibold text-gray-800">{portal.portal}</div>
+                        <div className="text-[10px] text-gray-400">{portal.carrier}</div>
                       </div>
                     </div>
+                    <span className={cn("inline-flex items-center gap-1 text-[10px] font-semibold border rounded-full px-2 py-0.5", statusCfg.color)}>
+                      <span className={cn("w-1.5 h-1.5 rounded-full", statusCfg.dot)} />
+                      {statusCfg.label}
+                    </span>
                   </div>
+
+                  {isHighlighted && (
+                    <div className="mb-2 text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5 inline-block">
+                      Relevant portal for selected booking
+                    </div>
+                  )}
+
+                  {/* Agent capability badge */}
+                  {(() => {
+                    const canAutoBook = portal.apiAvailable && portal.credentialStatus === "Valid"
+                    const isBlocked = portal.status === "Offline" || portal.credentialStatus === "Expired"
+                    return (
+                      <div className={cn(
+                        "mb-3 inline-flex items-center gap-1.5 text-[10px] font-semibold rounded-full px-2.5 py-1 border",
+                        canAutoBook
+                          ? "bg-green-50 border-green-200 text-green-700"
+                          : isBlocked
+                          ? "bg-red-50 border-red-200 text-red-700"
+                          : "bg-amber-50 border-amber-200 text-amber-700"
+                      )}>
+                        <Brain size={9} />
+                        {canAutoBook ? "Agent: Auto-book enabled" : isBlocked ? "Agent: Blocked — manual required" : "Agent: RPA fallback"}
+                      </div>
+                    )
+                  })()}
+
+                  {/* Availability indicators */}
+                  <div className="grid grid-cols-3 gap-3 text-[11px] mb-3">
+                    <div className="flex items-center gap-1.5">
+                      {portal.apiAvailable ? (
+                        <Wifi size={10} className="text-green-500" />
+                      ) : (
+                        <WifiOff size={10} className="text-red-500" />
+                      )}
+                      <span className="text-gray-500">API</span>
+                      <span className={cn("w-1.5 h-1.5 rounded-full", portal.apiAvailable ? "bg-green-500" : "bg-red-500")} />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Bot size={10} className={portal.rpaAvailable ? "text-green-500" : "text-red-500"} />
+                      <span className="text-gray-500">RPA</span>
+                      <span className={cn("w-1.5 h-1.5 rounded-full", portal.rpaAvailable ? "bg-green-500" : "bg-red-500")} />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Key size={10} className={
+                        portal.credentialStatus === "Valid" ? "text-green-500" :
+                        portal.credentialStatus === "Expiring Soon" ? "text-amber-500" : "text-red-500"
+                      } />
+                      <span className={cn("text-[10px] font-semibold border rounded-full px-1.5 py-0.5", credCfg.color)}>
+                        {credCfg.label}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Uptime bar */}
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[10px] text-gray-400 w-12 shrink-0">Uptime</span>
+                    <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                      <div className={cn("h-full rounded-full transition-all", UPTIME_COLOR(portal.uptime))} style={{ width: `${portal.uptime}%` }} />
+                    </div>
+                    <span className="text-[10px] font-mono font-semibold text-gray-700 w-12 text-right">{portal.uptime}%</span>
+                  </div>
+
+                  {/* Last checked */}
+                  <div className="flex items-center gap-1.5 text-[10px] text-gray-400">
+                    <Clock size={10} />
+                    <span>Checked {portal.lastChecked}</span>
+                  </div>
+
+                  {/* Notes (warning banner) */}
+                  {portal.notes && (
+                    <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 flex items-start gap-2">
+                      <AlertTriangle size={12} className="text-amber-600 shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-amber-800 leading-relaxed">{portal.notes}</p>
+                    </div>
+                  )}
                 </div>
               )
             })}
           </div>
         </div>
 
-        {/* Port Intelligence — inspired by project44 Port Intel */}
-        <div>
-          <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-            <Anchor size={12} /> Port Intelligence · 5 Key Ports
-          </h3>
-          <div className="grid grid-cols-5 gap-3">
-            {PORT_STATUS.map((port) => {
-              const cfg = CONGESTION_CONFIG[port.congestionLevel]
-              const trendIcon = port.trend === "improving"
-                ? <TrendingDown size={11} className="text-green-500" />
-                : port.trend === "worsening"
-                  ? <TrendingUp size={11} className="text-red-500" />
-                  : <Minus size={11} className="text-gray-400" />
-              return (
-                <div key={port.code} className="bg-white rounded-xl border border-gray-200 p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-mono text-gray-400">{port.code}</span>
-                    <span className={cn("w-2 h-2 rounded-full shrink-0", cfg.dot)} />
-                  </div>
-                  <div className="text-xs font-semibold text-gray-800 leading-tight mb-1">{port.name}</div>
-                  <div className="text-[10px] text-gray-400 mb-2">{port.country}</div>
-
-                  <div className="w-full h-1.5 rounded-full bg-gray-100 mb-2 overflow-hidden">
-                    <div className={cn("h-full rounded-full transition-all", cfg.bar)} style={{ width: `${CONGESTION_LEVEL[port.congestionLevel]}%` }} />
-                  </div>
-
-                  <span className={cn("inline-block text-[10px] font-semibold border rounded-full px-1.5 py-0.5 mb-2", cfg.color)}>
-                    {port.congestionLevel}
-                  </span>
-
-                  <div className="space-y-1 text-[10px] text-gray-500">
-                    <div className="flex justify-between">
-                      <span>Queue</span>
-                      <span className="font-medium text-gray-700">
-                        {port.vesselQueue > 0 ? `${port.vesselQueue} vessels` : port.avgBerthWait}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Avg wait</span>
-                      <span className="font-medium text-gray-700">{port.avgBerthWait}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Dwell</span>
-                      <span className="font-medium text-gray-700">{port.avgDwell}</span>
-                    </div>
-                    <div className="flex items-center gap-1 pt-0.5">
-                      {trendIcon}
-                      <span className={port.trend === "improving" ? "text-green-600" : port.trend === "worsening" ? "text-red-600" : "text-gray-500"}>
-                        {port.trend.charAt(0).toUpperCase() + port.trend.slice(1)}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="mt-2 pt-2 border-t border-gray-100 text-[9px] text-gray-400 leading-relaxed">
-                    {port.note}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Lane-level risk summary */}
+        {/* Health Summary */}
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-center gap-2 mb-3">
-            <AlertTriangle size={14} className="text-amber-600" />
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Lane Risk Summary</h3>
+            <Shield size={14} className="text-blue-600" />
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Integration Health Summary</h3>
           </div>
           <div className="space-y-2">
-            {[
-              { lane: "SHA→LAX", risk: "High", reason: "Port congestion + peak season", shipments: 1 },
-              { lane: "BOM→RTM", risk: "High", reason: "Arabian Sea weather + AIS loss", shipments: 1 },
-              { lane: "CAN→DTW", risk: "Critical", reason: "PVG ground stop — active", shipments: 1 },
-              { lane: "LAX→PHX", risk: "High", reason: "I-40 incident — resolving", shipments: 1 },
-              { lane: "BOM→LAX", risk: "Medium", reason: "DXB hub capacity constraints", shipments: 1 },
-            ].map((row) => (
-              <div key={row.lane} className="flex items-center gap-3 text-xs">
-                <span className="font-mono text-gray-600 w-20 shrink-0">{row.lane}</span>
-                <span className={cn(
-                  "rounded-full border px-2 py-0.5 text-[10px] font-semibold w-16 text-center",
-                  row.risk === "Critical" ? "bg-red-50 border-red-200 text-red-700" :
-                  row.risk === "High" ? "bg-amber-50 border-amber-200 text-amber-700" :
-                  "bg-yellow-50 border-yellow-200 text-yellow-700"
-                )}>{row.risk}</span>
-                <span className="text-gray-500 flex-1">{row.reason}</span>
-                <span className="text-gray-400 shrink-0">{row.shipments} shipment{row.shipments !== 1 ? "s" : ""}</span>
-              </div>
-            ))}
+            {PORTAL_STATUSES.map((portal) => {
+              const statusCfg = STATUS_CONFIG[portal.status]
+              const credCfg = CRED_CONFIG[portal.credentialStatus]
+              return (
+                <div key={portal.portal} className="flex items-center gap-3 text-xs">
+                  <span className="text-gray-600 w-44 shrink-0 truncate">{portal.portal}</span>
+                  <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-semibold w-20 text-center", statusCfg.color)}>
+                    {statusCfg.label}
+                  </span>
+                  <div className="flex items-center gap-1 w-14">
+                    <span className={cn("w-1.5 h-1.5 rounded-full", portal.apiAvailable ? "bg-green-500" : "bg-red-500")} />
+                    <span className="text-[10px] text-gray-400">API</span>
+                  </div>
+                  <div className="flex items-center gap-1 w-14">
+                    <span className={cn("w-1.5 h-1.5 rounded-full", portal.rpaAvailable ? "bg-green-500" : "bg-gray-300")} />
+                    <span className="text-[10px] text-gray-400">RPA</span>
+                  </div>
+                  <span className={cn("text-[10px] font-semibold border rounded-full px-1.5 py-0.5", credCfg.color)}>
+                    {credCfg.label}
+                  </span>
+                  <span className="font-mono text-gray-500 flex-1 text-right">{portal.uptime}%</span>
+                </div>
+              )
+            })}
           </div>
         </div>
       </div>

@@ -2,16 +2,30 @@
 
 import { useState, useEffect } from "react"
 import { AGENT_ACTIVITIES, SHIPMENTS, type AgentActionType } from "@/lib/mock-data"
-import { Brain, RefreshCw, Bell, Flag, Lightbulb, ArrowRightLeft, Search } from "lucide-react"
+import {
+  Brain,
+  Download,
+  BarChart3,
+  LogIn,
+  Send,
+  Upload,
+  CheckCircle,
+  Bell,
+  AlertTriangle,
+  Lightbulb,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const ACTION_CONFIG: Record<AgentActionType, { icon: typeof Brain; label: string; color: string; iconColor: string }> = {
-  detected: { icon: Search, label: "Detection", color: "bg-amber-50 border-amber-200", iconColor: "text-amber-600" },
-  recalculated: { icon: RefreshCw, label: "ETA Recalc", color: "bg-blue-50 border-blue-200", iconColor: "text-blue-600" },
-  notified: { icon: Bell, label: "Notification", color: "bg-green-50 border-green-200", iconColor: "text-green-600" },
-  flagged: { icon: Flag, label: "Flag", color: "bg-red-50 border-red-200", iconColor: "text-red-600" },
-  recommended: { icon: Lightbulb, label: "Suggestion", color: "bg-purple-50 border-purple-200", iconColor: "text-purple-600" },
-  synced: { icon: ArrowRightLeft, label: "OTM Sync", color: "bg-indigo-50 border-indigo-200", iconColor: "text-indigo-600" },
+  ingested: { icon: Download, label: "Ingested", color: "bg-blue-50 border-blue-200", iconColor: "text-blue-600" },
+  carrier_eval: { icon: BarChart3, label: "Carrier Eval", color: "bg-violet-50 border-violet-200", iconColor: "text-violet-600" },
+  portal_login: { icon: LogIn, label: "Portal Login", color: "bg-cyan-50 border-cyan-200", iconColor: "text-cyan-600" },
+  booking_submit: { icon: Send, label: "Booking Submit", color: "bg-indigo-50 border-indigo-200", iconColor: "text-indigo-600" },
+  doc_upload: { icon: Upload, label: "Doc Upload", color: "bg-teal-50 border-teal-200", iconColor: "text-teal-600" },
+  confirmed: { icon: CheckCircle, label: "Confirmed", color: "bg-green-50 border-green-200", iconColor: "text-green-600" },
+  notified: { icon: Bell, label: "Notified", color: "bg-sky-50 border-sky-200", iconColor: "text-sky-600" },
+  flagged: { icon: AlertTriangle, label: "Flagged", color: "bg-amber-50 border-amber-200", iconColor: "text-amber-600" },
+  recommended: { icon: Lightbulb, label: "Recommended", color: "bg-purple-50 border-purple-200", iconColor: "text-purple-600" },
 }
 
 function ThinkingDots() {
@@ -28,7 +42,7 @@ function ThinkingDots() {
   )
 }
 
-function AgentThinkingState({ label = "Analyzing shipments" }: { label?: string }) {
+function AgentThinkingState({ label = "Analyzing bookings" }: { label?: string }) {
   return (
     <div className="flex items-center gap-2 py-1.5">
       <Brain size={13} className="text-blue-500 animate-pulse shrink-0" />
@@ -38,15 +52,27 @@ function AgentThinkingState({ label = "Analyzing shipments" }: { label?: string 
   )
 }
 
+export interface DynamicActivity {
+  id: string
+  description: string
+  actionType: AgentActionType
+  timestamp: string
+  shipmentId?: string
+  lane?: string
+}
+
 interface AgentActivityLogProps {
   condensed?: boolean
   maxItems?: number
   onShipmentClick?: (shipmentId: string) => void
   onViewAll?: () => void
+  dynamicActivities?: DynamicActivity[]
 }
 
-export function AgentActivityLog({ condensed, maxItems, onShipmentClick, onViewAll }: AgentActivityLogProps) {
-  const items = maxItems ? AGENT_ACTIVITIES.slice(0, maxItems) : AGENT_ACTIVITIES
+export function AgentActivityLog({ condensed, maxItems, onShipmentClick, onViewAll, dynamicActivities = [] }: AgentActivityLogProps) {
+  // Merge static + dynamic, sort by timestamp descending (newest first)
+  const merged = [...dynamicActivities, ...AGENT_ACTIVITIES]
+  const items = maxItems ? merged.slice(0, maxItems) : merged
   const [thinking, setThinking] = useState(true)
 
   useEffect(() => {
@@ -69,7 +95,7 @@ export function AgentActivityLog({ condensed, maxItems, onShipmentClick, onViewA
           )}
         </div>
         {thinking ? (
-          <AgentThinkingState label="Scanning active shipments" />
+          <AgentThinkingState label="Scanning active bookings" />
         ) : (
           <div className="space-y-2">
             {items.map((a) => {
@@ -113,7 +139,7 @@ export function AgentActivityLog({ condensed, maxItems, onShipmentClick, onViewA
           </div>
           <div>
             <h2 className="text-lg font-semibold text-gray-800">Agent Activity Log</h2>
-            <p className="text-xs text-gray-500">Chronological feed of autonomous agent actions and decisions</p>
+            <p className="text-xs text-gray-500">Chronological feed of autonomous booking agent actions and decisions</p>
           </div>
         </div>
 

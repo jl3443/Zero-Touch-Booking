@@ -36,6 +36,7 @@ interface ShipmentDrawerProps {
   onSendNotification?: (email: SentEmailItem) => void
   onEtaApproved?: () => void
   onResumeWorkflow?: (shipmentId: string) => void
+  onRouteUpdated?: (shipmentId: string, carrier: string) => void
 }
 
 const LOADING_STEPS = [
@@ -116,7 +117,7 @@ function AIThinkingSkeleton({ label = "AI analyzing" }: { label?: string }) {
   )
 }
 
-export function ShipmentDrawer({ shipment, onClose, onOpenWeather, onSendNotification, onEtaApproved, onResumeWorkflow }: ShipmentDrawerProps) {
+export function ShipmentDrawer({ shipment, onClose, onOpenWeather, onSendNotification, onEtaApproved, onResumeWorkflow, onRouteUpdated }: ShipmentDrawerProps) {
   const [actions, setActions] = useState<ActionState>({
     bookingApproved: false,
     notified: false,
@@ -334,6 +335,7 @@ export function ShipmentDrawer({ shipment, onClose, onOpenWeather, onSendNotific
               notifyType={notifyType}
               showNotifyPrompt={showNotifyPrompt}
               onDismissNotifyPrompt={() => setShowNotifyPrompt(false)}
+              onRouteUpdated={onRouteUpdated}
             />
           </div>
         )}
@@ -356,6 +358,7 @@ export function ShipmentDrawer({ shipment, onClose, onOpenWeather, onSendNotific
 function OverviewTab({ shipment, actions, onApprove, resuming, resumed, onResumeWorkflow,
   approvedReroute, syncing, onSyncOTM, onSendEmail, onSendMessage, onSendBoth,
   showNotifyConfirmation, notifyType, showNotifyPrompt, onDismissNotifyPrompt,
+  onRouteUpdated,
 }: {
   shipment: BookingRequest; actions: ActionState; onApprove: () => void
   resuming: boolean; resumed: boolean; onResumeWorkflow: () => void
@@ -364,6 +367,7 @@ function OverviewTab({ shipment, actions, onApprove, resuming, resumed, onResume
   onSendEmail: () => void; onSendMessage: () => void; onSendBoth: () => void
   showNotifyConfirmation: boolean; notifyType: "email" | "message" | "both" | null
   showNotifyPrompt: boolean; onDismissNotifyPrompt: () => void
+  onRouteUpdated?: (shipmentId: string, carrier: string) => void
 }) {
   const hasFailed = shipment.workflowSteps.some((s) => s.status === "failed")
 
@@ -575,7 +579,7 @@ function OverviewTab({ shipment, actions, onApprove, resuming, resumed, onResume
           shipment.exceptionType !== "Portal Unavailable" &&
           shipment.exceptionType !== "Credentials Expired" && (
           <div className="mt-3">
-            <UnifiedExceptionPanel shipment={shipment} onApprove={onApprove} />
+            <UnifiedExceptionPanel shipment={shipment} onApprove={onApprove} onRouteUpdated={onRouteUpdated} />
           </div>
         )}
       </div>
@@ -726,7 +730,7 @@ function OverviewTab({ shipment, actions, onApprove, resuming, resumed, onResume
 
 // ─── Unified Exception Panel (Missing Allocation, Rate Mismatch, Missing Fields, Carrier Rejection) ──
 
-function UnifiedExceptionPanel({ shipment, onApprove }: { shipment: BookingRequest; onApprove: () => void }) {
+function UnifiedExceptionPanel({ shipment, onApprove, onRouteUpdated }: { shipment: BookingRequest; onApprove: () => void; onRouteUpdated?: (shipmentId: string, carrier: string) => void }) {
   const [approvedReroute, setApprovedReroute] = useState(false)
   const [selectedCarrier, setSelectedCarrier] = useState<string | null>(null)
   const [retrying, setRetrying] = useState(false)
@@ -734,9 +738,15 @@ function UnifiedExceptionPanel({ shipment, onApprove }: { shipment: BookingReque
   const [escalated, setEscalated] = useState(false)
   const [notified, setNotified] = useState(false)
   const [aiThinking, setAiThinking] = useState(true)
+  const [showCarrierModal, setShowCarrierModal] = useState(false)
+  const [carrierThinking, setCarrierThinking] = useState(false)
+  const [modalSelectedCarrier, setModalSelectedCarrier] = useState<string | null>(null)
 
   useEffect(() => {
     setAiThinking(true)
+    setShowCarrierModal(false)
+    setCarrierThinking(false)
+    setModalSelectedCarrier(null)
     const t = setTimeout(() => setAiThinking(false), 1500)
     return () => clearTimeout(t)
   }, [shipment.id])
@@ -814,6 +824,7 @@ function UnifiedExceptionPanel({ shipment, onApprove }: { shipment: BookingReque
     setSelectedCarrier(selected ?? null)
     setApprovedReroute(true)
     onApprove()
+    if (selected) onRouteUpdated?.(shipment.id, selected)
   }
 
   if (approvedReroute) {
@@ -821,7 +832,7 @@ function UnifiedExceptionPanel({ shipment, onApprove }: { shipment: BookingReque
       <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-2">
         <CheckCircle size={14} className="text-green-600 mt-0.5 shrink-0" />
         <div>
-          <p className="text-xs font-bold text-green-700">Reroute Approved — AI Rebooking</p>
+          <p className="text-xs font-bold text-green-700">Route Updated — AI Rebooking</p>
           <p className="text-[11px] text-green-600 mt-0.5">
             Agent initiating booking with <span className="font-semibold">{selectedCarrier ?? recommended?.carrier ?? "alternate carrier"}</span>.
             Confirmation expected within 2h.
@@ -932,111 +943,176 @@ function UnifiedExceptionPanel({ shipment, onApprove }: { shipment: BookingReque
         </div>
       )}
 
-      {/* AI Carrier Table (with thinking) */}
+      {/* AI Carrier Recommendation — Button triggers modal */}
       {aiThinking ? (
         <AIThinkingSkeleton label="AI evaluating carriers" />
       ) : (
-        <div className="space-y-3">
-          {/* AI Recommendation header */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5">
-            <div className="flex items-center gap-1.5 mb-1">
-              <Brain size={13} className="text-blue-600" />
-              <span className="text-[11px] font-semibold text-blue-800">AI Carrier Recommendation</span>
+        <button
+          onClick={() => {
+            setShowCarrierModal(true)
+            setCarrierThinking(true)
+            setTimeout(() => setCarrierThinking(false), 1800)
+          }}
+          className="w-full bg-blue-50 hover:bg-blue-100 border-2 border-blue-200 hover:border-blue-300 rounded-lg p-3 transition-colors group"
+        >
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-blue-100 group-hover:bg-blue-200 flex items-center justify-center transition-colors">
+              <Brain size={16} className="text-blue-600" />
             </div>
-            {recommended && (
-              <p className="text-[10px] text-blue-700">
-                <span className="font-bold">{recommended.carrier}</span> — {recommended.reason}
-              </p>
-            )}
+            <div className="text-left flex-1">
+              <p className="text-[12px] font-semibold text-blue-800">AI Recommended Alternative Carrier</p>
+              <p className="text-[10px] text-blue-600 mt-0.5">Analyze carriers and generate recommended options</p>
+            </div>
+            <ChevronRight size={16} className="text-blue-400 group-hover:text-blue-600 transition-colors" />
           </div>
+        </button>
+      )}
 
-          {/* Carrier Comparison Table — selectable */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-gray-200 bg-gray-50">
-                  <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500">Carrier</th>
-                  <th className="px-2 py-2 text-right text-[10px] font-semibold text-gray-500">Rate</th>
-                  <th className="px-2 py-2 text-right text-[10px] font-semibold text-gray-500">Transit</th>
-                  <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500">Capacity</th>
-                  <th className="px-2 py-2 text-right text-[10px] font-semibold text-gray-500">SLA</th>
-                  <th className="px-2 py-2 text-right text-[10px] font-semibold text-gray-500">OTP%</th>
-                </tr>
-              </thead>
-              <tbody>
-                {shipment.carrierOptions.map((c) => {
-                  const isDisabled = disabledCarrier !== null && c.carrier === disabledCarrier
-                  const isSelected = selectedCarrier === c.carrier
-                  return (
-                    <tr
-                      key={c.carrier}
-                      onClick={() => { if (!isDisabled) setSelectedCarrier(c.carrier) }}
-                      className={cn(
-                        "border-b border-gray-100 transition-colors",
-                        isDisabled ? "opacity-40 cursor-not-allowed bg-red-50/30 line-through" : "cursor-pointer hover:bg-blue-50",
-                        isSelected && "bg-blue-50 border-l-2 border-l-blue-500 ring-1 ring-blue-200",
-                        c.recommended && !isSelected && !isDisabled && "bg-green-50/30 border-l-2 border-l-green-400"
-                      )}
-                    >
-                      <td className="px-2 py-2">
-                        <div className="flex items-center gap-1.5">
-                          <span className={cn("font-medium", isDisabled ? "text-gray-400" : "text-gray-800")}>{c.carrier}</span>
-                          {c.recommended && <span className="text-[8px] font-bold bg-green-600 text-white px-1 py-0.5 rounded">AI Pick</span>}
-                          {isDisabled && <span className="text-[8px] font-bold bg-red-500 text-white px-1 py-0.5 rounded">Rejected</span>}
+      {/* ── AI Carrier Recommendation Modal (centered overlay) ── */}
+      {showCarrierModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => { if (!carrierThinking) { setShowCarrierModal(false) } }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-[520px] max-h-[90vh] overflow-y-auto mx-4" onClick={(e) => e.stopPropagation()}>
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-white border-b border-gray-100 px-5 py-4 rounded-t-2xl flex items-start gap-3">
+              <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center shrink-0 mt-0.5">
+                <AlertOctagon size={18} className="text-red-600" />
+              </div>
+              <div className="flex-1">
+                <h2 className="text-[15px] font-bold text-gray-900">AI Recommended Actions — Select One</h2>
+                <p className="text-[11px] text-gray-500 mt-0.5">{shipment.id} · {shipment.lane}</p>
+              </div>
+              <button onClick={() => setShowCarrierModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors p-1">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="px-5 py-4">
+              {carrierThinking ? (
+                /* AI Thinking animation */
+                <div className="py-8 space-y-4">
+                  <div className="flex items-center justify-center gap-2">
+                    <Brain size={20} className="text-blue-500 animate-pulse" />
+                    <span className="text-[13px] font-semibold text-blue-700">AI Analyzing Carriers<ThinkingDots /></span>
+                  </div>
+                  <div className="max-w-xs mx-auto space-y-2.5">
+                    {["Scanning carrier capacity on lane...", "Evaluating rate vs SLA tradeoffs...", "Checking vessel schedules..."].map((step, i) => (
+                      <div key={i} className="flex items-center gap-2 animate-pulse" style={{ animationDelay: `${i * 400}ms` }}>
+                        <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                        <span className="text-[11px] text-blue-600">{step}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                /* Carrier option cards */
+                <div className="space-y-2">
+                  {(() => {
+                    // Sort: non-rejected first, rejected last — always show all 3
+                    const nonRejected = shipment.carrierOptions.filter(c => !(disabledCarrier && c.carrier === disabledCarrier))
+                    const rejected = shipment.carrierOptions.filter(c => disabledCarrier !== null && c.carrier === disabledCarrier)
+                    const sorted = [...nonRejected, ...rejected].slice(0, 3)
+                    const labels = ["RECOMMENDED", "ALTERNATIVE", "FALLBACK"] as const
+                    const labelColors = {
+                      RECOMMENDED: "text-green-700",
+                      ALTERNATIVE: "text-gray-600",
+                      FALLBACK: "text-gray-500",
+                    }
+                    const borderColors = {
+                      RECOMMENDED: "border-green-400 bg-green-50/30",
+                      ALTERNATIVE: "border-gray-200",
+                      FALLBACK: "border-gray-200",
+                    }
+                    // Compute ETA from targetShipDate + transitDays
+                    const baseDate = new Date(shipment.targetShipDate + ", 2025")
+                    const computeETA = (transitDays: number) => {
+                      const d = new Date(baseDate)
+                      d.setDate(d.getDate() + transitDays)
+                      return d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                    }
+                    return sorted.map((c, idx) => {
+                      const label = labels[idx] ?? "FALLBACK"
+                      const isSelected = modalSelectedCarrier === c.carrier
+                      const eta = computeETA(c.transitDays)
+                      return (
+                        <div
+                          key={c.carrier}
+                          onClick={() => setModalSelectedCarrier(c.carrier)}
+                          className={cn(
+                            "relative rounded-lg border-2 px-3 py-2.5 cursor-pointer transition-all",
+                            isSelected ? "border-blue-500 ring-2 ring-blue-200 bg-blue-50/30" : borderColors[label],
+                            !isSelected && "hover:border-blue-300 hover:shadow-sm"
+                          )}
+                        >
+                          {/* Row 1: Radio + Label + Carrier + ETA + AI Pick */}
+                          <div className="flex items-center gap-2">
+                            <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0",
+                              isSelected ? "border-blue-500 bg-blue-500" : "border-gray-300"
+                            )}>
+                              {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                            </div>
+                            <span className={cn("text-[9px] font-bold uppercase tracking-wider", labelColors[label])}>{label}</span>
+                            <span className="text-[13px] font-bold text-gray-900">{c.carrier}</span>
+                            <span className="text-[11px] text-gray-500 font-medium">ETA {eta}</span>
+                            {idx === 0 && <span className="ml-auto text-[9px] font-bold bg-green-600 text-white px-1.5 py-0.5 rounded">AI Pick</span>}
+                          </div>
+
+                          {/* Row 2: Metric Badges */}
+                          <div className="flex flex-wrap gap-1 mt-1.5 ml-6">
+                            <span className="inline-flex items-center gap-0.5 text-[9px] font-medium bg-green-50 text-green-700 border border-green-200 rounded-full px-2 py-0.5">
+                              <TrendingUp size={9} /> ${c.rate.toLocaleString()}
+                            </span>
+                            <span className="inline-flex items-center gap-0.5 text-[9px] font-medium bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-2 py-0.5">
+                              <Clock size={9} /> {c.transitDays}d
+                            </span>
+                            <span className={cn("inline-flex items-center gap-0.5 text-[9px] font-medium rounded-full px-2 py-0.5 border",
+                              c.capacity === "Available" ? "bg-green-50 text-green-700 border-green-200" :
+                              c.capacity === "Limited" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-red-50 text-red-700 border-red-200"
+                            )}>
+                              {c.capacity}
+                            </span>
+                            <span className="inline-flex items-center gap-0.5 text-[9px] font-medium bg-purple-50 text-purple-700 border border-purple-200 rounded-full px-2 py-0.5">
+                              SLA {c.sla}%
+                            </span>
+                            <span className="inline-flex items-center gap-0.5 text-[9px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full px-2 py-0.5">
+                              OTP {c.lanePerformance}%
+                            </span>
+                          </div>
                         </div>
-                      </td>
-                      <td className="px-2 py-2 text-right font-mono">
-                        <span className={isDisabled ? "text-gray-400" : "text-gray-700"}>${c.rate.toLocaleString()}</span>
-                        {!isDisabled && recommended && c.carrier !== recommended.carrier && (
-                          c.rate < recommended.rate ? <ArrowDown size={10} className="inline ml-0.5 text-green-500" /> :
-                          c.rate > recommended.rate ? <ArrowUp size={10} className="inline ml-0.5 text-red-500" /> : null
-                        )}
-                      </td>
-                      <td className="px-2 py-2 text-right">
-                        <span className={isDisabled ? "text-gray-400" : "text-gray-700"}>{c.transitDays}d</span>
-                        {!isDisabled && recommended && c.carrier !== recommended.carrier && (
-                          c.transitDays < recommended.transitDays ? <ArrowDown size={10} className="inline ml-0.5 text-green-500" /> :
-                          c.transitDays > recommended.transitDays ? <ArrowUp size={10} className="inline ml-0.5 text-red-500" /> : null
-                        )}
-                      </td>
-                      <td className="px-2 py-2 text-center">
-                        <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded",
-                          isDisabled ? "bg-gray-100 text-gray-400" :
-                          c.capacity === "Available" ? "bg-green-100 text-green-700" :
-                          c.capacity === "Limited" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"
-                        )}>{c.capacity}</span>
-                      </td>
-                      <td className="px-2 py-2 text-right font-mono">
-                        <span className={isDisabled ? "text-gray-400" : "text-gray-700"}>{c.sla}%</span>
-                        {!isDisabled && recommended && c.carrier !== recommended.carrier && (
-                          c.sla > recommended.sla ? <ArrowUp size={10} className="inline ml-0.5 text-green-500" /> :
-                          c.sla < recommended.sla ? <ArrowDown size={10} className="inline ml-0.5 text-red-500" /> : null
-                        )}
-                      </td>
-                      <td className="px-2 py-2 text-right font-mono">
-                        <span className={isDisabled ? "text-gray-400" : "text-gray-700"}>{c.lanePerformance}%</span>
-                        {!isDisabled && recommended && c.carrier !== recommended.carrier && (
-                          c.lanePerformance > recommended.lanePerformance ? <ArrowUp size={10} className="inline ml-0.5 text-green-500" /> :
-                          c.lanePerformance < recommended.lanePerformance ? <ArrowDown size={10} className="inline ml-0.5 text-red-500" /> : null
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-          <p className="text-[9px] text-gray-400 text-center">{selectedCarrier ? `${selectedCarrier} selected — click Approve Reroute to confirm` : "Click a carrier row to select"}</p>
+                      )
+                    })
+                  })()}
+                </div>
+              )}
+            </div>
 
-          {/* AI Policy Analysis */}
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-            <div className="flex items-center gap-1.5 mb-2">
-              <ShieldCheck size={13} className="text-gray-600" />
-              <span className="text-[11px] font-semibold text-gray-700">AI Policy Analysis</span>
-            </div>
-            <div className="space-y-1 text-[10px] text-gray-600">
-              {config.policyItems.map((item, i) => <p key={i}>• {item}</p>)}
-            </div>
+            {/* Modal Footer — Cancel / Approve */}
+            {!carrierThinking && (
+              <div className="sticky bottom-0 bg-white border-t border-gray-100 px-5 py-4 rounded-b-2xl flex items-center justify-between gap-3">
+                <button
+                  onClick={() => setShowCarrierModal(false)}
+                  className="px-4 py-2.5 rounded-lg border border-gray-300 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    const carrier = modalSelectedCarrier
+                    if (carrier) {
+                      setSelectedCarrier(carrier)
+                      setShowCarrierModal(false)
+                      handleApproveWithCarrier(carrier)
+                    }
+                  }}
+                  disabled={!modalSelectedCarrier}
+                  className={cn(
+                    "flex items-center gap-1.5 px-5 py-2.5 rounded-lg text-[12px] font-semibold transition-colors",
+                    modalSelectedCarrier ? "bg-green-600 text-white hover:bg-green-700" : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                  )}
+                >
+                  Approve Action <ChevronRight size={14} />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1052,7 +1128,7 @@ function UnifiedExceptionPanel({ shipment, onApprove }: { shipment: BookingReque
               selectedCarrier || recommended ? "bg-green-600 text-white hover:bg-green-700" : "bg-gray-200 text-gray-400 cursor-not-allowed"
             )}
           >
-            <CheckCircle size={12} /> {selectedCarrier ? `Approve ${selectedCarrier}` : "Approve Reroute"}
+            <CheckCircle size={12} /> {selectedCarrier ? <>Approve {selectedCarrier} <ChevronRight size={11} /></> : "Approve Reroute"}
           </button>
           <button
             onClick={() => { if (!retrying && !retried) { setRetrying(true); setTimeout(() => { setRetrying(false); setRetried(true) }, 2200) } }}

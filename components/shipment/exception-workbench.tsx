@@ -317,6 +317,7 @@ export function ExceptionWorkbench({ onSendNotification, onOpenWeather, onExcept
   const [rerouteBooking, setRerouteBooking] = useState<Shipment | null>(null)
   const [drawerShipment, setDrawerShipment] = useState<Shipment | null>(null)
   const [missingFieldsBooking, setMissingFieldsBooking] = useState<Shipment | null>(null)
+  const [routeUpdatedMap, setRouteUpdatedMap] = useState<Record<string, string>>({})
 
   const getActions = (id: string): WorkbenchCardActions =>
     actions[id] ?? { ...DEFAULT_ACTIONS }
@@ -695,6 +696,7 @@ export function ExceptionWorkbench({ onSendNotification, onOpenWeather, onExcept
                           setResolvedIds((prev) => new Set([...prev, s.id]))
                           onExceptionResolved?.(s.id)
                         }}
+                        routeUpdatedCarrier={routeUpdatedMap[s.id]}
                       />
                     )
                   })}
@@ -820,6 +822,9 @@ export function ExceptionWorkbench({ onSendNotification, onOpenWeather, onExcept
         shipment={drawerShipment}
         onClose={() => setDrawerShipment(null)}
         onOpenWeather={onOpenWeather}
+        onRouteUpdated={(shipmentId, carrier) => {
+          setRouteUpdatedMap(prev => ({ ...prev, [shipmentId]: carrier }))
+        }}
       />
     </div>
   )
@@ -839,6 +844,7 @@ interface ExceptionCardProps {
   onViewDetail: () => void
   onViewPortal: () => void
   onResolve: () => void
+  routeUpdatedCarrier?: string
 }
 
 function ExceptionCard({
@@ -853,6 +859,7 @@ function ExceptionCard({
   onViewDetail,
   onViewPortal,
   onResolve,
+  routeUpdatedCarrier,
 }: ExceptionCardProps) {
   const [expanded, setExpanded] = useState(false)
   const allDone = actions.acknowledged && actions.actionTaken !== null
@@ -879,7 +886,22 @@ function ExceptionCard({
             <span className="font-mono font-bold text-blue-700 text-sm group-hover:underline">{s.id}</span>
             <ExceptionBadge type={s.exceptionType} />
             {s.carrier !== "—" && <CarrierBadge carrier={s.carrier} />}
+            {routeUpdatedCarrier && (
+              <span className="text-[9px] font-bold bg-green-600 text-white px-1.5 py-0.5 rounded flex items-center gap-1">
+                <CheckCircle size={9} /> Route Updated
+              </span>
+            )}
           </div>
+
+          {/* Route Updated banner */}
+          {routeUpdatedCarrier && (
+            <div className="flex items-center gap-2 mb-2 px-2.5 py-1.5 rounded-lg bg-green-50 border border-green-200">
+              <CheckCircle size={11} className="text-green-600 shrink-0" />
+              <span className="text-[10px] text-green-700 font-medium">
+                Route updated — rebooked with <span className="font-bold">{routeUpdatedCarrier}</span>
+              </span>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-x-6 gap-y-1 mb-2">
             <InfoItem label="Lane" value={s.lane} mono />

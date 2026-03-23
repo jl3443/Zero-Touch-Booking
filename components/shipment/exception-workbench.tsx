@@ -22,6 +22,7 @@ import {
   PhoneCall, TrendingUp, ChevronRight, Zap, Brain, Search, Loader2,
   ShieldAlert, DollarSign, FileWarning, Ban, KeyRound, Package, Globe, Calendar,
   ThumbsUp, ThumbsDown, ArrowRightLeft, BarChart3, ClipboardList, Gauge,
+  Ship, Plane, Truck,
 } from "lucide-react"
 import type { SentEmailItem } from "./email-sent-page"
 import { ShipmentDrawer } from "./shipment-drawer"
@@ -1564,7 +1565,15 @@ function EscalateModal({ booking: s, onClose, onSend }: {
   )
 }
 
-// ── Reroute / Alternate Carrier Panel ───────────────────────────────────
+// ── Transport Mode Config ────────────────────────────────────────────────
+
+const TRANSPORT_MODE_CONFIG: Record<string, { icon: typeof Ship; color: string; bg: string; border: string; label: string }> = {
+  Ocean: { icon: Ship, color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200", label: "Ocean Freight" },
+  Air:   { icon: Plane, color: "text-violet-600", bg: "bg-violet-50", border: "border-violet-200", label: "Air Freight" },
+  Road:  { icon: Truck, color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-200", label: "Ground Freight" },
+}
+
+// ── Carrier Selection Panel (Reroute) ───────────────────────────────────
 
 function ReroutePanel({ booking, approvedId, onClose, onApprove }: {
   booking: Shipment
@@ -1595,72 +1604,142 @@ function ReroutePanel({ booking, approvedId, onClose, onApprove }: {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-2xl mx-4 flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <div className="flex items-center gap-2">
-            <GitBranch size={15} className="text-blue-600" />
-            <span className="text-sm font-semibold text-gray-800">Alternate Carrier Selection</span>
-            <span className="text-[11px] text-gray-400 ml-1">&mdash; {booking.id}</span>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center">
+                <GitBranch size={14} className="text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-gray-800">Select Alternative Carrier</h3>
+                <span className="text-[11px] text-gray-400">{booking.id} &mdash; {booking.lane}</span>
+              </div>
+            </div>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
             <X size={16} />
           </button>
         </div>
 
-        {/* Context bar */}
-        <div className="px-5 py-2.5 bg-amber-50 border-b border-amber-100 flex items-center gap-2 text-[11px] text-amber-800">
-          <Zap size={11} className="text-amber-500 shrink-0" />
-          <span>
-            <strong>{booking.exceptionType}</strong> &mdash; {EXCEPTION_DESCRIPTIONS[booking.exceptionType]} on {booking.lane}
-          </span>
+        {/* Impact assessment bar */}
+        <div className="px-6 py-3 bg-red-50 border-b border-red-100">
+          <div className="flex items-start gap-2">
+            <AlertOctagon size={13} className="text-red-500 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-xs font-semibold text-red-800">Impact Assessment</p>
+              <p className="text-[11px] text-red-600 mt-0.5">
+                {booking.exceptionType === "Carrier Rejection"
+                  ? `Booking rejected by ${booking.carrier}. ${booking.lane} route requires immediate rebooking to avoid production delay.`
+                  : `${booking.exceptionType} on ${booking.lane}. Alternative carrier required to maintain schedule.`
+                }
+              </p>
+            </div>
+          </div>
         </div>
 
-        {/* Options */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+        {/* Carrier Cards */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+          <p className="text-[11px] text-gray-400 font-medium uppercase tracking-wider mb-1">Available Options</p>
           {options.map((opt) => {
             const isSelected = selected === opt.id
             const isApproved = approvedId === opt.id
+            const modeCfg = TRANSPORT_MODE_CONFIG[opt.transportMode] ?? TRANSPORT_MODE_CONFIG.Ocean
+            const ModeIcon = modeCfg.icon
+
             return (
               <button
                 key={opt.id}
                 onClick={() => !approvedId && setSelected(isSelected ? null : opt.id)}
                 disabled={!!approvedId || !opt.available}
                 className={cn(
-                  "w-full text-left rounded-xl border p-4 transition-all",
+                  "w-full text-left rounded-xl border-2 transition-all overflow-hidden",
                   isApproved
-                    ? "border-green-400 bg-green-50"
+                    ? "border-green-400 bg-green-50/50 shadow-sm"
                     : isSelected
-                    ? "border-blue-400 bg-blue-50 ring-2 ring-blue-200"
+                    ? "border-blue-400 bg-white ring-2 ring-blue-100 shadow-md"
                     : !opt.available
                     ? "border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed"
-                    : "border-gray-200 bg-gray-50/40 hover:border-blue-300 hover:bg-blue-50/20"
+                    : "border-gray-200 bg-white hover:border-blue-300 hover:shadow-md"
                 )}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={cn(
-                        "text-xs font-bold",
-                        isApproved ? "text-green-700" : isSelected ? "text-blue-700" : "text-gray-700"
-                      )}>
-                        {opt.carrier}
-                      </span>
-                      {isApproved && (
-                        <span className="text-[9px] font-bold bg-green-600 text-white rounded-full px-1.5 py-0.5 flex items-center gap-1">
-                          <CheckCircle size={8} /> Approved
-                        </span>
-                      )}
-                      {!opt.available && (
-                        <span className="text-[9px] font-semibold text-gray-500 bg-gray-200 rounded-full px-1.5 py-0.5">
-                          Unavailable
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-[11px] text-gray-600 font-mono mb-1">{opt.route}</div>
+                <div className="flex">
+                  {/* Mode indicator strip */}
+                  <div className={cn("w-16 flex flex-col items-center justify-center gap-1.5 shrink-0 py-4", modeCfg.bg)}>
+                    <ModeIcon size={22} className={modeCfg.color} />
+                    <span className={cn("text-[9px] font-bold uppercase tracking-wider", modeCfg.color)}>
+                      {opt.transportMode}
+                    </span>
                   </div>
-                  <div className="text-right shrink-0 space-y-1">
-                    <div className="text-xs font-bold text-gray-700">{opt.transitDays}d transit</div>
-                    <div className="text-[11px] font-mono text-gray-600">${opt.rate.toLocaleString()}</div>
-                    <div className="text-[10px] text-gray-400">{opt.savings}</div>
+
+                  {/* Main content */}
+                  <div className="flex-1 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        {/* Carrier name + badges */}
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className={cn(
+                            "text-sm font-bold",
+                            isApproved ? "text-green-700" : isSelected ? "text-blue-700" : "text-gray-800"
+                          )}>
+                            {opt.carrier}
+                          </span>
+                          <span className={cn("text-[9px] font-semibold border rounded-full px-2 py-0.5", modeCfg.bg, modeCfg.border, modeCfg.color)}>
+                            {modeCfg.label}
+                          </span>
+                          {opt.recommended && !isApproved && (
+                            <span className="text-[9px] font-bold bg-indigo-600 text-white rounded-full px-2 py-0.5 flex items-center gap-1">
+                              <Brain size={8} /> AI Recommended
+                            </span>
+                          )}
+                          {isApproved && (
+                            <span className="text-[9px] font-bold bg-green-600 text-white rounded-full px-2 py-0.5 flex items-center gap-1">
+                              <CheckCircle size={8} /> Approved
+                            </span>
+                          )}
+                          {!opt.available && (
+                            <span className="text-[9px] font-semibold text-gray-500 bg-gray-200 rounded-full px-2 py-0.5">
+                              Unavailable
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Route */}
+                        <div className="text-[11px] text-gray-500 font-mono mb-3">{opt.route}</div>
+
+                        {/* Stats grid */}
+                        <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-1.5">
+                            <Calendar size={11} className="text-gray-400" />
+                            <span className="text-xs text-gray-600">
+                              <span className="font-bold text-gray-800">{opt.transitDays}</span> day{opt.transitDays !== 1 ? "s" : ""} transit
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <Gauge size={11} className="text-gray-400" />
+                            <span className="text-xs text-gray-600">
+                              SLA <span className={cn("font-bold", opt.sla >= 95 ? "text-green-700" : opt.sla >= 90 ? "text-blue-700" : "text-amber-700")}>{opt.sla}%</span>
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <Package size={11} className="text-gray-400" />
+                            <span className={cn(
+                              "text-[10px] font-semibold rounded-full px-1.5 py-0.5 border",
+                              opt.capacity === "Available" ? "bg-green-50 border-green-200 text-green-700" :
+                              opt.capacity === "Limited" ? "bg-amber-50 border-amber-200 text-amber-700" :
+                              "bg-red-50 border-red-200 text-red-700"
+                            )}>
+                              {opt.capacity}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Price column */}
+                      <div className="text-right shrink-0 pl-4 border-l border-gray-100">
+                        <div className="text-lg font-bold text-gray-800">${opt.rate.toLocaleString()}</div>
+                        <div className="text-[10px] text-gray-400 mt-0.5">{opt.savings}</div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </button>
@@ -1669,13 +1748,13 @@ function ReroutePanel({ booking, approvedId, onClose, onApprove }: {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-5 py-4 border-t border-gray-100">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50/50">
           <div className="text-[11px] text-gray-400">
             {approvedId
-              ? "Carrier approved \u2014 notification sent"
+              ? "Carrier approved — booking confirmation sent"
               : selected
               ? `Selected: ${options.find((o) => o.id === selected)?.carrier ?? ""}`
-              : "Select a carrier to approve"}
+              : "Select a carrier to continue"}
           </div>
           <div className="flex items-center gap-2">
             <button onClick={onClose} className="px-4 py-2 rounded-lg text-xs font-semibold text-gray-600 border border-gray-300 hover:bg-gray-50 transition-colors">
@@ -1684,11 +1763,10 @@ function ReroutePanel({ booking, approvedId, onClose, onApprove }: {
             {!approvedId && selectedOption && (
               <button
                 onClick={() => onApprove(selectedOption)}
-                className="px-4 py-2 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-1.5 transition-colors"
+                className="px-5 py-2.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2 transition-colors shadow-sm"
               >
-                <CheckCircle size={11} />
-                Approve Carrier
-                <ChevronRight size={11} />
+                <CheckCircle size={12} />
+                Confirm &amp; Book
               </button>
             )}
           </div>

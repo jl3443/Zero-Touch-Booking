@@ -4,6 +4,11 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Hide Next.js dev tools button */
+button[data-nextjs-dialog-left-right],
+[data-nextjs-dev-tools-button],
+nextjs-portal { display: none !important; }
+
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);

@@ -6,13 +6,14 @@ import {
   LayoutDashboard, BarChart2, Anchor, AlertTriangle,
   Monitor, GitBranch, Mail, Inbox, Send, Brain,
   ChevronDown, ChevronRight, FileStack, User, Award, ScanSearch,
-  Route,
+  Route, Columns3, Settings2, DollarSign, Sparkles,
 } from "lucide-react"
 import { type Persona } from "./login-page"
 
 export type SidebarView =
   | "dashboard"
   | "analytics"
+  | "booking-pipeline"
   | "carrier-scorecard"
   | "exceptions"
   | "documents"
@@ -22,6 +23,8 @@ export type SidebarView =
   | "email-sent"
   | "agent-activity"
   | "tracking-search"
+  | "automation-rules"
+  | "rate-intelligence"
 
 interface SidebarProps {
   view: SidebarView
@@ -35,6 +38,7 @@ export function Sidebar({ view, onViewChange, exceptionsCount = 4, unreadInboxCo
   const [exceptionOpen, setExceptionOpen] = useState(true)
   const [opsOpen, setOpsOpen] = useState(false)
   const [emailOpen, setEmailOpen] = useState(false)
+  const [intelOpen, setIntelOpen] = useState(false)
 
   return (
     <aside className="w-[260px] bg-[#0A0A0B] text-[#A1A1AA] flex flex-col shrink-0 border-r border-gray-800">
@@ -65,6 +69,12 @@ export function Sidebar({ view, onViewChange, exceptionsCount = 4, unreadInboxCo
           icon={<BarChart2 size={15} />}
           active={view === "analytics"}
           onClick={() => onViewChange("analytics")}
+        />
+        <NavItem
+          label="Booking Pipeline"
+          icon={<Columns3 size={15} />}
+          active={view === "booking-pipeline"}
+          onClick={() => onViewChange("booking-pipeline")}
         />
 
         <div className="pt-2 pb-1" />
@@ -161,6 +171,34 @@ export function Sidebar({ view, onViewChange, exceptionsCount = 4, unreadInboxCo
               icon={<Send size={13} />}
               active={view === "email-sent"}
               onClick={() => onViewChange("email-sent")}
+            />
+          </div>
+        )}
+
+        <div className="pt-2 pb-1" />
+
+        <SectionLabel>Intelligence</SectionLabel>
+
+        <NavParent
+          label="AI Intelligence"
+          icon={<Sparkles size={15} />}
+          open={intelOpen}
+          onToggle={() => setIntelOpen(!intelOpen)}
+        />
+
+        {intelOpen && (
+          <div className="ml-3 border-l border-gray-800 pl-3 space-y-0.5">
+            <NavSubItem
+              label="Automation Rules"
+              icon={<Settings2 size={13} />}
+              active={view === "automation-rules"}
+              onClick={() => onViewChange("automation-rules")}
+            />
+            <NavSubItem
+              label="Rate Intelligence"
+              icon={<DollarSign size={13} />}
+              active={view === "rate-intelligence"}
+              onClick={() => onViewChange("rate-intelligence")}
             />
           </div>
         )}

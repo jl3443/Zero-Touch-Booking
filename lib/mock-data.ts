@@ -225,6 +225,62 @@ const CARRIER_OPTIONS_HKG_RTM: CarrierOption[] = [
   { carrier: "MSC", rate: 2800, contractRate: 2850, transitDays: 22, capacity: "Available", sla: 86, lanePerformance: 88, recommended: false },
 ]
 
+// ── Simulation Booking (for Live Agent Demo) ─────────────────────────────
+
+const CARRIER_OPTIONS_NGB_HAM: CarrierOption[] = [
+  { carrier: "Maersk", rate: 2850, contractRate: 2800, transitDays: 14, capacity: "Available", sla: 92, lanePerformance: 94, recommended: true, reason: "Best combination of rate, SLA, and capacity on NGB→HAM lane" },
+  { carrier: "Hapag-Lloyd", rate: 2950, contractRate: 2900, transitDays: 13, capacity: "Available", sla: 90, lanePerformance: 91, recommended: false, reason: "Faster transit but higher rate" },
+  { carrier: "MSC", rate: 2700, contractRate: 2750, transitDays: 17, capacity: "Available", sla: 86, lanePerformance: 88, recommended: false, reason: "Lowest rate but 3 extra transit days" },
+  { carrier: "CMA-CGM", rate: 3100, contractRate: 3000, transitDays: 15, capacity: "Limited", sla: 89, lanePerformance: 87, recommended: false, reason: "Limited capacity on current sailing" },
+]
+
+export const SIMULATION_BOOKING: BookingRequest = {
+  id: "BKG-SIM-01",
+  mode: "Ocean",
+  carrier: "Maersk",
+  bookingRef: "MAEU2462110",
+  vesselSchedule: "Maersk Sealand — Sailing Mar 21",
+  containerType: "40' HC",
+  origin: "Ningbo, CN",
+  destination: "Hamburg, DE",
+  plant: "Hamburg Distribution Center",
+  bookingStatus: "Pending",
+  requestedDate: "Mar 13, 2025 09:30",
+  targetShipDate: "Mar 21, 2025",
+  severity: "High",
+  exceptionType: "None",
+  approvalType: "None",
+  lane: "NGB→HAM",
+  sapOrderRef: "SAP-TM-44862",
+  agentSummary: "Zero Touch Booking in progress — AI agent processing SAP TM requirement autonomously.",
+  workflowSteps: makeWorkflowSteps(1),
+  carrierOptions: CARRIER_OPTIONS_NGB_HAM,
+  reasonChips: [
+    { label: "AI Simulation", type: "booking" },
+    { label: "Zero-Touch", type: "booking" },
+    { label: "On Contract", type: "rate" },
+  ],
+  timeline: [
+    { timestamp: "Mar 13 09:30", event: "Shipment requirement ingested from SAP TM", location: "SAP TM", source: "SAP TM", status: "ok" },
+  ],
+  sources: [
+    { source: "SAP TM", status: "Requirement Received", timestamp: "Mar 13 09:30", freshness: "Just now", aligned: true, fresh: true },
+  ],
+  currentStatus: "Processing SAP Requirement",
+  recommendedAction: "AI agent processing — no action required",
+  notificationStatus: "Not Yet Sent",
+  otmStatus: "Pending Update",
+  etaConfidence: 85,
+  delayHours: 0,
+  trackingRef: "—",
+  plannedETA: "Mar 21, 2025",
+  revisedETA: "Mar 21, 2025",
+  lastSignal: "Just now",
+  lastSignalSource: "SAP TM",
+  lat: 29.87,
+  lng: 121.54,
+}
+
 // ── 8 Booking Requests ───────────────────────────────────────────────────
 
 export const BOOKING_REQUESTS: BookingRequest[] = [
@@ -1105,6 +1161,17 @@ function emailName(email: string) {
 
 export const INBOX_EMAILS: InboxEmail[] = [
   {
+    id: "EM-SIM",
+    from: "sap-workflow@company.com",
+    fromName: emailName("sap-workflow@company.com"),
+    subject: "New Shipment Requirement — SAP-TM-44862 (NGB→HAM)",
+    body: "A new shipment requirement has been created in SAP TM.\n\nOrder: SAP-TM-44862\nOrigin: Ningbo, CN\nDestination: Hamburg, DE\nMode: Ocean\nTarget Ship Date: Mar 21, 2025\nContainer: 40' HC\nPriority: High — Production Critical\nCargo: Electronic Components\nWeight: 18,200 kg\n\nThis requirement has been flagged for autonomous processing by the Zero Touch Booking Agent.",
+    timestamp: "Today, 09:30",
+    read: false,
+    tag: "sap",
+    tags: ["sap", "booking"],
+  },
+  {
     id: "EM-001",
     from: "sap-workflow@company.com",
     fromName: emailName("sap-workflow@company.com"),
@@ -1676,4 +1743,177 @@ export const BOOKING_FUNNEL_EXTENDED = [
   { stage: "Submitted", count: 8, color: "#A855F7" },
   { stage: "Confirmed", count: 6, color: "#22C55E" },
   { stage: "Exception", count: 6, color: "#EF4444" },
+]
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Phase 2: Automation Rules Data
+// ══════════════════════════════════════════════════════════════════════════════
+
+export interface CarrierSelectionWeight {
+  factor: string
+  weight: number
+  description: string
+}
+
+export interface AutoApprovalThreshold {
+  rule: string
+  threshold: string
+  currentValue: string
+  enabled: boolean
+}
+
+export interface LanePreference {
+  lane: string
+  mode: TransportMode
+  preferredCarrier: string
+  fallbackCarrier: string
+  maxAcceptableRate: number
+  autoApprove: boolean
+}
+
+export interface EscalationRule {
+  id: string
+  condition: string
+  severity: Severity
+  action: string
+  enabled: boolean
+  triggerCount30d: number
+}
+
+export const CARRIER_SELECTION_WEIGHTS: CarrierSelectionWeight[] = [
+  { factor: "Rate Competitiveness", weight: 40, description: "Contract vs spot rate variance and overall cost efficiency" },
+  { factor: "SLA Compliance", weight: 30, description: "On-time performance, booking success rate, and transit reliability" },
+  { factor: "Capacity Availability", weight: 20, description: "Current equipment and vessel availability on requested lanes" },
+  { factor: "Historical Performance", weight: 10, description: "Lane-specific track record, exception rate, and dispute history" },
+]
+
+export const AUTO_APPROVAL_THRESHOLDS: AutoApprovalThreshold[] = [
+  { rule: "Rate Variance Tolerance", threshold: "< 5%", currentValue: "4.2%", enabled: true },
+  { rule: "Max Booking Value", threshold: "< $5,000", currentValue: "$4,800", enabled: true },
+  { rule: "Carrier Rating Minimum", threshold: "Standard+", currentValue: "Preferred", enabled: true },
+  { rule: "Transit Time Variance", threshold: "< 2 days", currentValue: "1.5 days", enabled: true },
+  { rule: "New Lane Auto-Approve", threshold: "Disabled", currentValue: "N/A", enabled: false },
+]
+
+export const LANE_PREFERENCES: LanePreference[] = [
+  { lane: "SHA→LAX", mode: "Ocean", preferredCarrier: "Maersk", fallbackCarrier: "MSC", maxAcceptableRate: 3200, autoApprove: true },
+  { lane: "SZX→ORD", mode: "Ocean", preferredCarrier: "MSC", fallbackCarrier: "CMA-CGM", maxAcceptableRate: 3500, autoApprove: true },
+  { lane: "BOM→RTM", mode: "Ocean", preferredCarrier: "Hapag-Lloyd", fallbackCarrier: "MSC", maxAcceptableRate: 2600, autoApprove: false },
+  { lane: "MEM→ORD", mode: "Road", preferredCarrier: "FedEx Freight", fallbackCarrier: "XPO Logistics", maxAcceptableRate: 950, autoApprove: true },
+  { lane: "YYZ→DTW", mode: "Road", preferredCarrier: "DHL Freight", fallbackCarrier: "Hapag-Lloyd", maxAcceptableRate: 1900, autoApprove: true },
+  { lane: "BOM→LAX", mode: "Ocean", preferredCarrier: "Maersk", fallbackCarrier: "CMA-CGM", maxAcceptableRate: 3600, autoApprove: false },
+  { lane: "MAA→IAH", mode: "Ocean", preferredCarrier: "Maersk", fallbackCarrier: "MSC", maxAcceptableRate: 2800, autoApprove: true },
+  { lane: "HKG→RTM", mode: "Ocean", preferredCarrier: "Hapag-Lloyd", fallbackCarrier: "Maersk", maxAcceptableRate: 3100, autoApprove: true },
+]
+
+export const ESCALATION_RULES: EscalationRule[] = [
+  { id: "ESC-01", condition: "Rate mismatch exceeds 10% of contract", severity: "Critical", action: "Flag for planner review + email notification", enabled: true, triggerCount30d: 4 },
+  { id: "ESC-02", condition: "Carrier rejects booking request", severity: "High", action: "Auto-select next carrier + notify planner", enabled: true, triggerCount30d: 2 },
+  { id: "ESC-03", condition: "Required booking fields missing from SAP", severity: "Medium", action: "Pause workflow + request data from originator", enabled: true, triggerCount30d: 3 },
+  { id: "ESC-04", condition: "Carrier portal unavailable > 30 minutes", severity: "High", action: "Switch to API fallback or manual booking queue", enabled: true, triggerCount30d: 5 },
+  { id: "ESC-05", condition: "No capacity on any preferred carrier", severity: "Critical", action: "Escalate to supply chain manager immediately", enabled: true, triggerCount30d: 1 },
+  { id: "ESC-06", condition: "Booking not confirmed within 4 hours", severity: "Medium", action: "Send reminder + escalate if > 8h unconfirmed", enabled: true, triggerCount30d: 6 },
+  { id: "ESC-07", condition: "Credentials expired for carrier portal", severity: "High", action: "Auto-notify IT + pause portal bookings for carrier", enabled: false, triggerCount30d: 1 },
+]
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Phase 3: Rate Intelligence Data
+// ══════════════════════════════════════════════════════════════════════════════
+
+export interface RateTrendPoint {
+  month: string
+  contractRate: number
+  spotRate: number
+  agentNegotiated: number
+}
+
+export interface LaneRateTrend {
+  lane: string
+  mode: TransportMode
+  carrier: string
+  dataPoints: RateTrendPoint[]
+}
+
+export interface ContractAlert {
+  id: string
+  lane: string
+  carrier: string
+  contractEnd: string
+  daysRemaining: number
+  currentRate: number
+  marketRate: number
+  recommendation: string
+  severity: "urgent" | "warning" | "info"
+}
+
+export interface AIRateRecommendation {
+  id: string
+  lane: string
+  carrier: string
+  type: "renegotiate" | "switch" | "lock-in" | "monitor"
+  title: string
+  description: string
+  potentialSavings: string
+  confidence: number
+}
+
+export const RATE_TRENDS: LaneRateTrend[] = [
+  {
+    lane: "SHA→LAX", mode: "Ocean", carrier: "Maersk",
+    dataPoints: [
+      { month: "Oct", contractRate: 2800, spotRate: 2900, agentNegotiated: 2820 },
+      { month: "Nov", contractRate: 2800, spotRate: 2950, agentNegotiated: 2810 },
+      { month: "Dec", contractRate: 2800, spotRate: 3100, agentNegotiated: 2850 },
+      { month: "Jan", contractRate: 2800, spotRate: 3050, agentNegotiated: 2830 },
+      { month: "Feb", contractRate: 2800, spotRate: 2850, agentNegotiated: 2800 },
+      { month: "Mar", contractRate: 2800, spotRate: 2850, agentNegotiated: 2810 },
+    ],
+  },
+  {
+    lane: "SZX→ORD", mode: "Ocean", carrier: "MSC",
+    dataPoints: [
+      { month: "Oct", contractRate: 3150, spotRate: 3200, agentNegotiated: 3160 },
+      { month: "Nov", contractRate: 3150, spotRate: 3350, agentNegotiated: 3180 },
+      { month: "Dec", contractRate: 3150, spotRate: 3500, agentNegotiated: 3200 },
+      { month: "Jan", contractRate: 3150, spotRate: 3400, agentNegotiated: 3170 },
+      { month: "Feb", contractRate: 3150, spotRate: 3250, agentNegotiated: 3150 },
+      { month: "Mar", contractRate: 3150, spotRate: 3200, agentNegotiated: 3155 },
+    ],
+  },
+  {
+    lane: "BOM→RTM", mode: "Ocean", carrier: "Hapag-Lloyd",
+    dataPoints: [
+      { month: "Oct", contractRate: 2300, spotRate: 2400, agentNegotiated: 2320 },
+      { month: "Nov", contractRate: 2300, spotRate: 2500, agentNegotiated: 2350 },
+      { month: "Dec", contractRate: 2300, spotRate: 2650, agentNegotiated: 2380 },
+      { month: "Jan", contractRate: 2300, spotRate: 2550, agentNegotiated: 2340 },
+      { month: "Feb", contractRate: 2300, spotRate: 2450, agentNegotiated: 2310 },
+      { month: "Mar", contractRate: 2300, spotRate: 2550, agentNegotiated: 2330 },
+    ],
+  },
+  {
+    lane: "BOM→LAX", mode: "Ocean", carrier: "CMA-CGM",
+    dataPoints: [
+      { month: "Oct", contractRate: 3000, spotRate: 3300, agentNegotiated: 3100 },
+      { month: "Nov", contractRate: 3000, spotRate: 3450, agentNegotiated: 3150 },
+      { month: "Dec", contractRate: 3000, spotRate: 3600, agentNegotiated: 3200 },
+      { month: "Jan", contractRate: 3000, spotRate: 3550, agentNegotiated: 3180 },
+      { month: "Feb", contractRate: 3000, spotRate: 3400, agentNegotiated: 3100 },
+      { month: "Mar", contractRate: 3000, spotRate: 3570, agentNegotiated: 3150 },
+    ],
+  },
+]
+
+export const CONTRACT_ALERTS: ContractAlert[] = [
+  { id: "CA-01", lane: "BOM→RTM", carrier: "Hapag-Lloyd", contractEnd: "Apr 15, 2025", daysRemaining: 33, currentRate: 2300, marketRate: 2550, recommendation: "Renew early — market rates trending 11% higher", severity: "warning" },
+  { id: "CA-02", lane: "SZX→ORD", carrier: "MSC", contractEnd: "Mar 31, 2025", daysRemaining: 18, currentRate: 3150, marketRate: 3200, recommendation: "Current rate competitive — renew at same terms", severity: "urgent" },
+  { id: "CA-03", lane: "YYZ→DTW", carrier: "DHL Freight", contractEnd: "Jun 30, 2025", daysRemaining: 109, currentRate: 1750, marketRate: 1900, recommendation: "Lock in current rate before Q3 seasonal increase", severity: "info" },
+  { id: "CA-04", lane: "MAA→IAH", carrier: "Maersk", contractEnd: "May 01, 2025", daysRemaining: 49, currentRate: 2550, marketRate: 2600, recommendation: "Consider multi-year deal for rate stability", severity: "warning" },
+]
+
+export const AI_RATE_RECOMMENDATIONS: AIRateRecommendation[] = [
+  { id: "RR-01", lane: "BOM→RTM", carrier: "Hapag-Lloyd", type: "renegotiate", title: "Renegotiate BOM→RTM contract", description: "Current contract expires in 33 days. Market rates are 11% higher, giving strong leverage to lock in current rate for 12 months.", potentialSavings: "$3,000/mo", confidence: 89 },
+  { id: "RR-02", lane: "SZX→ORD", carrier: "MSC", type: "lock-in", title: "Lock in SZX→ORD rate before expiry", description: "Contract expires in 18 days. Spot rates stable at +1.6%. Recommend immediate renewal to avoid rate reset.", potentialSavings: "$900/mo", confidence: 92 },
+  { id: "RR-03", lane: "BOM→LAX", carrier: "CMA-CGM", type: "switch", title: "Switch BOM→LAX to Maersk", description: "CMA-CGM spot rates consistently 15-19% above contract. Maersk offers better rate stability on this lane with 91% SLA.", potentialSavings: "$5,200/mo", confidence: 85 },
+  { id: "RR-04", lane: "MEM→ORD", carrier: "FedEx Freight", type: "monitor", title: "Monitor MEM→ORD rate stability", description: "FedEx contract rate at $800 is 6% below market. 96% zero-touch rate. No action needed — continue monitoring quarterly.", potentialSavings: "N/A", confidence: 95 },
 ]

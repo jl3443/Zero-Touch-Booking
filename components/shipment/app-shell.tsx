@@ -14,10 +14,29 @@ import { EmailInboxPage } from "./email-inbox-page"
 import { EmailSentPage, type SentEmailItem } from "./email-sent-page"
 import { CarrierScorecardPage } from "./carrier-scorecard-page"
 import { TrackingSearchPage } from "./tracking-search-page"
+import { BookingPipeline } from "./booking-pipeline"
+import { AutomationRulesPage } from "./automation-rules"
+import { RateIntelligencePage } from "./rate-intelligence"
 import { SearchResultsPage } from "./search-results-page"
 import { AIChatPanel } from "./ai-chat-panel"
 import { BOOKING_REQUESTS, INBOX_EMAILS } from "@/lib/mock-data"
 import { type Persona } from "./login-page"
+
+export type SimulationPhase =
+  | "idle"
+  | "email-analyzing"
+  | "email-order-detected"
+  | "email-finding-routes"
+  | "email-routes-ready"
+  | "email-ready"
+  | "transitioning"
+  | "pipeline-ingested"
+  | "pipeline-carrier"
+  | "pipeline-portal"
+  | "pipeline-submitted"
+  | "pipeline-docs"
+  | "pipeline-confirmed"
+  | "complete"
 
 export function AppShell({ persona }: { persona?: Persona }) {
   const [view, setView] = useState<SidebarView>("dashboard")
@@ -32,6 +51,7 @@ export function AppShell({ persona }: { persona?: Persona }) {
   const [readEmailIds, setReadEmailIds] = useState<Set<string>>(new Set())
   const [resolvedExceptionIds, setResolvedExceptionIds] = useState<Set<string>>(new Set())
   const [dynamicActivities, setDynamicActivities] = useState<DynamicActivity[]>([])
+  const [simPhase, setSimPhase] = useState<SimulationPhase>("idle")
 
   const handleEtaApproved = () => setEtaApprovedCount((prev) => prev + 1)
 
@@ -61,6 +81,40 @@ export function AppShell({ persona }: { persona?: Persona }) {
 
   const handleResumeWorkflow = (shipmentId: string) => {
     addActivity(`Workflow resumed for ${shipmentId} — agent proceeding to next step`, "booking_submit", shipmentId)
+  }
+
+  const handleStartSimulation = () => {
+    setSimPhase("email-analyzing")
+    setTimeout(() => setSimPhase("email-order-detected"), 2500)
+  }
+
+  const handleFindRoutes = () => {
+    setSimPhase("email-finding-routes")
+    setTimeout(() => setSimPhase("email-routes-ready"), 1500)
+  }
+
+  const handleConfirmRoute = () => {
+    setSimPhase("email-ready")
+  }
+
+  const handleFullAuto = () => {
+    setSimPhase("transitioning")
+    handleViewChange("booking-pipeline")
+    setTimeout(() => setSimPhase("pipeline-ingested"), 500)
+  }
+
+  const handleExecuteSimulation = () => {
+    setSimPhase("transitioning")
+    handleViewChange("booking-pipeline")
+    setTimeout(() => setSimPhase("pipeline-ingested"), 500)
+  }
+
+  const handleSimPhaseChange = (phase: SimulationPhase) => {
+    setSimPhase(phase)
+    if (phase === "pipeline-confirmed") {
+      addActivity("Zero-touch booking BKG-SIM-01 completed (NGB→HAM) — Maersk confirmed", "confirmed", "BKG-SIM-01")
+      setTimeout(() => setSimPhase("complete"), 3000)
+    }
   }
 
   const exceptionsCount = BOOKING_REQUESTS.filter((s) => s.bookingStatus === "Exception" || s.bookingStatus === "Awaiting Approval").filter((s) => !resolvedExceptionIds.has(s.id)).length
@@ -140,6 +194,10 @@ export function AppShell({ persona }: { persona?: Persona }) {
 
             {view === "analytics" && <AnalyticsPage etaUpdatedCount={etaApprovedCount} />}
 
+            {view === "booking-pipeline" && (
+              <BookingPipeline onSendNotification={handleSendNotification} onViewChange={handleViewChange} simPhase={simPhase} onSimPhaseChange={handleSimPhaseChange} />
+            )}
+
             {view === "tracking-search" && (
               <TrackingSearchPage
                 preselectedId={trackingPreselect ?? undefined}
@@ -172,10 +230,20 @@ export function AppShell({ persona }: { persona?: Persona }) {
                   handleViewChange("tracking-search")
                 }}
                 onMarkRead={handleMarkEmailRead}
+                simPhase={simPhase}
+                onStartSimulation={handleStartSimulation}
+                onExecuteSimulation={handleExecuteSimulation}
+                onFindRoutes={handleFindRoutes}
+                onConfirmRoute={handleConfirmRoute}
+                onFullAuto={handleFullAuto}
               />
             )}
 
             {view === "email-sent" && <EmailSentPage dynamicEmails={sentEmails} />}
+
+            {view === "automation-rules" && <AutomationRulesPage />}
+
+            {view === "rate-intelligence" && <RateIntelligencePage />}
 
             {view === "agent-activity" && (
               <AgentActivityLog

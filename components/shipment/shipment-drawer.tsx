@@ -54,6 +54,8 @@ interface ShipmentDrawerProps {
   onDemoComplete?: (elapsedTime: string) => void
   onNavigateView?: (view: string) => void
   onAddInboxEmail?: (email: { id: string; from: string; fromName: string; subject: string; body: string; timestamp: string; read: boolean; tag: string; tags: string[]; shipmentId: string; shipmentRef: string }) => void
+  demoReturnedFromInbox?: boolean
+  onDemoReturnedFromInboxConsumed?: () => void
 }
 
 const LOADING_STEPS = [
@@ -134,7 +136,7 @@ function AIThinkingSkeleton({ label = "AI analyzing" }: { label?: string }) {
   )
 }
 
-export function ShipmentDrawer({ shipment, onClose, onOpenWeather, onSendNotification, onEtaApproved, onResumeWorkflow, bookingMode, demoStep, demoPaused, demoScenario, demoExceptionActive, onDemoStepAdvance, onDemoPause, onDemoResume, onDemoExceptionResolved, onDemoExceptionTriggered, onDemoComplete, onAddInboxEmail, onNavigateView }: ShipmentDrawerProps) {
+export function ShipmentDrawer({ shipment, onClose, onOpenWeather, onSendNotification, onEtaApproved, onResumeWorkflow, bookingMode, demoStep, demoPaused, demoScenario, demoExceptionActive, onDemoStepAdvance, onDemoPause, onDemoResume, onDemoExceptionResolved, onDemoExceptionTriggered, onDemoComplete, onAddInboxEmail, onNavigateView, demoReturnedFromInbox, onDemoReturnedFromInboxConsumed }: ShipmentDrawerProps) {
   const [actions, setActions] = useState<ActionState>({
     bookingApproved: false,
     notified: false,
@@ -948,6 +950,8 @@ function LiveBookingFlow({
               onSendNotification={onSendNotification}
               onAddInboxEmail={onAddInboxEmail}
               onNavigateView={onNavigateView}
+              returnedFromInbox={demoReturnedFromInbox}
+              onReturnedFromInboxConsumed={onDemoReturnedFromInboxConsumed}
             />
           )}
 
@@ -1363,14 +1367,16 @@ function LiveBookingFlow({
 
 // ─── Demo Exception Overlay ──────────────────────────────────────────────────
 
-function DemoExceptionOverlay({ scenarioId, onResolve, onSendNotification, onAddInboxEmail, onNavigateView }: {
+function DemoExceptionOverlay({ scenarioId, onResolve, onSendNotification, onAddInboxEmail, onNavigateView, returnedFromInbox, onReturnedFromInboxConsumed }: {
   scenarioId: string; onResolve: () => void
   onSendNotification?: (email: SentEmailItem) => void
   onAddInboxEmail?: (email: { id: string; from: string; fromName: string; subject: string; body: string; timestamp: string; read: boolean; tag: string; tags: string[]; shipmentId: string; shipmentRef: string }) => void
   onNavigateView?: (view: string) => void
+  returnedFromInbox?: boolean
+  onReturnedFromInboxConsumed?: () => void
 }) {
   const resolution = DEMO_EXCEPTION_RESOLUTIONS[scenarioId]
-  const [phase, setPhase] = useState<"showing" | "resolving" | "email-compose" | "waiting-reply" | "carrier-select" | "confirm-switch" | "resolved">("showing")
+  const [phase, setPhase] = useState<"showing" | "resolving" | "email-compose" | "waiting-reply" | "carrier-select" | "confirm-switch" | "negotiating" | "resolved">("showing")
   const [showModal, setShowModal] = useState(true)
   // Missing-data animation
   const [filledFields, setFilledFields] = useState<number[]>([])
@@ -1384,6 +1390,36 @@ function DemoExceptionOverlay({ scenarioId, onResolve, onSendNotification, onAdd
   const [emailBody, setEmailBody] = useState("")
   // Selected carrier for capacity/rejection
   const [selectedAltCarrier, setSelectedAltCarrier] = useState<string | null>(null)
+
+  // Rate-mismatch: when user returns from inbox, re-open modal with negotiation spinner
+  useEffect(() => {
+    if (returnedFromInbox && scenarioId === "rate-mismatch") {
+      setShowModal(true)
+      setPhase("negotiating")
+      onReturnedFromInboxConsumed?.()
+      // Run negotiation animation
+      const statuses = [
+        "Connecting to Maersk rate desk...",
+        "Validating counter-offer against market data...",
+        "Carrier reviewing proposal...",
+        "Rate accepted — updating booking parameters...",
+      ]
+      statuses.forEach((status, i) => {
+        setTimeout(() => {
+          setNegoProgress((i + 1) * 25)
+          setNegoStatus(status)
+        }, i * 1200)
+      })
+      setTimeout(() => {
+        setNegoComplete(true)
+        setNegoStatus("Negotiation complete — rate locked in")
+      }, statuses.length * 1200)
+      setTimeout(() => {
+        setPhase("resolved")
+        setTimeout(() => { setShowModal(false); onResolve() }, 1500)
+      }, statuses.length * 1200 + 1500)
+    }
+  }, [returnedFromInbox])
 
   if (!resolution) return null
 
@@ -1502,8 +1538,11 @@ function DemoExceptionOverlay({ scenarioId, onResolve, onSendNotification, onAdd
   )
 
   // ─── Carrier Selection Panel (shared by no-capacity and carrier-rejection) ─
-  const ModeIcons = { Ocean: Ship, Air: Plane } as const
-  const modeColors = { Ocean: { bg: "bg-blue-600", light: "bg-blue-50", text: "text-blue-700", border: "border-blue-200" }, Air: { bg: "bg-sky-500", light: "bg-sky-50", text: "text-sky-700", border: "border-sky-200" } }
+  const MODE_CARD: Record<string, { Icon: typeof Ship; color: string; bg: string; strip: string; label: string; border: string }> = {
+    Ocean: { Icon: Ship, color: "text-blue-600", bg: "bg-blue-50", strip: "bg-blue-600", label: "Ocean Freight", border: "border-blue-200" },
+    Air:   { Icon: Plane, color: "text-violet-600", bg: "bg-violet-50", strip: "bg-violet-600", label: "Air Freight", border: "border-violet-200" },
+    Road:  { Icon: Truck, color: "text-emerald-600", bg: "bg-emerald-50", strip: "bg-emerald-600", label: "Ground Freight", border: "border-emerald-200" },
+  }
 
   const carrierSelectContent = (
     <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -1511,64 +1550,86 @@ function DemoExceptionOverlay({ scenarioId, onResolve, onSendNotification, onAdd
       <div className="space-y-3">
         {ALT_CARRIERS.map((c) => {
           const isSelected = selectedAltCarrier === c.carrier
-          const MIcon = ModeIcons[c.mode]
-          const mc = modeColors[c.mode]
+          const mc = MODE_CARD[c.mode] ?? MODE_CARD.Ocean
+          const MIcon = mc.Icon
           return (
             <button
               key={c.carrier}
               onClick={() => setSelectedAltCarrier(c.carrier)}
-              className={cn("w-full text-left rounded-xl border-2 transition-all overflow-hidden",
-                isSelected ? "border-blue-500 ring-2 ring-blue-200 shadow-md" : "border-gray-200 hover:border-blue-300 hover:shadow-sm"
+              className={cn("w-full text-left rounded-xl border-2 transition-all overflow-hidden flex",
+                isSelected ? "border-blue-400 bg-white ring-2 ring-blue-100 shadow-md" : "border-gray-200 bg-white hover:border-blue-300 hover:shadow-md"
               )}
             >
-              {/* Card header with mode color */}
-              <div className={cn("px-4 py-2.5 flex items-center justify-between", isSelected ? "bg-blue-50" : "bg-gray-50")}>
-                <div className="flex items-center gap-2.5">
-                  <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center", mc.bg)}>
-                    <MIcon size={16} className="text-white" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[14px] font-bold text-gray-900">{c.carrier}</span>
-                      <span className={cn("text-[9px] px-2 py-0.5 rounded-full font-bold", mc.light, mc.text)}>{c.mode === "Ocean" ? "Ocean Freight" : "Air Freight"}</span>
-                    </div>
-                    <div className="text-[11px] text-gray-500">{c.route}</div>
-                  </div>
+              {/* Left mode indicator strip */}
+              <div className={cn("w-14 flex flex-col items-center justify-center gap-1 shrink-0 py-4", mc.bg)}>
+                <MIcon size={20} className={mc.color} />
+                <span className={cn("text-[8px] font-bold uppercase tracking-wider", mc.color)}>
+                  {c.mode}
+                </span>
+              </div>
+
+              {/* Main content */}
+              <div className="flex-1 p-3 min-w-0">
+                {/* Carrier name + badges */}
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={cn("text-[13px] font-bold", isSelected ? "text-blue-700" : "text-gray-800")}>
+                    {c.carrier}
+                  </span>
+                  <span className={cn("text-[9px] font-semibold border rounded-full px-1.5 py-0.5", mc.bg, mc.border, mc.color)}>
+                    {mc.label}
+                  </span>
+                  {c.recommended && (
+                    <span className="text-[9px] font-bold bg-indigo-600 text-white rounded-full px-2 py-0.5 flex items-center gap-0.5">
+                      <Brain size={8} /> AI Recommended
+                    </span>
+                  )}
                 </div>
-                <div className="text-right">
-                  <div className="text-[18px] font-bold text-gray-900">{c.rate}</div>
-                  <div className={cn("text-[10px] font-medium", c.rateNote === "Premium" ? "text-amber-600" : c.rateNote.startsWith("-") ? "text-emerald-600" : "text-amber-600")}>{c.rateNote}</div>
+
+                {/* Route */}
+                <div className="text-[11px] text-gray-500 font-mono mb-1">{c.route}</div>
+
+                {/* Vessel / Flight info */}
+                <div className="text-[10px] text-gray-400 mb-2.5">
+                  {c.mode === "Ocean" ? "Vessel" : "Flight"}: <span className="text-gray-600 font-medium">{c.vessel}</span>
+                  <span className="mx-1.5 text-gray-300">·</span>
+                  Sailing: <span className="text-gray-600 font-medium">{c.sailing}</span>
+                </div>
+
+                {/* Stats grid */}
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1">
+                    <Calendar size={10} className="text-gray-400" />
+                    <span className="text-[10px] text-gray-500">
+                      <span className="font-bold text-gray-700">{c.transit}</span> transit
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Target size={10} className="text-gray-400" />
+                    <span className="text-[10px] text-gray-500">
+                      SLA <span className={cn("font-bold", parseInt(c.sla) >= 95 ? "text-emerald-700" : parseInt(c.sla) >= 90 ? "text-blue-700" : "text-amber-700")}>{c.sla}</span>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Ship size={10} className="text-gray-400" />
+                    <span className="text-[10px] text-gray-600 font-medium">{c.container}</span>
+                  </div>
+                  <span className={cn(
+                    "text-[9px] font-semibold rounded-full px-1.5 py-0.5 border",
+                    c.capacity === "Available" ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-amber-50 border-amber-200 text-amber-700"
+                  )}>
+                    {c.capacity}
+                  </span>
                 </div>
               </div>
-              {/* Card body with booking details */}
-              <div className="px-4 py-3">
-                <div className="grid grid-cols-4 gap-3 mb-2">
-                  {[
-                    { label: c.mode === "Ocean" ? "Vessel" : "Flight", value: c.vessel.split(" / ")[0] },
-                    { label: "Sailing", value: c.sailing.split(", ")[0] + c.sailing.slice(c.sailing.indexOf(",")) },
-                    { label: "Transit", value: c.transit },
-                    { label: "ETA", value: c.eta.split(", ")[0] + c.eta.slice(c.eta.indexOf(",")) },
-                  ].map((d) => (
-                    <div key={d.label}>
-                      <div className="text-[9px] text-gray-400 uppercase tracking-wider">{d.label}</div>
-                      <div className="text-[11px] font-semibold text-gray-800">{d.value}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex items-center gap-3 text-[10px]">
-                  <span className="flex items-center gap-1 text-gray-500">SLA: <span className="font-bold text-gray-700">{c.sla}</span></span>
-                  <span className="flex items-center gap-1 text-gray-500">Container: <span className="font-bold text-gray-700">{c.container}</span></span>
-                  <span className={cn("px-1.5 py-0.5 rounded-full font-semibold", c.capacity === "Available" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")}>{c.capacity}</span>
-                  {c.recommended && <span className="px-2 py-0.5 rounded-full bg-blue-600 text-white font-bold text-[9px] ml-auto">AI Recommended</span>}
-                </div>
+
+              {/* Right price column */}
+              <div className="shrink-0 px-3 py-3 flex flex-col items-end justify-center border-l border-gray-100 min-w-[90px]">
+                <div className="text-[16px] font-bold text-gray-800">{c.rate}</div>
+                <div className={cn("text-[10px] font-medium mt-0.5",
+                  c.rateNote === "Premium" ? "text-amber-600" : c.rateNote.startsWith("-") ? "text-emerald-600" : "text-amber-600"
+                )}>{c.rateNote}</div>
+                <div className="text-[9px] text-gray-400 mt-1.5">ETA {c.eta}</div>
               </div>
-              {/* Selection indicator */}
-              {isSelected && (
-                <div className="px-4 py-2 bg-blue-50 border-t border-blue-200 flex items-center gap-1.5">
-                  <CheckCircle size={12} className="text-blue-600" />
-                  <span className="text-[11px] font-semibold text-blue-700">Selected</span>
-                </div>
-              )}
             </button>
           )
         })}
@@ -1732,7 +1793,7 @@ function DemoExceptionOverlay({ scenarioId, onResolve, onSendNotification, onAdd
           </div>
         </div>
         {phase === "email-compose" && emailComposeContent}
-        {(phase === "resolving" || phase === "resolved") && (
+        {(phase === "negotiating" || phase === "resolved") && (
           <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
             <div className="p-4 bg-[#0f1623] rounded-xl border border-slate-700 mt-3">
               <div className="flex items-center gap-2 mb-3">
@@ -1841,6 +1902,14 @@ function DemoExceptionOverlay({ scenarioId, onResolve, onSendNotification, onAdd
           <button onClick={handleConfirmSwitch} className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white text-[13px] font-semibold rounded-lg hover:bg-blue-700 transition-colors">
             <Check size={14} /> Confirm Switch to EDI
           </button>
+        </div>
+      )
+    }
+    if (phase === "negotiating") {
+      return (
+        <div className="flex items-center gap-2 justify-center py-1">
+          <Brain size={14} className="text-violet-500 animate-pulse" />
+          <span className="text-[12px] font-medium text-violet-600">AI negotiating rate<ThinkingDots /></span>
         </div>
       )
     }

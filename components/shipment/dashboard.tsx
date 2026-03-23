@@ -11,7 +11,11 @@ import {
   CRITICAL_EXCEPTIONS,
   FREQUENT_ROUTES,
   SUGGESTED_BOOKINGS,
+  DEMO_SHIPMENT,
+  DEMO_SCENARIOS,
+  DEMO_STEP_DETAILS,
   type Shipment,
+  type DemoStepDetail,
 } from "@/lib/mock-data"
 import { AgentActivityLog } from "./agent-activity-log"
 import { ShipmentTable } from "./shipment-table"
@@ -20,10 +24,11 @@ import { MiniMap } from "./mini-map"
 import { type SidebarView } from "./sidebar"
 import {
   Brain, ArrowRight, AlertTriangle, CheckCircle2, Clock, Activity,
-  ExternalLink, TrendingUp, Lightbulb, Flame, MapPin,
+  ExternalLink, TrendingUp, Lightbulb, Flame, MapPin, Zap, Ship,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { type SentEmailItem } from "./email-sent-page"
+import { CompletionModal } from "./demo-modal"
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   PieChart, Pie,
@@ -37,6 +42,25 @@ interface DashboardProps {
   autoOpenShipmentId?: string
   onEtaApproved?: () => void
   etaUpdatedCount?: number
+  // Demo mode props
+  demoActive?: boolean
+  demoShipmentVisible?: boolean
+  demoStep?: number
+  demoPaused?: boolean
+  demoScenario?: string
+  demoExceptionActive?: boolean
+  onDemoStepAdvance?: (step: number) => void
+  onDemoPause?: () => void
+  onDemoResume?: () => void
+  onDemoExceptionResolved?: () => void
+  onDemoExceptionTriggered?: () => void
+  onDemoShipmentDismiss?: () => void
+  onDemoComplete?: (elapsedTime: string) => void
+  onAddInboxEmail?: (email: { id: string; from: string; fromName: string; subject: string; body: string; timestamp: string; read: boolean; tag: string; tags: string[]; shipmentId: string; shipmentRef: string }) => void
+  demoZoomActive?: boolean
+  showCompletionModal?: boolean
+  onCloseCompletionModal?: () => void
+  demoElapsedTime?: string
 }
 
 function ThinkingDots() {
@@ -80,9 +104,10 @@ const SEV_BADGE: Record<string, string> = {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
-export function Dashboard({ searchQuery, onViewChange, onOpenWeather, onSendNotification, autoOpenShipmentId, onEtaApproved, etaUpdatedCount }: DashboardProps) {
+export function Dashboard({ searchQuery, onViewChange, onOpenWeather, onSendNotification, autoOpenShipmentId, onEtaApproved, etaUpdatedCount, demoActive, demoShipmentVisible, demoStep, demoPaused, demoScenario, demoExceptionActive, onDemoStepAdvance, onDemoPause, onDemoResume, onDemoExceptionResolved, onDemoExceptionTriggered, onDemoShipmentDismiss, onDemoComplete, onAddInboxEmail, demoZoomActive, showCompletionModal, onCloseCompletionModal, demoElapsedTime }: DashboardProps) {
   const [activeFilter, setActiveFilter] = useState<string | null>(null)
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null)
+  const [bookingMode, setBookingMode] = useState(false)
   const [analysisThinking, setAnalysisThinking] = useState(true)
   const prevAutoOpen = useRef<string | undefined>(undefined)
 
@@ -99,15 +124,76 @@ export function Dashboard({ searchQuery, onViewChange, onOpenWeather, onSendNoti
     }
   }, [autoOpenShipmentId])
 
+  // Adjust data when demo completes
+  const demoCompleted = showCompletionModal || false
   const exceptionsCount = BOOKING_REQUESTS.filter((b) => b.bookingStatus === "Exception" || b.bookingStatus === "Awaiting Approval").length
-  const completedZeroTouch = BOOKING_REQUESTS.filter((b) => b.bookingStatus === "Confirmed" || b.bookingStatus === "Notified" || b.bookingStatus === "Docs Uploaded").length + (etaUpdatedCount ?? 0)
+  const completedZeroTouch = BOOKING_REQUESTS.filter((b) => b.bookingStatus === "Confirmed" || b.bookingStatus === "Notified" || b.bookingStatus === "Docs Uploaded").length + (etaUpdatedCount ?? 0) + (demoCompleted ? 1 : 0)
   const zeroTouchRate = BOOKING_REQUESTS.length > 0
-    ? Math.round((completedZeroTouch / BOOKING_REQUESTS.length) * 100)
+    ? Math.round((completedZeroTouch / (BOOKING_REQUESTS.length + (demoCompleted ? 1 : 0))) * 100)
     : 0
+
+  // Dynamic chart data — reflects completed demo booking
+  const funnelData = demoCompleted
+    ? BOOKING_FUNNEL_EXTENDED.map((s) => s.stage === "Confirmed" ? { ...s, count: s.count + 1 } : s.stage === "SAP Ingested" || s.stage === "Validated" || s.stage === "Carrier Selected" || s.stage === "Submitted" ? { ...s, count: s.count + 1 } : s)
+    : BOOKING_FUNNEL_EXTENDED
+  const exceptionData = demoCompleted && demoScenario && demoScenario !== "happy-path"
+    ? EXCEPTION_DISTRIBUTION.map((e) => {
+        const scenarioMap: Record<string, string> = { "missing-data": "Missing Booking Fields", "no-capacity": "Missing Allocation", "portal-failure": "Portal Unavailable", "rate-mismatch": "Rate Mismatch", "carrier-rejection": "Carrier Rejection" }
+        return e.type === scenarioMap[demoScenario ?? ""] ? { ...e, count: e.count + 1 } : e
+      })
+    : EXCEPTION_DISTRIBUTION
 
   return (
     <div className="flex-1 overflow-y-auto bg-[#F8F9FA]">
-      <div className="p-5 space-y-4 max-w-[1600px] mx-auto">
+      <div
+        className="p-5 space-y-4 max-w-[1600px] mx-auto transition-transform duration-1000 ease-in-out"
+        style={demoZoomActive ? { transform: "scale(1.6)", transformOrigin: "center 70%" } : { transform: "scale(1)" }}
+      >
+
+        {/* ── Demo: New Shipment Notification Banner ────────────────────── */}
+        {demoActive && demoShipmentVisible && !bookingMode && (
+          <div className="animate-in slide-in-from-top-2 duration-500 bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 border border-blue-200 rounded-lg overflow-hidden shadow-sm">
+            <div className="flex items-center gap-4 px-5 py-4">
+              <div className="relative shrink-0">
+                <div className="w-11 h-11 rounded-xl bg-blue-600 flex items-center justify-center">
+                  <Zap size={20} className="text-white" />
+                </div>
+                <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-blue-500 border-2 border-white" />
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="text-[13px] font-bold text-gray-900">New Shipment Detected</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-semibold">SAP TM</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-semibold">OTM</span>
+                  <span className="text-[10px] text-gray-400 ml-auto">Just now</span>
+                </div>
+                <div className="flex items-center gap-3 text-[12px] text-gray-600">
+                  <span className="flex items-center gap-1"><Ship size={12} className="text-blue-500" /> Ocean</span>
+                  <span className="font-medium text-gray-800">SHA → LAX</span>
+                  <span>2×40' HC</span>
+                  <span className="text-gray-400">|</span>
+                  <span>Suzhou Plant</span>
+                  <span className="text-gray-400">|</span>
+                  <span>SAP-TM-87234</span>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setSelectedShipment(DEMO_SHIPMENT)
+                  setBookingMode(true)
+                  onDemoShipmentDismiss?.()
+                }}
+                className="shrink-0 flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-[12px] font-semibold rounded-lg transition-colors shadow-sm"
+              >
+                View & Book
+                <ArrowRight size={14} />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ── 1. AI Analysis — 3 Insight Cards (TOP) ───────────────────── */}
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
@@ -253,7 +339,7 @@ export function Dashboard({ searchQuery, onViewChange, onOpenWeather, onSendNoti
               <div className="px-3 pt-2 pb-1">
                 <ResponsiveContainer width="100%" height={200}>
                   <BarChart
-                    data={BOOKING_FUNNEL_EXTENDED}
+                    data={funnelData}
                     margin={{ top: 6, right: 8, bottom: 28, left: 0 }}
                     barCategoryGap="25%"
                   >
@@ -285,7 +371,7 @@ export function Dashboard({ searchQuery, onViewChange, onOpenWeather, onSendNoti
                       contentStyle={{ fontSize: 11, padding: "4px 10px" }}
                     />
                     <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={32}>
-                      {BOOKING_FUNNEL_EXTENDED.map((entry, i) => (
+                      {funnelData.map((entry, i) => (
                         <Cell key={i} fill={entry.color} />
                       ))}
                     </Bar>
@@ -307,7 +393,7 @@ export function Dashboard({ searchQuery, onViewChange, onOpenWeather, onSendNoti
               <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={EXCEPTION_DISTRIBUTION.filter((e) => e.count > 0)}
+                      data={exceptionData.filter((e) => e.count > 0)}
                       dataKey="count"
                       nameKey="type"
                       cx="50%"
@@ -316,7 +402,7 @@ export function Dashboard({ searchQuery, onViewChange, onOpenWeather, onSendNoti
                       outerRadius={40}
                       paddingAngle={3}
                     >
-                      {EXCEPTION_DISTRIBUTION.filter((e) => e.count > 0).map((e, i) => (
+                      {exceptionData.filter((e) => e.count > 0).map((e, i) => (
                         <Cell key={i} fill={e.color} />
                       ))}
                     </Pie>
@@ -326,7 +412,7 @@ export function Dashboard({ searchQuery, onViewChange, onOpenWeather, onSendNoti
             </div>
             {/* Legend — stacked below donut */}
             <div className="space-y-1 mt-1">
-              {EXCEPTION_DISTRIBUTION.filter((e) => e.count > 0).map((e) => (
+              {exceptionData.filter((e) => e.count > 0).map((e) => (
                 <div key={e.type} className="flex items-center justify-between text-[9px]">
                   <div className="flex items-center gap-1 min-w-0">
                     <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: e.color }} />
@@ -431,12 +517,32 @@ export function Dashboard({ searchQuery, onViewChange, onOpenWeather, onSendNoti
       {selectedShipment && (
         <ShipmentDrawer
           shipment={selectedShipment}
-          onClose={() => setSelectedShipment(null)}
+          onClose={() => { setSelectedShipment(null); setBookingMode(false); if (demoActive) onDemoStepAdvance?.(0) }}
           onOpenWeather={onOpenWeather}
           onSendNotification={onSendNotification}
           onEtaApproved={onEtaApproved}
+          bookingMode={bookingMode}
+          demoStep={demoStep}
+          demoPaused={demoPaused}
+          demoScenario={demoScenario}
+          demoExceptionActive={demoExceptionActive}
+          onDemoStepAdvance={onDemoStepAdvance}
+          onDemoPause={onDemoPause}
+          onDemoResume={onDemoResume}
+          onDemoExceptionResolved={onDemoExceptionResolved}
+          onDemoExceptionTriggered={onDemoExceptionTriggered}
+          onDemoComplete={onDemoComplete}
+          onAddInboxEmail={onAddInboxEmail}
+          onNavigateView={(v) => onViewChange?.(v as any)}
         />
       )}
+
+      {/* Completion Modal */}
+      <CompletionModal
+        open={showCompletionModal ?? false}
+        onClose={onCloseCompletionModal ?? (() => {})}
+        elapsedTime={demoElapsedTime ?? "0s"}
+      />
     </div>
   )
 }

@@ -1,7 +1,9 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { type BookingRequest } from "@/lib/mock-data"
+import { type BookingRequest, DEMO_STEP_DETAILS, DEMO_SCENARIOS, DEMO_EXCEPTION_RESOLUTIONS, type DemoStepDetail } from "@/lib/mock-data"
+import { DemoModal, CompletionModal } from "./demo-modal"
+import { generateSLI, generatePackingList, generateCustomsDeclaration } from "@/lib/pdf-generator"
 import {
   SeverityBadge, ModeBadge, ExceptionBadge, ReasonChips,
   BookingStatusBadge, CarrierBadge, SourceBadge, OTMStatusBadge,
@@ -13,6 +15,8 @@ import {
   Monitor, Search, ShieldCheck,
   MapPin, RefreshCw, ChevronRight, Zap, Clock, Calendar,
   Mail, TrendingUp, ArrowUp, ArrowDown,
+  Play, Pause, RotateCcw, AlertTriangle, Target, Timer,
+  ChevronDown, Eye, Sparkles,
 } from "lucide-react"
 import { ModeIcon } from "./shared"
 import { EmailComposer } from "./email-composer"
@@ -36,6 +40,20 @@ interface ShipmentDrawerProps {
   onSendNotification?: (email: SentEmailItem) => void
   onEtaApproved?: () => void
   onResumeWorkflow?: (shipmentId: string) => void
+  // Demo booking mode
+  bookingMode?: boolean
+  demoStep?: number
+  demoPaused?: boolean
+  demoScenario?: string
+  demoExceptionActive?: boolean
+  onDemoStepAdvance?: (step: number) => void
+  onDemoPause?: () => void
+  onDemoResume?: () => void
+  onDemoExceptionResolved?: () => void
+  onDemoExceptionTriggered?: () => void
+  onDemoComplete?: (elapsedTime: string) => void
+  onNavigateView?: (view: string) => void
+  onAddInboxEmail?: (email: { id: string; from: string; fromName: string; subject: string; body: string; timestamp: string; read: boolean; tag: string; tags: string[]; shipmentId: string; shipmentRef: string }) => void
 }
 
 const LOADING_STEPS = [
@@ -116,7 +134,7 @@ function AIThinkingSkeleton({ label = "AI analyzing" }: { label?: string }) {
   )
 }
 
-export function ShipmentDrawer({ shipment, onClose, onOpenWeather, onSendNotification, onEtaApproved, onResumeWorkflow }: ShipmentDrawerProps) {
+export function ShipmentDrawer({ shipment, onClose, onOpenWeather, onSendNotification, onEtaApproved, onResumeWorkflow, bookingMode, demoStep, demoPaused, demoScenario, demoExceptionActive, onDemoStepAdvance, onDemoPause, onDemoResume, onDemoExceptionResolved, onDemoExceptionTriggered, onDemoComplete, onAddInboxEmail, onNavigateView }: ShipmentDrawerProps) {
   const [actions, setActions] = useState<ActionState>({
     bookingApproved: false,
     notified: false,
@@ -307,8 +325,27 @@ export function ShipmentDrawer({ shipment, onClose, onOpenWeather, onSendNotific
           )
         })()}
 
-        {/* ── Content (Req 6: Single scrollable view, no tabs) ──────── */}
-        {!isLoading && (
+        {/* ── Content ──────── */}
+        {bookingMode ? (
+          <div className="flex-1 overflow-y-auto">
+            <LiveBookingFlow
+              shipment={shipment}
+              demoStep={demoStep ?? 0}
+              demoPaused={demoPaused ?? false}
+              demoScenario={demoScenario ?? "happy-path"}
+              demoExceptionActive={demoExceptionActive ?? false}
+              onStepAdvance={onDemoStepAdvance}
+              onPause={onDemoPause}
+              onResume={onDemoResume}
+              onExceptionResolved={onDemoExceptionResolved}
+              onExceptionTriggered={onDemoExceptionTriggered}
+              onSendNotification={onSendNotification}
+              onDemoComplete={(elapsed) => { onClose(); onDemoComplete?.(elapsed) }}
+              onAddInboxEmail={onAddInboxEmail}
+              onNavigateView={onNavigateView}
+            />
+          </div>
+        ) : !isLoading ? (
           <div className="flex-1 overflow-y-auto">
             <OverviewTab
               shipment={shipment}
@@ -336,7 +373,7 @@ export function ShipmentDrawer({ shipment, onClose, onOpenWeather, onSendNotific
               onDismissNotifyPrompt={() => setShowNotifyPrompt(false)}
             />
           </div>
-        )}
+        ) : null}
       </aside>
 
       {/* Email composer modal */}
@@ -348,6 +385,1002 @@ export function ShipmentDrawer({ shipment, onClose, onOpenWeather, onSendNotific
         />
       )}
     </>
+  )
+}
+
+// ─── Step Output Panels (Rich demo content per step) ─────────────────────────
+
+function StepOutputPanel({ step, shipment, onNavigate }: { step: number; shipment: BookingRequest; onNavigate?: (view: string) => void }) {
+  if (step === 1) {
+    // Parsed shipment requirement card
+    return (
+      <div className="mt-3 bg-gray-50 rounded-lg border border-gray-200 p-3 space-y-2 animate-in fade-in duration-500">
+        <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Extracted Shipment Data</div>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+          {[
+            ["Order Ref", shipment.sapOrderRef],
+            ["Origin", shipment.origin],
+            ["Destination", shipment.destination],
+            ["Mode", shipment.mode],
+            ["Container", shipment.containerType],
+            ["Plant", shipment.plant],
+            ["Target Ship", shipment.targetShipDate],
+            ["Commodity", "Electronics (HS 8471.30)"],
+            ["Weight", "18,400 kg"],
+            ["Incoterm", "FOB Shanghai"],
+            ["Priority", "Standard"],
+            ["Routing Rule", "Lowest cost, SLA ≥ 90%"],
+          ].map(([label, value]) => (
+            <div key={label} className="flex items-center gap-2">
+              <span className="text-[10px] text-gray-400 w-20 shrink-0">{label}</span>
+              <span className="text-[11px] font-medium text-gray-700">{value}</span>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center gap-2 pt-1.5 border-t border-gray-200">
+          <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold">All fields valid</span>
+          <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-semibold">12 / 12 fields</span>
+          <span className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 font-medium">SAP TM + OTM</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (step === 3) {
+    // Portal connection status
+    return (
+      <div className="mt-3 bg-gray-50 rounded-lg border border-gray-200 p-3 space-y-2 animate-in fade-in duration-500">
+        <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Portal Connection</div>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center text-white text-[10px] font-bold">MSK</div>
+          <div className="flex-1">
+            <div className="text-[12px] font-semibold text-gray-800">Maersk Booking Portal</div>
+            <div className="text-[10px] text-gray-500">api.maersk.com/booking/v2</div>
+          </div>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">Connected</span>
+        </div>
+        <div className="grid grid-cols-3 gap-2 pt-1 border-t border-gray-200">
+          <div className="text-center">
+            <div className="text-[10px] text-gray-400">Response</div>
+            <div className="text-[12px] font-bold text-gray-700">240ms</div>
+          </div>
+          <div className="text-center">
+            <div className="text-[10px] text-gray-400">Auth</div>
+            <div className="text-[12px] font-bold text-emerald-600">API Key</div>
+          </div>
+          <div className="text-center">
+            <div className="text-[10px] text-gray-400">Session</div>
+            <div className="text-[12px] font-bold text-gray-700 font-mono">TKN-8f3a</div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (step === 4) {
+    // Booking submission details
+    return (
+      <div className="mt-3 bg-gray-50 rounded-lg border border-gray-200 p-3 space-y-2 animate-in fade-in duration-500">
+        <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Booking Parameters Submitted</div>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+          {[
+            ["Carrier", "Maersk Line"],
+            ["Vessel", "AE-1234 (Ever Given)"],
+            ["Sailing", "Mar 22, 2024"],
+            ["ETA", "Apr 05, 2024 (14d)"],
+            ["Container", "2×40' High Cube"],
+            ["Rate", "$2,850 / container"],
+            ["Total", "$5,700"],
+            ["Contract Ref", "MSK-2024-APAC-042"],
+          ].map(([label, value]) => (
+            <div key={label} className="flex items-center gap-2">
+              <span className="text-[10px] text-gray-400 w-24 shrink-0">{label}</span>
+              <span className="text-[11px] font-medium text-gray-700">{value}</span>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center gap-2 pt-1.5 border-t border-gray-200">
+          <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold">Rate within contract</span>
+          <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-semibold">+1.8% vs contract</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (step === 5) {
+    // Document upload details
+    return (
+      <div className="mt-3 bg-gray-50 rounded-lg border border-gray-200 p-3 space-y-2 animate-in fade-in duration-500">
+        <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Documents Uploaded</div>
+        <div className="space-y-1.5">
+          {[
+            { name: "Shipper's Letter of Instruction", size: "124 KB", source: "Auto-generated from SAP", status: "Verified" },
+            { name: "Commercial Packing List", size: "89 KB", source: "SAP TM attachment", status: "Verified" },
+            { name: "Customs Declaration (AES)", size: "56 KB", source: "Pre-filled from HS codes", status: "Verified" },
+          ].map((doc) => (
+            <div key={doc.name} className="flex items-center gap-2 py-1.5 px-2 bg-white rounded border border-gray-100">
+              <FileText size={14} className="text-blue-500 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="text-[11px] font-medium text-gray-700 truncate">{doc.name}</div>
+                <div className="text-[10px] text-gray-400">{doc.size} · {doc.source}</div>
+              </div>
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold shrink-0">{doc.status}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  if (step === 6) {
+    // Booking confirmation card
+    return (
+      <div className="mt-3 bg-emerald-50 rounded-lg border border-emerald-200 p-3 space-y-2 animate-in fade-in duration-500">
+        <div className="flex items-center gap-2">
+          <ShieldCheck size={16} className="text-emerald-600" />
+          <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Booking Confirmed</div>
+        </div>
+        <div className="bg-white rounded-md border border-emerald-200 p-3">
+          <div className="text-[16px] font-bold text-gray-900 font-mono tracking-wide">MAEU-2024-SHA-78432</div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2">
+            {[
+              ["Carrier", "Maersk Line"],
+              ["Vessel", "AE-1234 (Ever Given)"],
+              ["Sailing", "Mar 22, 2024"],
+              ["Port of Loading", "Shanghai (CNSHA)"],
+              ["Port of Discharge", "Los Angeles (USLAX)"],
+              ["ETA", "Apr 05, 2024"],
+              ["Container", "2×40' HC"],
+              ["CRO Number", "CRO-MAEU-78432"],
+            ].map(([l, v]) => (
+              <div key={l} className="flex items-center gap-2">
+                <span className="text-[10px] text-gray-400 w-24 shrink-0">{l}</span>
+                <span className="text-[11px] font-medium text-gray-700">{v}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (step === 7) {
+    // Notification + SAP update summary — clickable rows
+    const items = [
+      { system: "SAP TM", action: "Order SAP-TM-87234 updated with booking ref MAEU-2024-SHA-78432", icon: "🔄", status: "Synced", nav: "sap-tm" },
+      { system: "OTM", action: "Shipment record created, carrier assignment confirmed", icon: "🔄", status: "Synced", nav: "sap-tm" },
+      { system: "Email", action: "Booking confirmation sent to Suzhou Plant logistics team", icon: "📧", status: "Sent", nav: "email-sent" },
+      { system: "Email", action: "Shipping instructions sent to SCM planner (M. Santos)", icon: "📧", status: "Sent", nav: "email-sent" },
+    ]
+    return (
+      <div className="mt-3 bg-gray-50 rounded-lg border border-gray-200 p-3 space-y-2 animate-in fade-in duration-500">
+        <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">System Updates & Notifications</div>
+        <div className="space-y-1.5">
+          {items.map((item, idx) => (
+            <button
+              key={idx}
+              onClick={() => onNavigate?.(item.nav)}
+              className="w-full flex items-center gap-2 py-1.5 px-2 bg-white rounded border border-gray-100 hover:bg-blue-50 hover:border-blue-200 transition-colors text-left group"
+            >
+              <span className="text-[12px] shrink-0">{item.icon}</span>
+              <div className="flex-1 min-w-0">
+                <div className="text-[11px] font-medium text-gray-700 group-hover:text-blue-700">{item.action}</div>
+                <div className="text-[10px] text-gray-400">{item.system}</div>
+              </div>
+              <span className={cn("text-[9px] px-1.5 py-0.5 rounded font-semibold shrink-0",
+                item.status === "Synced" ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"
+              )}>{item.status}</span>
+              <ChevronRight size={12} className="text-gray-300 group-hover:text-blue-400 shrink-0" />
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  if (step === 8) {
+    // Monitoring status
+    return (
+      <div className="mt-3 bg-gray-50 rounded-lg border border-gray-200 p-3 space-y-2 animate-in fade-in duration-500">
+        <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Active Monitoring</div>
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { label: "Tracking Feed", value: "Maersk API + AIS", active: true },
+            { label: "Next Check", value: "30 min", active: true },
+            { label: "Port Congestion", value: "Normal", active: false },
+            { label: "Anomalies", value: "None detected", active: false },
+          ].map((item) => (
+            <div key={item.label} className="py-1.5 px-2 bg-white rounded border border-gray-100 text-center">
+              <div className="text-[10px] text-gray-400">{item.label}</div>
+              <div className={cn("text-[11px] font-semibold", item.active ? "text-blue-700" : "text-emerald-600")}>{item.value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  return null // Step 2 has its own carrier table inline
+}
+
+// ─── Live Booking Flow (Demo Mode) ───────────────────────────────────────────
+
+interface LiveBookingFlowProps {
+  shipment: BookingRequest
+  demoStep: number
+  demoPaused: boolean
+  demoScenario: string
+  demoExceptionActive: boolean
+  onStepAdvance?: (step: number) => void
+  onPause?: () => void
+  onResume?: () => void
+  onExceptionResolved?: () => void
+  onExceptionTriggered?: () => void
+  onSendNotification?: (email: SentEmailItem) => void
+  onDemoComplete?: () => void
+  onNavigateView?: (view: string) => void
+  onAddInboxEmail?: (email: { id: string; from: string; fromName: string; subject: string; body: string; timestamp: string; read: boolean; tag: string; tags: string[]; shipmentId: string; shipmentRef: string }) => void
+}
+
+function LiveBookingFlow({
+  shipment, demoStep, demoPaused, demoScenario, demoExceptionActive,
+  onStepAdvance, onPause, onResume, onExceptionResolved, onExceptionTriggered,
+  onSendNotification, onDemoComplete, onAddInboxEmail, onNavigateView,
+}: LiveBookingFlowProps) {
+  const [subItemTick, setSubItemTick] = useState(0)
+  const [stepPhase, setStepPhase] = useState<"thinking" | "revealing" | "complete" | "idle">("idle")
+  const [showReasoning, setShowReasoning] = useState(true)
+  const [carrierOverride, setCarrierOverride] = useState(false)
+  const [selectedCarrier, setSelectedCarrier] = useState<string | null>(null)
+  const [elapsedMs, setElapsedMs] = useState(0)
+  const [completedSteps, setCompletedSteps] = useState<number[]>([])
+  const [showStepModal, setShowStepModal] = useState<number | null>(null)
+
+  const scenario = DEMO_SCENARIOS.find((s) => s.id === demoScenario) ?? DEMO_SCENARIOS[0]
+  const currentStepConfig = demoStep >= 1 && demoStep <= 8 ? DEMO_STEP_DETAILS[demoStep - 1] : null
+  const StepIcon = demoStep >= 1 && demoStep <= 8 ? STEP_ICONS[demoStep - 1] : Zap
+
+  // Elapsed time counter
+  useEffect(() => {
+    if (demoStep === 0 || demoStep > 8 || demoPaused) return
+    const t = setInterval(() => setElapsedMs((p) => p + 100), 100)
+    return () => clearInterval(t)
+  }, [demoStep, demoPaused])
+
+  // Reset state when demo restarts (demoStep goes to 0)
+  useEffect(() => {
+    if (demoStep === 0) {
+      setSubItemTick(0)
+      setStepPhase("idle")
+      setCompletedSteps([])
+      setElapsedMs(0)
+      setShowStepModal(null)
+      setCarrierOverride(false)
+      setSelectedCarrier(null)
+      setShowReasoning(false)
+      const t = setTimeout(() => onStepAdvance?.(1), 800)
+      return () => clearTimeout(t)
+    }
+  }, [demoStep])
+
+  // Step animation engine
+  useEffect(() => {
+    if (demoStep < 1 || demoStep > 8 || demoPaused || demoExceptionActive) return
+    if (completedSteps.includes(demoStep)) return
+
+    // Check if this step should trigger an exception
+    if (scenario.exceptionAtStep === demoStep && !demoExceptionActive) {
+      // Show thinking briefly, then trigger exception
+      setStepPhase("thinking")
+      setSubItemTick(0)
+      const exTimer = setTimeout(() => {
+        onExceptionTriggered?.()
+      }, 1500)
+      return () => clearTimeout(exTimer)
+    }
+
+    // Normal step flow: thinking → revealing → complete
+    setStepPhase("thinking")
+    setSubItemTick(0)
+
+    const config = DEMO_STEP_DETAILS[demoStep - 1]
+
+    // At step 2 with carrier selection, pause after revealing for user interaction
+    const isCarrierStep = demoStep === 2
+
+    // After thinking duration, start revealing sub-items
+    const revealTimer = setTimeout(() => {
+      setStepPhase("revealing")
+      // Reveal sub-items one by one
+      const subTimer = setInterval(() => {
+        setSubItemTick((prev) => {
+          const next = prev + 1
+          if (next >= config.subItems.length) {
+            clearInterval(subTimer)
+            // After all revealed, show modal (pauses flow for user click)
+            if (isCarrierStep) {
+              setStepPhase("revealing") // keep in revealing to show carrier table in modal
+              setTimeout(() => setShowStepModal(2), 300)
+            } else {
+              setTimeout(() => {
+                setStepPhase("complete")
+                setCompletedSteps((p) => [...p, demoStep])
+                // Show modal — flow pauses until user clicks Continue
+                if (demoStep !== 3) {
+                  // Step 3 (portal login) has no modal — auto-advance
+                  setShowStepModal(demoStep)
+                } else {
+                  // Step 3: auto-advance after brief pause
+                  setTimeout(() => {
+                    if (demoStep < 8) onStepAdvance?.(demoStep + 1)
+                    else onStepAdvance?.(9)
+                  }, 1500)
+                }
+              }, 400)
+            }
+          }
+          return next
+        })
+      }, demoScenario === "happy-path" ? 340 : 180)
+      return () => clearInterval(subTimer)
+    }, config.duration * (demoScenario === "happy-path" ? 0.6 : 0.3))
+
+    return () => clearTimeout(revealTimer)
+  }, [demoStep, demoPaused, demoExceptionActive, completedSteps])
+
+  const makeTimestamp = () => {
+    const now = new Date()
+    return `${now.toLocaleDateString("en", { month: "short", day: "numeric" })}, ${now.toLocaleTimeString("en", { hour: "2-digit", minute: "2-digit", hour12: false })}`
+  }
+
+  // Handle modal Continue — advances to next step + side effects
+  const handleModalContinue = (fromStep: number) => {
+    setShowStepModal(null)
+
+    // Step-specific side effects
+    if (fromStep === 4 && onSendNotification) {
+      onSendNotification({ id: `DEMO-SENT-${Date.now()}`, to: "maersk-bookings@maersk.com", subject: "Booking Request Submitted — MAEU-2024-SHA-78432 (SHA→LAX)", body: "Booking request submitted for SAP-TM-87234.\n\nVessel: AE-1234 / Mar 22\nContainer: 2×40' HC\nRate: $2,850\n\n— Zero Touch Booking Agent", timestamp: makeTimestamp(), type: "carrier" })
+    }
+    if (fromStep === 6) {
+      // Add carrier confirmation to Inbox
+      onAddInboxEmail?.({ id: `DEMO-INBOX-${Date.now()}`, from: "bookings@maersk.com", fromName: "Maersk Bookings", subject: "Booking Confirmed — MAEU-2024-SHA-78432 (SHA→LAX)", body: "Dear Customer,\n\nYour booking has been confirmed.\n\nBooking Ref: MAEU-2024-SHA-78432\nVessel: AE-1234 / Ever Given\nSailing: Mar 22, 2024\nETA: Apr 05, 2024\nContainer: 2×40' HC\n\nContainer Release Order (CRO) has been issued.\n\nRegards,\nMaersk Line Booking Team", timestamp: makeTimestamp(), read: false, tag: "carrier", tags: ["carrier", "booking"], shipmentId: "BKG-NEW-001", shipmentRef: "MAEU-2024-SHA-78432" })
+    }
+    if (fromStep === 7 && onSendNotification) {
+      onSendNotification({ id: `DEMO-SENT-${Date.now()}-1`, to: "plant-logistics@suzhou.company.com", subject: "Booking Confirmed — MAEU-2024-SHA-78432 (SHA→LAX)", body: "Booking for SAP-TM-87234 has been confirmed.\n\nCarrier: Maersk Line\nVessel: AE-1234 / Mar 22 sailing\nBooking Ref: MAEU-2024-SHA-78432\nETA: Apr 05, 2024\n\n— Zero Touch Booking Agent", timestamp: makeTimestamp(), type: "plant" })
+      onSendNotification({ id: `DEMO-SENT-${Date.now()}-2`, to: "m.santos@logistics.co", subject: "SAP TM Updated — BKG-NEW-001 Booking Confirmed", body: "SAP TM order SAP-TM-87234 has been updated with booking confirmation MAEU-2024-SHA-78432.\n\nOTM shipment record synced.\n\n— Zero Touch Booking Agent", timestamp: makeTimestamp(), type: "sap" })
+    }
+
+    // Advance
+    if (fromStep === 8) {
+      onDemoComplete?.() // triggers dashboard zoom + completion modal
+    } else {
+      setTimeout(() => onStepAdvance?.(fromStep + 1), 400)
+    }
+  }
+
+  // Handle carrier selection confirm (step 2)
+  const handleCarrierConfirm = () => {
+    setShowStepModal(null)
+    setStepPhase("complete")
+    setCompletedSteps((p) => [...p, 2])
+    setCarrierOverride(false)
+    setTimeout(() => onStepAdvance?.(3), 400)
+  }
+
+  // Handle exception resolution
+  const handleResolveException = () => {
+    onExceptionResolved?.()
+    setStepPhase("complete")
+    setCompletedSteps((p) => [...p, demoStep])
+    setTimeout(() => {
+      if (demoStep < 8) onStepAdvance?.(demoStep + 1)
+      else onStepAdvance?.(9)
+    }, 600)
+  }
+
+  const formatElapsed = () => {
+    const s = Math.floor(elapsedMs / 1000)
+    const m = Math.floor(s / 60)
+    return m > 0 ? `${m}:${String(s % 60).padStart(2, "0")}` : `${s}s`
+  }
+
+  const isComplete = demoStep > 8
+
+  return (
+    <div className="p-4 space-y-4">
+      {/* ── Progress Bar + Controls ──────────────────────────────────── */}
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Live Booking</span>
+            <span className={cn(
+              "text-[10px] font-semibold px-2 py-0.5 rounded-full",
+              isComplete ? "bg-emerald-100 text-emerald-700" :
+              demoExceptionActive ? "bg-red-100 text-red-700" :
+              "bg-blue-100 text-blue-700"
+            )}>
+              {isComplete ? "Complete" : demoExceptionActive ? "Exception" : scenario.label}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] text-gray-400 font-mono flex items-center gap-1">
+              <Timer size={11} /> {formatElapsed()}
+            </span>
+            {!isComplete && (
+              <button
+                onClick={demoPaused ? onResume : onPause}
+                className="p-1.5 rounded-md hover:bg-gray-100 transition-colors text-gray-500"
+              >
+                {demoPaused ? <Play size={14} /> : <Pause size={14} />}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Progress bar */}
+        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+          <div
+            className={cn(
+              "h-full rounded-full transition-all duration-700 ease-out",
+              isComplete ? "bg-emerald-500" : demoExceptionActive ? "bg-amber-500" : "bg-blue-500"
+            )}
+            style={{ width: `${Math.min(((isComplete ? 8 : Math.max(0, demoStep - 1) + (stepPhase === "complete" ? 1 : stepPhase === "revealing" ? 0.6 : 0.2)) / 8) * 100, 100)}%` }}
+          />
+        </div>
+
+        {/* Step indicators */}
+        <div className="flex justify-between mt-2">
+          {Array.from({ length: 8 }, (_, i) => {
+            const stepNum = i + 1
+            const Icon = STEP_ICONS[i]
+            const done = completedSteps.includes(stepNum) || demoStep > stepNum
+            const active = demoStep === stepNum
+            return (
+              <div key={i} className="flex flex-col items-center gap-1">
+                <div className={cn(
+                  "w-7 h-7 rounded-full flex items-center justify-center transition-all duration-500",
+                  done ? "bg-emerald-500 text-white scale-100" :
+                  active ? "bg-blue-500 text-white scale-110 shadow-lg shadow-blue-200" :
+                  "bg-gray-100 text-gray-400"
+                )}>
+                  {done ? <Check size={13} /> : <Icon size={13} />}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ── Active Step Panel ────────────────────────────────────────── */}
+      {demoStep >= 1 && demoStep <= 8 && !isComplete && (
+        <div className={cn(
+          "bg-white border rounded-lg overflow-hidden transition-all duration-300",
+          demoExceptionActive ? "border-amber-300 shadow-amber-100 shadow-sm" : "border-blue-200 shadow-blue-50 shadow-sm"
+        )}>
+          {/* Step header */}
+          <div className={cn(
+            "flex items-center gap-2 px-4 py-3 border-b",
+            demoExceptionActive ? "bg-amber-50 border-amber-200" : "bg-blue-50 border-blue-100"
+          )}>
+            <StepIcon size={15} className={demoExceptionActive ? "text-amber-600" : "text-blue-600"} />
+            <span className={cn("text-[12px] font-bold", demoExceptionActive ? "text-amber-800" : "text-blue-800")}>
+              Step {demoStep}: {DEMO_STEP_DETAILS[demoStep - 1]?.thinkingLabel.replace("...", "")}
+            </span>
+            <span className="text-[10px] text-gray-400 ml-auto">{currentStepConfig?.processingTime}</span>
+          </div>
+
+          {/* Exception overlay */}
+          {demoExceptionActive && (
+            <DemoExceptionOverlay
+              scenarioId={demoScenario}
+              onResolve={handleResolveException}
+            />
+          )}
+
+          {/* Normal step content */}
+          {!demoExceptionActive && (
+            <div className="p-4 space-y-3">
+              {/* Thinking animation */}
+              {stepPhase === "thinking" && (
+                <div className="flex items-center gap-2 py-3">
+                  <Brain size={16} className="text-blue-500 animate-pulse" />
+                  <span className="text-[12px] font-medium text-blue-600">
+                    {currentStepConfig?.thinkingLabel}
+                  </span>
+                  <ThinkingDots />
+                </div>
+              )}
+
+              {/* Sub-items reveal */}
+              {(stepPhase === "revealing" || stepPhase === "complete") && currentStepConfig && (
+                <div className="space-y-2">
+                  {currentStepConfig.subItems.map((item, idx) => {
+                    const visible = idx < subItemTick
+                    return (
+                      <div
+                        key={idx}
+                        className={cn(
+                          "flex items-center gap-2 py-1.5 px-3 rounded-md transition-all duration-500",
+                          visible ? "opacity-100 translate-x-0 bg-gray-50" : "opacity-0 -translate-x-4"
+                        )}
+                      >
+                        {visible ? (
+                          <CheckCircle size={14} className="text-emerald-500 shrink-0" />
+                        ) : (
+                          <Loader2 size={14} className="text-gray-300 shrink-0 animate-spin" />
+                        )}
+                        <span className={cn("text-[12px]", visible ? "text-gray-700 font-medium" : "text-gray-400")}>
+                          {item}
+                        </span>
+                      </div>
+                    )
+                  })}
+
+                  {/* Completion label + Output Panel */}
+                  {stepPhase === "complete" && (
+                    <>
+                      <div className="flex items-center gap-2 mt-2 py-2 px-3 bg-emerald-50 rounded-md border border-emerald-200 animate-in fade-in duration-400">
+                        <CheckCircle size={14} className="text-emerald-600 shrink-0" />
+                        <span className="text-[12px] font-semibold text-emerald-700">{currentStepConfig.completionLabel}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Carrier table now in Step 2 modal */}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── AI Reasoning Panel (Collapsible) ─────────────────────────── */}
+      {demoStep >= 1 && demoStep <= 8 && !isComplete && currentStepConfig && (stepPhase === "revealing" || stepPhase === "complete") && !demoExceptionActive && (
+        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <button
+            onClick={() => setShowReasoning(!showReasoning)}
+            className="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-gray-50 transition-colors"
+          >
+            <Eye size={13} className="text-indigo-500" />
+            <span className="text-[11px] font-semibold text-indigo-600 uppercase tracking-wider">AI Reasoning</span>
+            <ChevronDown size={12} className={cn("text-gray-400 ml-auto transition-transform", showReasoning && "rotate-180")} />
+          </button>
+          {showReasoning && (
+            <div className="px-4 pb-4 space-y-3 border-t border-gray-100 pt-3">
+              <p className="text-[12px] text-gray-600 leading-relaxed">{currentStepConfig.aiReasoning}</p>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-gray-500 font-medium">Confidence</span>
+                  <div className="w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-emerald-500 rounded-full transition-all duration-700" style={{ width: `${currentStepConfig.aiConfidence}%` }} />
+                  </div>
+                  <span className="text-[10px] font-bold text-emerald-600">{currentStepConfig.aiConfidence}%</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  {currentStepConfig.aiSources.map((src) => (
+                    <span key={src} className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 font-medium">{src}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── 8-Step Vertical Stepper ──────────────────────────────────── */}
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-3">Workflow Progress</div>
+        <div className="space-y-1">
+          {DEMO_STEP_DETAILS.map((step, idx) => {
+            const stepNum = idx + 1
+            const Icon = STEP_ICONS[idx]
+            const done = completedSteps.includes(stepNum) || demoStep > stepNum
+            const active = demoStep === stepNum
+            const pending = demoStep < stepNum
+            return (
+              <div key={idx} className="flex items-start gap-3 py-1.5">
+                <div className={cn(
+                  "w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-all duration-500",
+                  done ? "bg-emerald-500 text-white" :
+                  active ? "bg-blue-500 text-white shadow-md shadow-blue-200" :
+                  "bg-gray-100 text-gray-400"
+                )}>
+                  {done ? <Check size={11} /> :
+                   active ? <Loader2 size={11} className="animate-spin" /> :
+                   <Icon size={11} />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className={cn("text-[12px] font-medium", done ? "text-gray-800" : active ? "text-blue-700" : "text-gray-400")}>
+                    {step.thinkingLabel.replace("...", "")}
+                  </div>
+                  {done && (
+                    <div className="text-[10px] text-emerald-600 mt-0.5">{step.completionLabel}</div>
+                  )}
+                  {active && !demoExceptionActive && stepPhase === "thinking" && (
+                    <div className="text-[10px] text-blue-500 mt-0.5 flex items-center gap-1">
+                      Processing<ThinkingDots />
+                    </div>
+                  )}
+                  {active && demoExceptionActive && (
+                    <div className="text-[10px] text-amber-600 mt-0.5 font-medium">Exception — awaiting resolution</div>
+                  )}
+                </div>
+                {done && <span className="text-[10px] text-gray-400 font-mono shrink-0">{step.processingTime}</span>}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ── Step Modals ─────────────────────────────────────────────── */}
+
+      {/* Step 1: Extracted Shipment Data */}
+      <DemoModal
+        open={showStepModal === 1}
+        title="Shipment Data Extracted"
+        subtitle="12 fields parsed from SAP TM & OTM — all validated"
+        icon={<div className="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center"><CheckCircle size={18} className="text-emerald-600" /></div>}
+        footer={<div className="flex justify-end"><button onClick={() => handleModalContinue(1)} className="px-5 py-2 bg-blue-600 text-white text-[13px] font-semibold rounded-lg hover:bg-blue-700 transition-colors">Continue to Carrier Selection →</button></div>}
+      >
+        <StepOutputPanel step={1} shipment={shipment} />
+      </DemoModal>
+
+      {/* Step 2: Carrier Evaluation */}
+      <DemoModal
+        open={showStepModal === 2}
+        title="Carrier Evaluation Complete"
+        subtitle="4 carriers queried — AI recommendation ready"
+        icon={<div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center"><Search size={18} className="text-blue-600" /></div>}
+        width="3xl"
+        footer={
+          <div className="flex items-center gap-2 justify-end">
+            {!carrierOverride ? (
+              <>
+                <button onClick={() => setCarrierOverride(true)} className="px-4 py-2 border border-gray-300 text-gray-600 text-[13px] font-medium rounded-lg hover:bg-gray-50 transition-colors">Override Carrier</button>
+                <button onClick={handleCarrierConfirm} className="px-5 py-2 bg-blue-600 text-white text-[13px] font-semibold rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5"><Check size={14} /> Accept AI Selection</button>
+              </>
+            ) : (
+              <button onClick={handleCarrierConfirm} disabled={!selectedCarrier} className="px-5 py-2 bg-blue-600 text-white text-[13px] font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-40 flex items-center gap-1.5"><Check size={14} /> Confirm {selectedCarrier ?? "Selection"}</button>
+            )}
+          </div>
+        }
+      >
+        <div className="grid grid-cols-2 gap-3">
+          {shipment.carrierOptions.map((c) => (
+            <div
+              key={c.carrier}
+              onClick={() => carrierOverride && setSelectedCarrier(c.carrier)}
+              className={cn(
+                "border rounded-xl p-4 transition-all",
+                (c.recommended && !carrierOverride && !selectedCarrier) || selectedCarrier === c.carrier
+                  ? "border-blue-400 bg-blue-50 shadow-sm ring-1 ring-blue-200"
+                  : carrierOverride ? "border-gray-200 hover:border-blue-300 cursor-pointer" : "border-gray-200",
+              )}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-600">{c.carrier.slice(0, 3).toUpperCase()}</div>
+                  <span className="text-[14px] font-bold text-gray-800">{c.carrier}</span>
+                </div>
+                {((c.recommended && !carrierOverride && !selectedCarrier) || selectedCarrier === c.carrier) && (
+                  <span className="text-[9px] px-2 py-0.5 rounded-full bg-blue-600 text-white font-bold">AI PICK</span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-y-2 gap-x-4">
+                <div><span className="text-[10px] text-gray-400">Rate</span><div className="text-[14px] font-bold text-gray-800">${c.rate.toLocaleString()}</div></div>
+                <div><span className="text-[10px] text-gray-400">Transit</span><div className="text-[14px] font-bold text-gray-800">{c.transitDays} days</div></div>
+                <div><span className="text-[10px] text-gray-400">SLA Score</span><div className="text-[14px] font-bold text-gray-800">{c.sla}%</div></div>
+                <div><span className="text-[10px] text-gray-400">Capacity</span><div className={cn("text-[12px] font-bold", c.capacity === "Available" ? "text-emerald-600" : c.capacity === "Limited" ? "text-amber-600" : "text-red-600")}>{c.capacity}</div></div>
+              </div>
+              {c.reason && <p className="text-[10px] text-gray-500 mt-2 border-t border-gray-100 pt-2">{c.reason}</p>}
+            </div>
+          ))}
+        </div>
+      </DemoModal>
+
+      {/* Step 4: Booking Preview */}
+      <DemoModal
+        open={showStepModal === 4}
+        title="Booking Preview"
+        subtitle="Review booking parameters before submission"
+        icon={<div className="w-9 h-9 rounded-lg bg-indigo-100 flex items-center justify-center"><Anchor size={18} className="text-indigo-600" /></div>}
+        footer={
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-emerald-600 font-medium">Rate within contract threshold (1.8%)</span>
+            <button onClick={() => handleModalContinue(4)} className="px-5 py-2 bg-emerald-600 text-white text-[13px] font-semibold rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-1.5"><Check size={14} /> Approve & Submit</button>
+          </div>
+        }
+      >
+        <StepOutputPanel step={4} shipment={shipment} />
+      </DemoModal>
+
+      {/* Step 5: Documents */}
+      <DemoModal
+        open={showStepModal === 5}
+        title="Documents Uploaded & Verified"
+        subtitle="3 shipping documents generated and uploaded to carrier portal"
+        icon={<div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center"><Upload size={18} className="text-blue-600" /></div>}
+        footer={<div className="flex justify-end"><button onClick={() => handleModalContinue(5)} className="px-5 py-2 bg-blue-600 text-white text-[13px] font-semibold rounded-lg hover:bg-blue-700 transition-colors">Continue →</button></div>}
+      >
+        <div className="space-y-2">
+          {[
+            { name: "Shipper's Letter of Instruction (SLI)", size: "124 KB", source: "Auto-generated from SAP", onView: () => generateSLI() },
+            { name: "Commercial Packing List", size: "89 KB", source: "SAP TM attachment", onView: () => generatePackingList() },
+            { name: "Customs Declaration (AES)", size: "56 KB", source: "Pre-filled from HS codes", onView: () => generateCustomsDeclaration() },
+          ].map((doc) => (
+            <div key={doc.name} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <FileText size={20} className="text-blue-500 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-semibold text-gray-800">{doc.name}</div>
+                <div className="text-[11px] text-gray-400">{doc.size} · {doc.source}</div>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold shrink-0">Verified</span>
+              <button onClick={doc.onView} className="text-[11px] px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-blue-600 font-medium hover:bg-blue-50 transition-colors shrink-0">View PDF</button>
+            </div>
+          ))}
+        </div>
+      </DemoModal>
+
+      {/* Step 6: Booking Confirmed */}
+      <DemoModal
+        open={showStepModal === 6}
+        title="Booking Confirmed by Carrier"
+        subtitle="Maersk has confirmed your booking"
+        icon={<div className="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center"><ShieldCheck size={18} className="text-emerald-600" /></div>}
+        footer={<div className="flex justify-end"><button onClick={() => handleModalContinue(6)} className="px-5 py-2 bg-blue-600 text-white text-[13px] font-semibold rounded-lg hover:bg-blue-700 transition-colors">Continue to System Update →</button></div>}
+      >
+        <StepOutputPanel step={6} shipment={shipment} />
+      </DemoModal>
+
+      {/* Step 7: System Update */}
+      <DemoModal
+        open={showStepModal === 7}
+        title="System Update Complete"
+        subtitle="SAP TM, OTM synced — stakeholders notified"
+        icon={<div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center"><Bell size={18} className="text-blue-600" /></div>}
+        footer={<div className="flex justify-end"><button onClick={() => handleModalContinue(7)} className="px-5 py-2 bg-blue-600 text-white text-[13px] font-semibold rounded-lg hover:bg-blue-700 transition-colors">Continue to Monitoring →</button></div>}
+      >
+        <StepOutputPanel step={7} shipment={shipment} onNavigate={onNavigateView} />
+      </DemoModal>
+
+      {/* Step 8: Monitoring Activated */}
+      <DemoModal
+        open={showStepModal === 8}
+        title="Booking Monitor Activated"
+        subtitle="Tracking feeds subscribed — anomaly detection armed"
+        icon={<div className="w-9 h-9 rounded-lg bg-indigo-100 flex items-center justify-center"><Truck size={18} className="text-indigo-600" /></div>}
+        footer={<div className="flex justify-end"><button onClick={() => handleModalContinue(8)} className="px-5 py-2 bg-emerald-600 text-white text-[13px] font-semibold rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-1.5"><Sparkles size={14} /> Complete Booking →</button></div>}
+      >
+        <StepOutputPanel step={8} shipment={shipment} />
+      </DemoModal>
+    </div>
+  )
+}
+
+// ─── Demo Exception Overlay ──────────────────────────────────────────────────
+
+function DemoExceptionOverlay({ scenarioId, onResolve }: { scenarioId: string; onResolve: () => void }) {
+  const resolution = DEMO_EXCEPTION_RESOLUTIONS[scenarioId]
+  const [resolving, setResolving] = useState(false)
+  const [showModal, setShowModal] = useState(true)
+
+  if (!resolution) return null
+
+  const handleResolve = () => {
+    setResolving(true)
+    setTimeout(() => {
+      setResolving(false)
+      setShowModal(false)
+      onResolve()
+    }, 1500)
+  }
+
+  // Scenario-specific rich content
+  const scenarioContent: Record<string, React.ReactNode> = {
+    "missing-data": (
+      <div className="space-y-3">
+        <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Missing Fields Detected</div>
+        <div className="space-y-2">
+          {[
+            { field: "Commodity HS Code", source: "SAP Material Master", autoValue: "8471.30 — Laptop Parts", status: "Auto-filled" },
+            { field: "Package Dimensions", source: "Historical Shipments (3 records)", autoValue: "60×40×30 cm / carton", status: "Auto-filled" },
+            { field: "Shipper Contact", source: "Plant Directory", autoValue: "Li Wei, +86 512 6688 7799", status: "Auto-filled" },
+          ].map((f) => (
+            <div key={f.field} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200">
+              <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                <AlertTriangle size={14} className="text-amber-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[12px] font-semibold text-gray-800">{f.field}</div>
+                <div className="text-[10px] text-gray-400">Source: {f.source}</div>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="text-[11px] font-medium text-blue-700">{f.autoValue}</div>
+                <div className="text-[9px] text-emerald-600 font-semibold">{f.status}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    ),
+    "no-capacity": (
+      <div className="space-y-3">
+        <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Carrier Capacity Status — SHA→LAX</div>
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { carrier: "Maersk", status: "Full", next: "Mar 28 (+5d)", color: "bg-red-100 text-red-700" },
+            { carrier: "MSC", status: "Full", next: "Mar 29 (+6d)", color: "bg-red-100 text-red-700" },
+            { carrier: "CMA-CGM", status: "Full", next: "Mar 27 (+4d)", color: "bg-red-100 text-red-700" },
+            { carrier: "Hapag-Lloyd", status: "Full", next: "Mar 30 (+7d)", color: "bg-red-100 text-red-700" },
+          ].map((c) => (
+            <div key={c.carrier} className="p-2.5 bg-white rounded-lg border border-gray-200 text-center">
+              <div className="text-[12px] font-bold text-gray-800">{c.carrier}</div>
+              <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full mt-1 inline-block", c.color)}>{c.status}</span>
+              <div className="text-[10px] text-gray-400 mt-1">Next: {c.next}</div>
+            </div>
+          ))}
+        </div>
+        <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mt-2">AI Alternative Route</div>
+        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-[13px] font-bold text-blue-800">SHA → Long Beach (LGB)</div>
+              <div className="text-[11px] text-blue-600">via Maersk, vessel AE-1240, sailing Mar 23</div>
+            </div>
+            <div className="text-right">
+              <div className="text-[14px] font-bold text-blue-800">$2,920</div>
+              <div className="text-[10px] text-blue-500">+2.5% vs contract</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-4 mt-2 text-[10px] text-blue-600">
+            <span>Transit: +1 day</span>
+            <span>Capacity: Available</span>
+            <span>SLA: within target</span>
+          </div>
+        </div>
+      </div>
+    ),
+    "portal-failure": (
+      <div className="space-y-3">
+        <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Portal Health Dashboard</div>
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { portal: "Maersk Portal", status: "Offline", uptime: "HTTP 503", since: "14:23 UTC", color: "bg-red-100 text-red-700 border-red-200" },
+            { portal: "MSC Portal", status: "Online", uptime: "99.8%", since: "Healthy", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+            { portal: "CMA-CGM Portal", status: "Online", uptime: "99.2%", since: "Healthy", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+            { portal: "Hapag-Lloyd Portal", status: "Degraded", uptime: "94.1%", since: "Slow response", color: "bg-amber-100 text-amber-700 border-amber-200" },
+          ].map((p) => (
+            <div key={p.portal} className={cn("p-2.5 rounded-lg border", p.color)}>
+              <div className="text-[11px] font-bold">{p.portal}</div>
+              <div className="text-[13px] font-bold mt-0.5">{p.status}</div>
+              <div className="text-[10px] opacity-70">{p.uptime} · {p.since}</div>
+            </div>
+          ))}
+        </div>
+        <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mt-2">Fallback Carrier</div>
+        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200 flex items-center justify-between">
+          <div>
+            <div className="text-[13px] font-bold text-blue-800">MSC — Portal Online</div>
+            <div className="text-[11px] text-blue-600">Rate $2,720 (5% lower) · 16d transit · SLA within window</div>
+          </div>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">Available</span>
+        </div>
+      </div>
+    ),
+    "rate-mismatch": (
+      <div className="space-y-3">
+        <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Rate Comparison</div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200 text-center">
+            <div className="text-[10px] text-emerald-600 font-semibold">Contract Rate</div>
+            <div className="text-[22px] font-bold text-emerald-700">$2,800</div>
+            <div className="text-[10px] text-emerald-500">per container</div>
+          </div>
+          <div className="p-3 bg-red-50 rounded-lg border border-red-200 text-center">
+            <div className="text-[10px] text-red-600 font-semibold">Quoted Rate</div>
+            <div className="text-[22px] font-bold text-red-700">$3,340</div>
+            <div className="text-[10px] text-red-500">+19% premium</div>
+          </div>
+        </div>
+        <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+          <div className="flex items-center justify-between">
+            <span className="text-[12px] font-semibold text-amber-800">Overspend per booking</span>
+            <span className="text-[14px] font-bold text-red-700">$1,080</span>
+          </div>
+          <div className="flex items-center justify-between mt-1">
+            <span className="text-[11px] text-amber-600">Auto-approval threshold</span>
+            <span className="text-[11px] font-semibold text-amber-700">5% (exceeded: 19%)</span>
+          </div>
+        </div>
+        <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mt-2">Alternative</div>
+        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200 flex items-center justify-between">
+          <div>
+            <div className="text-[13px] font-bold text-blue-800">MSC — $2,720</div>
+            <div className="text-[11px] text-blue-600">Below contract rate · 16d transit · 87% SLA</div>
+          </div>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">Under contract</span>
+        </div>
+      </div>
+    ),
+    "carrier-rejection": (
+      <div className="space-y-3">
+        <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Rejection Details</div>
+        <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+          <div className="grid grid-cols-2 gap-y-2 gap-x-4">
+            {[
+              ["Booking Ref", "MAEU-2024-SHA-78432"],
+              ["Rejection Code", "EQ-UNAVAIL-HC40"],
+              ["Reason", "40' HC not available"],
+              ["Vessel", "AE-1234 (Mar 22)"],
+            ].map(([l, v]) => (
+              <div key={l}><span className="text-[10px] text-red-400">{l}</span><div className="text-[11px] font-semibold text-red-800">{v}</div></div>
+            ))}
+          </div>
+        </div>
+        <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mt-2">AI Re-booking Option</div>
+        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[13px] font-bold text-blue-800">MSC — vessel MSC-ANNA</div>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">40' HC Available</span>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            {[
+              ["Sailing", "Mar 23 (+1d)"],
+              ["Rate", "$2,720"],
+              ["Transit", "16 days"],
+            ].map(([l, v]) => (
+              <div key={l}><span className="text-[10px] text-blue-400">{l}</span><div className="text-[12px] font-bold text-blue-800">{v}</div></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    ),
+  }
+
+  return (
+    <DemoModal
+      open={showModal}
+      title={resolution.title}
+      subtitle={resolution.description}
+      icon={<div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center"><AlertTriangle size={18} className="text-amber-600" /></div>}
+      width="2xl"
+      showClose={false}
+      footer={
+        !resolving ? (
+          <div className="flex items-center gap-2 justify-between">
+            <div className="flex items-center gap-2">
+              {resolution.alternatives.map((alt, idx) => (
+                <button key={idx} onClick={handleResolve} className="px-3 py-2 border border-gray-300 text-gray-600 text-[12px] font-medium rounded-lg hover:bg-gray-50 transition-colors">{alt.label}</button>
+              ))}
+            </div>
+            <button onClick={handleResolve} className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white text-[13px] font-semibold rounded-lg hover:bg-blue-700 transition-colors"><Sparkles size={13} /> {resolution.resolveLabel}</button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 justify-center py-1">
+            <Loader2 size={14} className="text-blue-500 animate-spin" />
+            <span className="text-[12px] font-medium text-blue-600">Resolving exception<ThinkingDots /></span>
+          </div>
+        )
+      }
+    >
+      {/* Impact panel */}
+      <div className="bg-amber-50 rounded-lg px-4 py-3 border border-amber-200 mb-4">
+        <div className="text-[10px] font-bold text-amber-600 uppercase tracking-wider mb-1">Impact Assessment</div>
+        <div className="text-[12px] text-amber-800">{resolution.impact}</div>
+      </div>
+
+      {/* Scenario-specific rich content */}
+      {scenarioContent[scenarioId]}
+
+      {/* AI Recommendation */}
+      <div className="bg-blue-50 rounded-lg px-4 py-3 border border-blue-200 mt-4">
+        <div className="flex items-center gap-1.5 mb-1">
+          <Brain size={13} className="text-blue-600" />
+          <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">AI Recommendation</span>
+        </div>
+        <div className="text-[12px] text-blue-800">{resolution.aiRecommendation}</div>
+      </div>
+    </DemoModal>
   )
 }
 

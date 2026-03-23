@@ -945,6 +945,9 @@ function LiveBookingFlow({
             <DemoExceptionOverlay
               scenarioId={demoScenario}
               onResolve={handleResolveException}
+              onSendNotification={onSendNotification}
+              onAddInboxEmail={onAddInboxEmail}
+              onNavigateView={onNavigateView}
             />
           )}
 
@@ -1360,87 +1363,211 @@ function LiveBookingFlow({
 
 // ─── Demo Exception Overlay ──────────────────────────────────────────────────
 
-function DemoExceptionOverlay({ scenarioId, onResolve }: { scenarioId: string; onResolve: () => void }) {
+function DemoExceptionOverlay({ scenarioId, onResolve, onSendNotification, onAddInboxEmail, onNavigateView }: {
+  scenarioId: string; onResolve: () => void
+  onSendNotification?: (email: SentEmailItem) => void
+  onAddInboxEmail?: (email: { id: string; from: string; fromName: string; subject: string; body: string; timestamp: string; read: boolean; tag: string; tags: string[]; shipmentId: string; shipmentRef: string }) => void
+  onNavigateView?: (view: string) => void
+}) {
   const resolution = DEMO_EXCEPTION_RESOLUTIONS[scenarioId]
-  const [phase, setPhase] = useState<"showing" | "resolving" | "resolved">("showing")
+  const [phase, setPhase] = useState<"showing" | "resolving" | "email-compose" | "waiting-reply" | "carrier-select" | "confirm-switch" | "resolved">("showing")
   const [showModal, setShowModal] = useState(true)
-  // Animation states for missing-data
+  // Missing-data animation
   const [filledFields, setFilledFields] = useState<number[]>([])
-  // Animation states for portal-failure / carrier-rejection (auto-resolve stepper)
+  // Stepper (portal-failure, carrier-rejection)
   const [autoStep, setAutoStep] = useState(0)
-  // Rate-mismatch negotiation spinner
+  // Rate-mismatch negotiation
   const [negoProgress, setNegoProgress] = useState(0)
   const [negoStatus, setNegoStatus] = useState("")
   const [negoComplete, setNegoComplete] = useState(false)
+  // Email compose
+  const [emailBody, setEmailBody] = useState("")
+  // Selected carrier for capacity/rejection
+  const [selectedAltCarrier, setSelectedAltCarrier] = useState<string | null>(null)
 
   if (!resolution) return null
 
+  const makeTs = () => {
+    const now = new Date()
+    return `${now.toLocaleDateString("en", { month: "short", day: "numeric" })}, ${now.toLocaleTimeString("en", { hour: "2-digit", minute: "2-digit", hour12: false })}`
+  }
+
   const MISSING_FIELDS = [
-    { field: "Commodity HS Code", source: "SAP Material Master", value: "8471.30 — Laptop Parts", confidence: 99 },
-    { field: "Package Dimensions", source: "Historical Shipments (BKG-09812)", value: "60×40×30 cm / carton", confidence: 87 },
-    { field: "Shipper Contact", source: "Plant Directory", value: "Li Wei, +86 512 6688 7799", confidence: 95 },
+    { field: "Commodity HS Code", source: "SAP Material Master", value: "8471.30 — Laptop Parts", confidence: 99, aiResolved: true },
+    { field: "Package Dimensions", source: "Historical Shipments (BKG-09812)", value: "60×40×30 cm / carton", confidence: 87, aiResolved: true },
+    { field: "Shipper Contact", source: "Carrier Portal — Not Found", value: "", confidence: 0, aiResolved: false },
   ]
 
-  const handleResolve = () => {
-    if (phase !== "showing") return
-    setPhase("resolving")
+  const ALT_CARRIERS = [
+    { carrier: "Maersk (via Long Beach)", mode: "Ocean", rate: "$2,920", transit: "15 days", sla: "91%", reason: "Capacity available on vessel AE-1240. +1 day transit, +2.5% vs contract. SLA within target.", recommended: true },
+    { carrier: "MSC", mode: "Ocean", rate: "$2,720", transit: "16 days", sla: "87%", reason: "Lower rate but 2 extra transit days.", recommended: false },
+    { carrier: "DHL Express", mode: "Air", rate: "$8,400", transit: "3 days", sla: "98%", reason: "Fastest option. Premium rate — use only for urgent shipments.", recommended: false },
+  ]
 
-    if (scenarioId === "missing-data") {
-      // Progressive field fill animation
-      MISSING_FIELDS.forEach((_, idx) => {
-        setTimeout(() => setFilledFields((p) => [...p, idx]), 600 + idx * 800)
-      })
+  // ─── Scenario 1: Missing Data ─────────────────────────────────────────────
+  const handleResolveMissingData = () => {
+    setPhase("resolving")
+    // Fill first 2 fields (AI resolved), then pause for email flow on 3rd
+    setTimeout(() => setFilledFields([0]), 600)
+    setTimeout(() => setFilledFields([0, 1]), 1400)
+    setTimeout(() => {
+      // 3rd field not found — open email compose
+      setPhase("email-compose")
+      setEmailBody("Dear Suzhou Plant Team,\n\nWe are processing booking SAP-TM-87234 (SHA→LAX) and require the shipper contact information for this order.\n\nPlease confirm the primary shipper contact name and phone number for the Suzhou Plant facility.\n\nRegards,\nZero Touch Booking Agent")
+    }, 2200)
+  }
+
+  const handleSendMissingDataEmail = () => {
+    onSendNotification?.({ id: `DEMO-SENT-MD-${Date.now()}`, to: "plant-logistics@suzhou.company.com", subject: "Data Request: Shipper Contact for SAP-TM-87234", body: emailBody, timestamp: makeTs(), type: "plant" })
+    setPhase("waiting-reply")
+    // Simulate carrier reply after 1.5s
+    setTimeout(() => {
+      onAddInboxEmail?.({ id: `DEMO-INBOX-MD-${Date.now()}`, from: "li.wei@suzhou.company.com", fromName: "Li Wei (Suzhou Plant)", subject: "RE: Data Request: Shipper Contact for SAP-TM-87234", body: "Hi,\n\nShipper contact for SAP-TM-87234:\n\nName: Li Wei\nPhone: +86 512 6688 7799\nRole: Logistics Coordinator, Suzhou Plant\n\nPlease proceed with the booking.\n\nBest regards,\nLi Wei", timestamp: makeTs(), read: false, tag: "carrier", tags: ["carrier", "data-request"], shipmentId: "BKG-NEW-001", shipmentRef: "SAP-TM-87234" })
+      // Auto-fill the 3rd field
+      setFilledFields([0, 1, 2])
+      setPhase("resolved")
+      setTimeout(() => { setShowModal(false); onResolve() }, 1500)
+    }, 1500)
+  }
+
+  // ─── Scenario 2 & 5: No Capacity / Carrier Rejection → carrier select ──
+  const handleResolveWithCarrierSelect = () => {
+    setPhase("resolving")
+    setTimeout(() => setPhase("carrier-select"), 1200)
+  }
+
+  const handleConfirmCarrier = () => {
+    setPhase("resolved")
+    setTimeout(() => { setShowModal(false); onResolve() }, 1000)
+  }
+
+  // ─── Scenario 3: Portal Failure → confirm before switching ─────────────
+  const handleResolvePortalFailure = () => {
+    setPhase("confirm-switch")
+  }
+
+  const handleConfirmSwitch = () => {
+    setPhase("resolving")
+    const steps = ["Detecting outage scope — 47 shippers affected", "Switching to INTTRA EDI channel", "Resubmitting booking via EDI", "Confirmed — INTTRA-88421"]
+    steps.forEach((_, idx) => {
+      setTimeout(() => setAutoStep(idx + 1), 600 + idx * 1000)
+    })
+    setTimeout(() => {
+      setPhase("resolved")
+      setTimeout(() => { setShowModal(false); onResolve() }, 1000)
+    }, 600 + steps.length * 1000 + 400)
+  }
+
+  // ─── Scenario 4: Rate Mismatch → email compose → negotiation spinner ──
+  const handleResolveRateMismatch = () => {
+    setPhase("email-compose")
+    setEmailBody("Dear Maersk Booking Team,\n\nRe: Booking SAP-TM-87234 (SHA→LAX)\n\nThe quoted rate of $3,340/container is 19% above our contract rate of $2,800.\n\nBased on current market conditions (SHA→LAX 30-day avg: $3,480), we propose a counter-rate of $3,024/container (contract + 8% market adjustment).\n\nPlease confirm acceptance to proceed with booking.\n\nRegards,\nZero Touch Booking Agent")
+  }
+
+  const handleSendRateEmail = () => {
+    onSendNotification?.({ id: `DEMO-SENT-RM-${Date.now()}`, to: "rates@maersk.com", subject: "Counter-Offer: SAP-TM-87234 — $3,024/container (SHA→LAX)", body: emailBody, timestamp: makeTs(), type: "carrier" })
+    setPhase("resolving")
+    // Run negotiation spinner
+    const steps = [
+      { pct: 15, label: "Counter-offer submitted to Maersk..." },
+      { pct: 40, label: "Validating against market benchmarks..." },
+      { pct: 65, label: "Carrier reviewing terms..." },
+      { pct: 85, label: "Maersk accepted counter-offer..." },
+      { pct: 100, label: "Rate confirmed at $3,024/container." },
+    ]
+    steps.forEach((s, idx) => {
+      setTimeout(() => { setNegoProgress(s.pct); setNegoStatus(s.label) }, idx * 1000)
+    })
+    setTimeout(() => {
+      setNegoComplete(true)
+      // Add reply email to inbox
+      onAddInboxEmail?.({ id: `DEMO-INBOX-RM-${Date.now()}`, from: "rates@maersk.com", fromName: "Maersk Rate Desk", subject: "RE: Counter-Offer Accepted — $3,024/container (SHA→LAX)", body: "Dear Customer,\n\nWe accept your counter-offer.\n\nConfirmed Rate: $3,024/container\nRoute: SHA→LAX\nBooking: SAP-TM-87234\n\nPlease proceed with booking submission.\n\nMaersk Rate Desk", timestamp: makeTs(), read: false, tag: "carrier", tags: ["carrier", "rate"], shipmentId: "BKG-NEW-001", shipmentRef: "SAP-TM-87234" })
       setTimeout(() => {
         setPhase("resolved")
         setTimeout(() => { setShowModal(false); onResolve() }, 1200)
-      }, 600 + MISSING_FIELDS.length * 800 + 400)
-    } else if (scenarioId === "portal-failure" || scenarioId === "carrier-rejection") {
-      // Auto-resolve stepper animation (no user click needed)
-      const steps = scenarioId === "portal-failure"
-        ? ["Detecting outage scope...", "Switching to EDI channel...", "Resubmitting booking...", "Confirmed"]
-        : ["Checking equipment availability...", "Evaluating 3 carriers...", "Submitting to MSC...", "Confirmed"]
-      steps.forEach((_, idx) => {
-        setTimeout(() => setAutoStep(idx + 1), 800 + idx * 1200)
-      })
-      setTimeout(() => {
-        setPhase("resolved")
-        setTimeout(() => { setShowModal(false); onResolve() }, 1000)
-      }, 800 + steps.length * 1200 + 400)
-    } else if (scenarioId === "rate-mismatch") {
-      // Negotiation spinner flow (GSSN-style)
-      const steps = [
-        { pct: 10, label: "Analyzing market rate benchmarks..." },
-        { pct: 30, label: "Validating contract terms..." },
-        { pct: 55, label: "Calculating optimal counter-offer..." },
-        { pct: 80, label: "Submitting counter at $3,024..." },
-        { pct: 100, label: "Carrier response received." },
-      ]
-      steps.forEach((s, idx) => {
-        setTimeout(() => { setNegoProgress(s.pct); setNegoStatus(s.label) }, idx * 1000)
-      })
-      setTimeout(() => {
-        setNegoComplete(true)
-        setTimeout(() => {
-          setPhase("resolved")
-          setTimeout(() => { setShowModal(false); onResolve() }, 1200)
-        }, 1500)
-      }, steps.length * 1000 + 500)
-    } else {
-      // Standard resolve animation (no-capacity)
-      setTimeout(() => {
-        setPhase("resolved")
-        setTimeout(() => { setShowModal(false); onResolve() }, 800)
       }, 1500)
-    }
+    }, steps.length * 1000 + 500)
   }
 
-  // Auto-trigger resolve for portal-failure and carrier-rejection (zero touch)
-  useEffect(() => {
-    if ((scenarioId === "portal-failure" || scenarioId === "carrier-rejection") && phase === "showing") {
-      const t = setTimeout(() => handleResolve(), 2000) // Auto-start after 2s
-      return () => clearTimeout(t)
-    }
-  }, [scenarioId, phase])
+  // Main resolve dispatcher
+  const handleResolve = () => {
+    if (scenarioId === "missing-data") handleResolveMissingData()
+    else if (scenarioId === "no-capacity") handleResolveWithCarrierSelect()
+    else if (scenarioId === "portal-failure") handleResolvePortalFailure()
+    else if (scenarioId === "rate-mismatch") handleResolveRateMismatch()
+    else if (scenarioId === "carrier-rejection") handleResolveWithCarrierSelect()
+  }
+
+
+  // ─── Email Compose Modal (shared by missing-data and rate-mismatch) ──────
+  const emailComposeContent = (
+    <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Compose Email</div>
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 text-[11px] text-gray-500">
+          To: <span className="text-gray-700 font-medium">{scenarioId === "rate-mismatch" ? "rates@maersk.com" : "plant-logistics@suzhou.company.com"}</span>
+        </div>
+        <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 text-[11px] text-gray-500">
+          Subject: <span className="text-gray-700 font-medium">{scenarioId === "rate-mismatch" ? "Counter-Offer: SAP-TM-87234 — $3,024/container" : "Data Request: Shipper Contact for SAP-TM-87234"}</span>
+        </div>
+        <textarea
+          value={emailBody}
+          onChange={(e) => setEmailBody(e.target.value)}
+          className="w-full px-3 py-2.5 text-[12px] text-gray-700 leading-relaxed min-h-[140px] focus:outline-none resize-none"
+        />
+      </div>
+    </div>
+  )
+
+  // ─── Carrier Selection Panel (shared by no-capacity and carrier-rejection) ─
+  const carrierSelectContent = (
+    <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Select Alternative Carrier</div>
+      <div className="space-y-2">
+        {ALT_CARRIERS.map((c) => (
+          <button
+            key={c.carrier}
+            onClick={() => setSelectedAltCarrier(c.carrier)}
+            className={cn("w-full text-left p-3 rounded-lg border transition-all",
+              selectedAltCarrier === c.carrier ? "border-blue-400 bg-blue-50 ring-1 ring-blue-200" : "border-gray-200 bg-white hover:border-blue-300"
+            )}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <span className="text-[13px] font-bold text-gray-800">{c.carrier}</span>
+                <span className={cn("text-[9px] px-1.5 py-0.5 rounded-full font-semibold", c.mode === "Ocean" ? "bg-blue-100 text-blue-700" : "bg-sky-100 text-sky-700")}>{c.mode}</span>
+                {c.recommended && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-bold">AI Recommended</span>}
+              </div>
+              <span className="text-[14px] font-bold text-gray-800">{c.rate}</span>
+            </div>
+            <div className="flex items-center gap-3 text-[10px] text-gray-500">
+              <span>Transit: {c.transit}</span><span>SLA: {c.sla}</span>
+            </div>
+            <div className="text-[10px] text-gray-400 mt-1">{c.reason}</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+
+  // ─── Confirm Switch Dialog (portal-failure) ────────────────────────────────
+  const confirmSwitchContent = (
+    <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+        <div className="flex items-center gap-2 mb-2">
+          <Brain size={16} className="text-blue-600" />
+          <span className="text-[13px] font-bold text-blue-800">Switch to Backup Channel?</span>
+        </div>
+        <div className="text-[12px] text-blue-700 leading-relaxed">
+          Maersk Portal is down (HTTP 503). AI recommends switching to <span className="font-bold">INTTRA EDI channel</span> to resubmit the booking. This is a verified backup channel with 99.9% uptime.
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2 text-center">
+          <div className="p-2 bg-white rounded border border-blue-200"><span className="text-[10px] text-gray-400">Current</span><div className="text-[12px] font-bold text-red-600">Maersk Portal ✕</div></div>
+          <div className="p-2 bg-white rounded border border-blue-200"><span className="text-[10px] text-gray-400">Backup</span><div className="text-[12px] font-bold text-emerald-600">INTTRA EDI ✓</div></div>
+        </div>
+      </div>
+    </div>
+  )
 
   const scenarioContent: Record<string, React.ReactNode> = {
     "missing-data": (
@@ -1449,16 +1576,17 @@ function DemoExceptionOverlay({ scenarioId, onResolve }: { scenarioId: string; o
         <div className="space-y-2">
           {MISSING_FIELDS.map((f, idx) => {
             const isFilled = filledFields.includes(idx)
-            const isScanning = phase === "resolving" && !isFilled
+            const isScanning = phase === "resolving" && !isFilled && f.aiResolved
+            const isEmailNeeded = !f.aiResolved && phase === "resolving"
             return (
               <div key={f.field} className={cn(
                 "flex items-center gap-3 p-3 rounded-lg border transition-all duration-500",
-                isFilled ? "bg-emerald-50 border-emerald-300" : isScanning ? "bg-blue-50 border-blue-300 animate-pulse" : "bg-white border-gray-200"
+                isFilled ? "bg-emerald-50 border-emerald-300" : isScanning ? "bg-blue-50 border-blue-300 animate-pulse" : isEmailNeeded ? "bg-amber-50 border-amber-300" : "bg-white border-gray-200"
               )}>
                 <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors duration-500",
-                  isFilled ? "bg-emerald-100" : "bg-amber-100"
+                  isFilled ? "bg-emerald-100" : isEmailNeeded ? "bg-amber-100" : isScanning ? "bg-blue-100" : "bg-amber-100"
                 )}>
-                  {isFilled ? <CheckCircle size={14} className="text-emerald-600" /> : isScanning ? <Loader2 size={14} className="text-blue-500 animate-spin" /> : <AlertTriangle size={14} className="text-amber-600" />}
+                  {isFilled ? <CheckCircle size={14} className="text-emerald-600" /> : isScanning ? <Loader2 size={14} className="text-blue-500 animate-spin" /> : isEmailNeeded ? <Mail size={14} className="text-amber-600" /> : <AlertTriangle size={14} className="text-amber-600" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[12px] font-semibold text-gray-800">{f.field}</div>
@@ -1467,9 +1595,11 @@ function DemoExceptionOverlay({ scenarioId, onResolve }: { scenarioId: string; o
                 <div className="text-right shrink-0">
                   {isFilled ? (
                     <div className="animate-in fade-in slide-in-from-right-2 duration-300">
-                      <div className="text-[11px] font-semibold text-emerald-700">{f.value}</div>
-                      <div className="text-[9px] text-emerald-500 font-medium">{f.confidence}% match</div>
+                      <div className="text-[11px] font-semibold text-emerald-700">{f.value || "Li Wei, +86 512 6688 7799"}</div>
+                      <div className="text-[9px] text-emerald-500 font-medium">{f.confidence || 95}% match</div>
                     </div>
+                  ) : isEmailNeeded ? (
+                    <div className="text-[10px] text-amber-600 font-medium">Email Required</div>
                   ) : isScanning ? (
                     <div className="text-[10px] text-blue-500 font-medium">Searching...</div>
                   ) : (
@@ -1480,11 +1610,18 @@ function DemoExceptionOverlay({ scenarioId, onResolve }: { scenarioId: string; o
             )
           })}
         </div>
+        {phase === "email-compose" && emailComposeContent}
+        {phase === "waiting-reply" && (
+          <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg border border-blue-200 animate-pulse">
+            <Loader2 size={14} className="text-blue-500 animate-spin" />
+            <span className="text-[12px] font-medium text-blue-600">Waiting for carrier reply<ThinkingDots /></span>
+          </div>
+        )}
         {phase === "resolved" && (
           <div className="bg-emerald-50 rounded-lg px-4 py-3 border border-emerald-200 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <div className="flex items-center gap-2">
               <CheckCircle size={16} className="text-emerald-600" />
-              <span className="text-[13px] font-bold text-emerald-700">3/3 Fields Resolved in 2.4s</span>
+              <span className="text-[13px] font-bold text-emerald-700">3/3 Fields Resolved — 2 by AI, 1 via email</span>
             </div>
           </div>
         )}
@@ -1507,28 +1644,15 @@ function DemoExceptionOverlay({ scenarioId, onResolve }: { scenarioId: string; o
             </div>
           ))}
         </div>
-        <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mt-2">AI Alternative Route</div>
-        <div className={cn("p-3 rounded-lg border transition-all", phase === "resolved" ? "bg-emerald-50 border-emerald-300 ring-1 ring-emerald-200" : "bg-blue-50 border-blue-200")}>
-          <div className="flex items-center justify-between">
-            <div>
-              <div className={cn("text-[13px] font-bold", phase === "resolved" ? "text-emerald-800" : "text-blue-800")}>SHA → Long Beach (LGB)</div>
-              <div className={cn("text-[11px]", phase === "resolved" ? "text-emerald-600" : "text-blue-600")}>via Maersk, vessel AE-1240, sailing Mar 23</div>
-            </div>
-            <div className="text-right">
-              <div className={cn("text-[14px] font-bold", phase === "resolved" ? "text-emerald-800" : "text-blue-800")}>$2,920</div>
-              <div className="text-[10px] text-blue-500">+2.5% vs contract</div>
+        {phase === "carrier-select" && carrierSelectContent}
+        {phase === "resolved" && (
+          <div className="bg-emerald-50 rounded-lg px-4 py-3 border border-emerald-200 animate-in fade-in duration-300">
+            <div className="flex items-center gap-2">
+              <CheckCircle size={16} className="text-emerald-600" />
+              <span className="text-[12px] font-bold text-emerald-700">Rerouted via {selectedAltCarrier}. Booking submitted.</span>
             </div>
           </div>
-          <div className="flex items-center gap-4 mt-2 text-[10px] text-blue-600">
-            <span>Transit: +1 day</span><span>Capacity: Available</span><span>SLA: within target</span>
-          </div>
-          {phase === "resolved" && (
-            <div className="mt-2 pt-2 border-t border-emerald-200 flex items-center gap-2 animate-in fade-in duration-300">
-              <CheckCircle size={13} className="text-emerald-600" />
-              <span className="text-[11px] font-bold text-emerald-700">Reroute approved. Booking submitted.</span>
-            </div>
-          )}
-        </div>
+        )}
       </div>
     ),
     "portal-failure": (
@@ -1548,8 +1672,8 @@ function DemoExceptionOverlay({ scenarioId, onResolve }: { scenarioId: string; o
             </div>
           ))}
         </div>
-        {/* Auto-resolve stepper */}
-        {phase !== "showing" && (
+        {phase === "confirm-switch" && confirmSwitchContent}
+        {(phase === "resolving" || phase === "resolved") && (
           <div className="space-y-2 mt-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">AI Failover Sequence</div>
             {["Detecting outage scope — 47 shippers affected", "Switching to INTTRA EDI channel", "Resubmitting booking via EDI", "Confirmed — INTTRA-88421"].map((step, idx) => (
@@ -1581,40 +1705,27 @@ function DemoExceptionOverlay({ scenarioId, onResolve }: { scenarioId: string; o
             <div className="text-[10px] text-red-500">+19% premium</div>
           </div>
         </div>
-        <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
-          <div className="flex items-center justify-between">
-            <span className="text-[12px] font-semibold text-amber-800">Overspend per booking</span>
-            <span className="text-[14px] font-bold text-red-700">$1,080</span>
-          </div>
-          <div className="flex items-center justify-between mt-1">
-            <span className="text-[11px] text-amber-600">Auto-approval threshold: 5%</span>
-            <span className="text-[11px] font-semibold text-red-600">Exceeded (19%)</span>
-          </div>
-        </div>
-        {/* Negotiation spinner — GSSN-style dark themed */}
-        {phase !== "showing" && (
+        {phase === "email-compose" && emailComposeContent}
+        {(phase === "resolving" || phase === "resolved") && (
           <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
             <div className="p-4 bg-[#0f1623] rounded-xl border border-slate-700 mt-3">
               <div className="flex items-center gap-2 mb-3">
                 {negoComplete ? <CheckCircle size={16} className="text-emerald-400" /> : <Brain size={16} className="text-violet-400 animate-pulse" />}
                 <span className="text-[13px] font-bold text-white">{negoComplete ? "Negotiation Complete" : "AI Negotiating Rate"}</span>
               </div>
-              {/* Progress bar */}
               <div className="h-2 bg-slate-800 rounded-full overflow-hidden mb-2">
                 <div className={cn("h-full rounded-full transition-all duration-700 ease-out", negoComplete ? "bg-emerald-500" : "bg-violet-500")} style={{ width: `${negoProgress}%` }} />
               </div>
               <div className="text-[11px] text-slate-400 mb-3">{negoStatus}</div>
-
-              {/* Result rows — fade in after complete */}
               {negoComplete && (
                 <div className="space-y-1.5 animate-in fade-in duration-300">
                   {[
-                    { label: "Market Rate (SHA→LAX, 30d avg)", value: "$3,480", badge: "Benchmark", color: "text-slate-300" },
+                    { label: "Market Rate (30d avg)", value: "$3,480", badge: "Benchmark", color: "text-slate-300" },
                     { label: "Carrier Quote", value: "$3,340", badge: "-4% vs market", color: "text-amber-300" },
-                    { label: "AI Counter-Offer", value: "$3,024", badge: "Sent", color: "text-violet-300" },
+                    { label: "Counter-Offer", value: "$3,024", badge: "Sent", color: "text-violet-300" },
                     { label: "Carrier Accepted", value: "$3,024", badge: "Accepted", color: "text-emerald-300" },
                   ].map((r, idx) => (
-                    <div key={idx} className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-slate-800/50" style={{ animationDelay: `${idx * 150}ms` }}>
+                    <div key={idx} className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-slate-800/50">
                       <div className="flex items-center gap-2">
                         {r.badge === "Accepted" ? <CheckCircle size={12} className="text-emerald-400" /> : <div className="w-3 h-3 rounded-full border border-slate-600" />}
                         <span className={cn("text-[11px] font-medium", r.color)}>{r.label}</span>
@@ -1628,7 +1739,7 @@ function DemoExceptionOverlay({ scenarioId, onResolve }: { scenarioId: string; o
                     </div>
                   ))}
                   <div className="mt-2 px-2 py-1.5 bg-emerald-900/30 rounded-lg border border-emerald-800/50">
-                    <span className="text-[11px] text-emerald-300 font-medium">Savings: <span className="font-bold">$316/container</span> ($632 total) vs original quote</span>
+                    <span className="text-[11px] text-emerald-300 font-medium">Savings: <span className="font-bold">$316/container</span> ($632 total)</span>
                   </div>
                 </div>
               )}
@@ -1647,41 +1758,85 @@ function DemoExceptionOverlay({ scenarioId, onResolve }: { scenarioId: string; o
             ))}
           </div>
         </div>
-        {/* Auto-rebook stepper */}
-        {phase !== "showing" && (
-          <div className="space-y-2 mt-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">AI Auto-Rebook</div>
-            {["Checking 40' HC availability across 4 carriers", "MSC: 40' HC available on MSC-ANNA (Mar 23)", "Submitting booking to MSC", "Confirmed — MSC-BK-44219"].map((step, idx) => (
-              <div key={idx} className={cn("flex items-center gap-3 p-2.5 rounded-lg border transition-all duration-300",
-                autoStep > idx ? "bg-emerald-50 border-emerald-200" : autoStep === idx ? "bg-blue-50 border-blue-200 animate-pulse" : "bg-gray-50 border-gray-100"
-              )}>
-                {autoStep > idx ? <CheckCircle size={14} className="text-emerald-600 shrink-0" /> :
-                 autoStep === idx ? <Loader2 size={14} className="text-blue-500 animate-spin shrink-0" /> :
-                 <div className="w-3.5 h-3.5 rounded-full border-2 border-gray-300 shrink-0" />}
-                <span className={cn("text-[12px] font-medium", autoStep > idx ? "text-emerald-700" : autoStep === idx ? "text-blue-700" : "text-gray-400")}>{step}</span>
-              </div>
-            ))}
-            {phase === "resolved" && (
-              <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200 animate-in fade-in duration-300">
-                <div className="flex items-center gap-2 mb-1">
-                  <CheckCircle size={14} className="text-emerald-600" />
-                  <span className="text-[12px] font-bold text-emerald-700">Re-booked in 12s — No human intervention required</span>
-                </div>
-                <div className="grid grid-cols-3 gap-2 text-center mt-2">
-                  {[["New Carrier", "MSC"], ["Rate", "$2,720"], ["Equipment", "40' HC ✓"]].map(([l, v]) => (
-                    <div key={l}><span className="text-[10px] text-emerald-500">{l}</span><div className="text-[12px] font-bold text-emerald-800">{v}</div></div>
-                  ))}
-                </div>
-              </div>
-            )}
+        {phase === "carrier-select" && carrierSelectContent}
+        {phase === "resolved" && (
+          <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200 animate-in fade-in duration-300">
+            <div className="flex items-center gap-2">
+              <CheckCircle size={14} className="text-emerald-600" />
+              <span className="text-[12px] font-bold text-emerald-700">Re-booked with {selectedAltCarrier || "MSC"}</span>
+            </div>
           </div>
         )}
       </div>
     ),
   }
 
-  // For portal-failure and carrier-rejection, the footer shows auto-resolve status instead of buttons
-  const isAutoResolve = scenarioId === "portal-failure" || scenarioId === "carrier-rejection"
+  // ─── Dynamic Footer ────────────────────────────────────────────────────────
+  const renderFooter = () => {
+    if (phase === "resolved") {
+      return (
+        <div className="flex items-center gap-2 justify-center py-1">
+          <CheckCircle size={14} className="text-emerald-600" />
+          <span className="text-[12px] font-semibold text-emerald-600">Exception resolved — continuing booking flow</span>
+        </div>
+      )
+    }
+    if (phase === "email-compose") {
+      return (
+        <div className="flex justify-end">
+          <button onClick={scenarioId === "rate-mismatch" ? handleSendRateEmail : handleSendMissingDataEmail} className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white text-[13px] font-semibold rounded-lg hover:bg-blue-700 transition-colors">
+            <Send size={13} /> Send Email
+          </button>
+        </div>
+      )
+    }
+    if (phase === "waiting-reply") {
+      return (
+        <div className="flex items-center gap-2 justify-center py-1">
+          <Loader2 size={14} className="text-blue-500 animate-spin" />
+          <span className="text-[12px] font-medium text-blue-600">Awaiting reply<ThinkingDots /></span>
+        </div>
+      )
+    }
+    if (phase === "carrier-select") {
+      return (
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-gray-400">{selectedAltCarrier ? `Selected: ${selectedAltCarrier}` : "Select a carrier to continue"}</span>
+          <button onClick={handleConfirmCarrier} disabled={!selectedAltCarrier} className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white text-[13px] font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-40">
+            <Check size={14} /> Confirm & Book
+          </button>
+        </div>
+      )
+    }
+    if (phase === "confirm-switch") {
+      return (
+        <div className="flex items-center gap-2 justify-end">
+          <button onClick={() => setPhase("showing")} className="px-4 py-2 border border-gray-300 text-gray-600 text-[12px] font-medium rounded-lg hover:bg-gray-50 transition-colors">Cancel</button>
+          <button onClick={handleConfirmSwitch} className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white text-[13px] font-semibold rounded-lg hover:bg-blue-700 transition-colors">
+            <Check size={14} /> Confirm Switch to EDI
+          </button>
+        </div>
+      )
+    }
+    if (phase === "resolving") {
+      return (
+        <div className="flex items-center gap-2 justify-center py-1">
+          <Loader2 size={14} className="text-blue-500 animate-spin" />
+          <span className="text-[12px] font-medium text-blue-600">AI resolving<ThinkingDots /></span>
+        </div>
+      )
+    }
+    return (
+      <div className="flex items-center gap-2 justify-between">
+        <div className="flex items-center gap-2">
+          {resolution.alternatives.map((alt, idx) => (
+            <button key={idx} onClick={handleResolve} className="px-3 py-2 border border-gray-300 text-gray-600 text-[12px] font-medium rounded-lg hover:bg-gray-50 transition-colors">{alt.label}</button>
+          ))}
+        </div>
+        <button onClick={handleResolve} className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white text-[13px] font-semibold rounded-lg hover:bg-blue-700 transition-colors"><Sparkles size={13} /> {resolution.resolveLabel}</button>
+      </div>
+    )
+  }
 
   return (
     <DemoModal
@@ -1691,49 +1846,13 @@ function DemoExceptionOverlay({ scenarioId, onResolve }: { scenarioId: string; o
       icon={<div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center"><AlertTriangle size={18} className="text-amber-600" /></div>}
       width="2xl"
       showClose={false}
-      footer={
-        isAutoResolve ? (
-          <div className="flex items-center gap-2 justify-center py-1">
-            {phase === "resolved" ? (
-              <span className="text-[12px] font-semibold text-emerald-600 flex items-center gap-1.5"><CheckCircle size={14} /> Exception resolved autonomously</span>
-            ) : phase === "resolving" ? (
-              <span className="text-[12px] font-medium text-blue-600 flex items-center gap-1.5"><Brain size={14} className="animate-pulse" /> AI agent resolving autonomously<ThinkingDots /></span>
-            ) : (
-              <span className="text-[12px] text-gray-500 flex items-center gap-1.5"><Brain size={14} className="animate-pulse" /> AI agent analyzing<ThinkingDots /></span>
-            )}
-          </div>
-        ) : phase === "resolved" ? (
-          <div className="flex items-center gap-2 justify-center py-1">
-            <CheckCircle size={14} className="text-emerald-600" />
-            <span className="text-[12px] font-semibold text-emerald-600">Exception resolved — continuing booking flow</span>
-          </div>
-        ) : phase === "resolving" ? (
-          <div className="flex items-center gap-2 justify-center py-1">
-            <Loader2 size={14} className="text-blue-500 animate-spin" />
-            <span className="text-[12px] font-medium text-blue-600">AI resolving<ThinkingDots /></span>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 justify-between">
-            <div className="flex items-center gap-2">
-              {resolution.alternatives.map((alt, idx) => (
-                <button key={idx} onClick={handleResolve} className="px-3 py-2 border border-gray-300 text-gray-600 text-[12px] font-medium rounded-lg hover:bg-gray-50 transition-colors">{alt.label}</button>
-              ))}
-            </div>
-            <button onClick={handleResolve} className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white text-[13px] font-semibold rounded-lg hover:bg-blue-700 transition-colors"><Sparkles size={13} /> {resolution.resolveLabel}</button>
-          </div>
-        )
-      }
+      footer={renderFooter()}
     >
-      {/* Impact panel */}
       <div className="bg-amber-50 rounded-lg px-4 py-3 border border-amber-200 mb-4">
         <div className="text-[10px] font-bold text-amber-600 uppercase tracking-wider mb-1">Impact Assessment</div>
         <div className="text-[12px] text-amber-800">{resolution.impact}</div>
       </div>
-
-      {/* Scenario-specific rich content with animations */}
       {scenarioContent[scenarioId]}
-
-      {/* AI Recommendation — only show in "showing" phase */}
       {phase === "showing" && (
         <div className="bg-blue-50 rounded-lg px-4 py-3 border border-blue-200 mt-4">
           <div className="flex items-center gap-1.5 mb-1">
@@ -1746,7 +1865,6 @@ function DemoExceptionOverlay({ scenarioId, onResolve }: { scenarioId: string; o
     </DemoModal>
   )
 }
-
 // ─── Unified Overview (Req 6: All content in single scrollable view) ──────
 
 function OverviewTab({ shipment, actions, onApprove, resuming, resumed, onResumeWorkflow,

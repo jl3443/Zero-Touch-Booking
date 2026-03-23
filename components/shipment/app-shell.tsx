@@ -47,6 +47,7 @@ export function AppShell({ persona }: { persona?: Persona }) {
   const [dynamicInboxEmails, setDynamicInboxEmails] = useState<Array<{ id: string; from: string; fromName: string; subject: string; body: string; timestamp: string; read: boolean; tag: string; tags: string[]; shipmentId: string; shipmentRef: string }>>([])
   const [sapAutoOpenOrderId, setSapAutoOpenOrderId] = useState<string | null>(null)
   const [emailAutoSelectId, setEmailAutoSelectId] = useState<string | null>(null)
+  const [demoReturnedFromInbox, setDemoReturnedFromInbox] = useState(false)
 
   const handleAddInboxEmail = (email: typeof dynamicInboxEmails[0]) => {
     setDynamicInboxEmails((prev) => [email, ...prev])
@@ -130,7 +131,7 @@ export function AppShell({ persona }: { persona?: Persona }) {
   }
 
   const exceptionsCount = BOOKING_REQUESTS.filter((s) => s.bookingStatus === "Exception" || s.bookingStatus === "Awaiting Approval").filter((s) => !resolvedExceptionIds.has(s.id)).length
-  const unreadInboxCount = INBOX_EMAILS.filter((e) => !e.read && !readEmailIds.has(e.id)).length
+  const unreadInboxCount = INBOX_EMAILS.filter((e) => !e.read && !readEmailIds.has(e.id)).length + dynamicInboxEmails.filter((e) => !e.read && !readEmailIds.has(e.id)).length
 
   const handleViewChange = (v: SidebarView, opts?: { sapOrderId?: string; emailId?: string }) => {
     setViewHistory((prev) => [...prev, { view }])
@@ -225,6 +226,8 @@ export function AppShell({ persona }: { persona?: Persona }) {
                 onDemoShipmentDismiss={() => setDemoShipmentVisible(false)}
                 onDemoComplete={handleDemoComplete}
                 onAddInboxEmail={handleAddInboxEmail}
+                demoReturnedFromInbox={demoReturnedFromInbox}
+                onDemoReturnedFromInboxConsumed={() => setDemoReturnedFromInbox(false)}
                 demoZoomActive={demoZoomActive}
                 showCompletionModal={showCompletionModal}
                 onCloseCompletionModal={() => { setShowCompletionModal(false); handleStopDemo() }}
@@ -270,12 +273,19 @@ export function AppShell({ persona }: { persona?: Persona }) {
                 onMarkRead={handleMarkEmailRead}
                 dynamicEmails={dynamicInboxEmails}
                 onReturnToFlow={() => {
-                  // Resolve the exception and return to dashboard
-                  setDemoExceptionActive(false)
-                  // Advance demo step past the exception
-                  handleDemoStepAdvance(demoStep + 1)
-                  handleViewChange("dashboard")
-                  setDemoShipmentVisible(true)
+                  if (demoScenario === "rate-mismatch") {
+                    // Rate mismatch: return to dashboard to show negotiation spinner
+                    // Do NOT resolve exception yet — spinner will resolve it
+                    setDemoReturnedFromInbox(true)
+                    handleViewChange("dashboard")
+                    setDemoShipmentVisible(true)
+                  } else {
+                    // All other scenarios: resolve and advance
+                    setDemoExceptionActive(false)
+                    handleDemoStepAdvance(demoStep + 1)
+                    handleViewChange("dashboard")
+                    setDemoShipmentVisible(true)
+                  }
                 }}
               />
             )}

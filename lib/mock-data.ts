@@ -225,62 +225,6 @@ const CARRIER_OPTIONS_HKG_RTM: CarrierOption[] = [
   { carrier: "MSC", rate: 2800, contractRate: 2850, transitDays: 22, capacity: "Available", sla: 86, lanePerformance: 88, recommended: false },
 ]
 
-// ── Simulation Booking (for Live Agent Demo) ─────────────────────────────
-
-const CARRIER_OPTIONS_NGB_HAM: CarrierOption[] = [
-  { carrier: "Maersk", rate: 2850, contractRate: 2800, transitDays: 14, capacity: "Available", sla: 92, lanePerformance: 94, recommended: true, reason: "Best combination of rate, SLA, and capacity on NGB→HAM lane" },
-  { carrier: "Hapag-Lloyd", rate: 2950, contractRate: 2900, transitDays: 13, capacity: "Available", sla: 90, lanePerformance: 91, recommended: false, reason: "Faster transit but higher rate" },
-  { carrier: "MSC", rate: 2700, contractRate: 2750, transitDays: 17, capacity: "Available", sla: 86, lanePerformance: 88, recommended: false, reason: "Lowest rate but 3 extra transit days" },
-  { carrier: "CMA-CGM", rate: 3100, contractRate: 3000, transitDays: 15, capacity: "Limited", sla: 89, lanePerformance: 87, recommended: false, reason: "Limited capacity on current sailing" },
-]
-
-export const SIMULATION_BOOKING: BookingRequest = {
-  id: "BKG-SIM-01",
-  mode: "Ocean",
-  carrier: "Maersk",
-  bookingRef: "MAEU2462110",
-  vesselSchedule: "Maersk Sealand — Sailing Mar 21",
-  containerType: "40' HC",
-  origin: "Ningbo, CN",
-  destination: "Hamburg, DE",
-  plant: "Hamburg Distribution Center",
-  bookingStatus: "Pending",
-  requestedDate: "Mar 13, 2025 09:30",
-  targetShipDate: "Mar 21, 2025",
-  severity: "High",
-  exceptionType: "None",
-  approvalType: "None",
-  lane: "NGB→HAM",
-  sapOrderRef: "SAP-TM-44862",
-  agentSummary: "Zero Touch Booking in progress — AI agent processing SAP TM requirement autonomously.",
-  workflowSteps: makeWorkflowSteps(1),
-  carrierOptions: CARRIER_OPTIONS_NGB_HAM,
-  reasonChips: [
-    { label: "AI Simulation", type: "booking" },
-    { label: "Zero-Touch", type: "booking" },
-    { label: "On Contract", type: "rate" },
-  ],
-  timeline: [
-    { timestamp: "Mar 13 09:30", event: "Shipment requirement ingested from SAP TM", location: "SAP TM", source: "SAP TM", status: "ok" },
-  ],
-  sources: [
-    { source: "SAP TM", status: "Requirement Received", timestamp: "Mar 13 09:30", freshness: "Just now", aligned: true, fresh: true },
-  ],
-  currentStatus: "Processing SAP Requirement",
-  recommendedAction: "AI agent processing — no action required",
-  notificationStatus: "Not Yet Sent",
-  otmStatus: "Pending Update",
-  etaConfidence: 85,
-  delayHours: 0,
-  trackingRef: "—",
-  plannedETA: "Mar 21, 2025",
-  revisedETA: "Mar 21, 2025",
-  lastSignal: "Just now",
-  lastSignalSource: "SAP TM",
-  lat: 29.87,
-  lng: 121.54,
-}
-
 // ── 8 Booking Requests ───────────────────────────────────────────────────
 
 export const BOOKING_REQUESTS: BookingRequest[] = [
@@ -1161,17 +1105,6 @@ function emailName(email: string) {
 
 export const INBOX_EMAILS: InboxEmail[] = [
   {
-    id: "EM-SIM",
-    from: "sap-workflow@company.com",
-    fromName: emailName("sap-workflow@company.com"),
-    subject: "New Shipment Requirement — SAP-TM-44862 (NGB→HAM)",
-    body: "A new shipment requirement has been created in SAP TM.\n\nOrder: SAP-TM-44862\nOrigin: Ningbo, CN\nDestination: Hamburg, DE\nMode: Ocean\nTarget Ship Date: Mar 21, 2025\nContainer: 40' HC\nPriority: High — Production Critical\nCargo: Electronic Components\nWeight: 18,200 kg\n\nThis requirement has been flagged for autonomous processing by the Zero Touch Booking Agent.",
-    timestamp: "Today, 09:30",
-    read: false,
-    tag: "sap",
-    tags: ["sap", "booking"],
-  },
-  {
     id: "EM-001",
     from: "sap-workflow@company.com",
     fromName: emailName("sap-workflow@company.com"),
@@ -1746,174 +1679,235 @@ export const BOOKING_FUNNEL_EXTENDED = [
 ]
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Phase 2: Automation Rules Data
+// DEMO MODE — Live Booking Flow Data
 // ══════════════════════════════════════════════════════════════════════════════
 
-export interface CarrierSelectionWeight {
-  factor: string
-  weight: number
+export interface DemoScenario {
+  id: string
+  label: string
   description: string
-}
-
-export interface AutoApprovalThreshold {
-  rule: string
-  threshold: string
-  currentValue: string
-  enabled: boolean
-}
-
-export interface LanePreference {
-  lane: string
-  mode: TransportMode
-  preferredCarrier: string
-  fallbackCarrier: string
-  maxAcceptableRate: number
-  autoApprove: boolean
-}
-
-export interface EscalationRule {
-  id: string
-  condition: string
+  exceptionAtStep: number | null // which step triggers exception (null = happy path)
+  exceptionType: BookingExceptionType
   severity: Severity
-  action: string
-  enabled: boolean
-  triggerCount30d: number
 }
 
-export const CARRIER_SELECTION_WEIGHTS: CarrierSelectionWeight[] = [
-  { factor: "Rate Competitiveness", weight: 40, description: "Contract vs spot rate variance and overall cost efficiency" },
-  { factor: "SLA Compliance", weight: 30, description: "On-time performance, booking success rate, and transit reliability" },
-  { factor: "Capacity Availability", weight: 20, description: "Current equipment and vessel availability on requested lanes" },
-  { factor: "Historical Performance", weight: 10, description: "Lane-specific track record, exception rate, and dispute history" },
+export const DEMO_SCENARIOS: DemoScenario[] = [
+  { id: "happy-path", label: "Happy Path", description: "Full zero-touch booking — no exceptions", exceptionAtStep: null, exceptionType: "None", severity: "Low" },
+  { id: "missing-data", label: "Missing Data", description: "SAP order missing required fields", exceptionAtStep: 1, exceptionType: "Missing Booking Fields", severity: "Medium" },
+  { id: "no-capacity", label: "No Carrier Capacity", description: "All preferred carriers fully booked", exceptionAtStep: 2, exceptionType: "Missing Allocation", severity: "High" },
+  { id: "portal-failure", label: "Portal Failure", description: "Carrier portal connection timeout", exceptionAtStep: 3, exceptionType: "Portal Unavailable", severity: "High" },
+  { id: "rate-mismatch", label: "Rate Mismatch", description: "Quoted rate exceeds contract by 19%", exceptionAtStep: 4, exceptionType: "Rate Mismatch", severity: "Medium" },
+  { id: "carrier-rejection", label: "Carrier Rejection", description: "Carrier rejects booking due to equipment", exceptionAtStep: 6, exceptionType: "Carrier Rejection", severity: "Critical" },
 ]
 
-export const AUTO_APPROVAL_THRESHOLDS: AutoApprovalThreshold[] = [
-  { rule: "Rate Variance Tolerance", threshold: "< 5%", currentValue: "4.2%", enabled: true },
-  { rule: "Max Booking Value", threshold: "< $5,000", currentValue: "$4,800", enabled: true },
-  { rule: "Carrier Rating Minimum", threshold: "Standard+", currentValue: "Preferred", enabled: true },
-  { rule: "Transit Time Variance", threshold: "< 2 days", currentValue: "1.5 days", enabled: true },
-  { rule: "New Lane Auto-Approve", threshold: "Disabled", currentValue: "N/A", enabled: false },
-]
-
-export const LANE_PREFERENCES: LanePreference[] = [
-  { lane: "SHA→LAX", mode: "Ocean", preferredCarrier: "Maersk", fallbackCarrier: "MSC", maxAcceptableRate: 3200, autoApprove: true },
-  { lane: "SZX→ORD", mode: "Ocean", preferredCarrier: "MSC", fallbackCarrier: "CMA-CGM", maxAcceptableRate: 3500, autoApprove: true },
-  { lane: "BOM→RTM", mode: "Ocean", preferredCarrier: "Hapag-Lloyd", fallbackCarrier: "MSC", maxAcceptableRate: 2600, autoApprove: false },
-  { lane: "MEM→ORD", mode: "Road", preferredCarrier: "FedEx Freight", fallbackCarrier: "XPO Logistics", maxAcceptableRate: 950, autoApprove: true },
-  { lane: "YYZ→DTW", mode: "Road", preferredCarrier: "DHL Freight", fallbackCarrier: "Hapag-Lloyd", maxAcceptableRate: 1900, autoApprove: true },
-  { lane: "BOM→LAX", mode: "Ocean", preferredCarrier: "Maersk", fallbackCarrier: "CMA-CGM", maxAcceptableRate: 3600, autoApprove: false },
-  { lane: "MAA→IAH", mode: "Ocean", preferredCarrier: "Maersk", fallbackCarrier: "MSC", maxAcceptableRate: 2800, autoApprove: true },
-  { lane: "HKG→RTM", mode: "Ocean", preferredCarrier: "Hapag-Lloyd", fallbackCarrier: "Maersk", maxAcceptableRate: 3100, autoApprove: true },
-]
-
-export const ESCALATION_RULES: EscalationRule[] = [
-  { id: "ESC-01", condition: "Rate mismatch exceeds 10% of contract", severity: "Critical", action: "Flag for planner review + email notification", enabled: true, triggerCount30d: 4 },
-  { id: "ESC-02", condition: "Carrier rejects booking request", severity: "High", action: "Auto-select next carrier + notify planner", enabled: true, triggerCount30d: 2 },
-  { id: "ESC-03", condition: "Required booking fields missing from SAP", severity: "Medium", action: "Pause workflow + request data from originator", enabled: true, triggerCount30d: 3 },
-  { id: "ESC-04", condition: "Carrier portal unavailable > 30 minutes", severity: "High", action: "Switch to API fallback or manual booking queue", enabled: true, triggerCount30d: 5 },
-  { id: "ESC-05", condition: "No capacity on any preferred carrier", severity: "Critical", action: "Escalate to supply chain manager immediately", enabled: true, triggerCount30d: 1 },
-  { id: "ESC-06", condition: "Booking not confirmed within 4 hours", severity: "Medium", action: "Send reminder + escalate if > 8h unconfirmed", enabled: true, triggerCount30d: 6 },
-  { id: "ESC-07", condition: "Credentials expired for carrier portal", severity: "High", action: "Auto-notify IT + pause portal bookings for carrier", enabled: false, triggerCount30d: 1 },
-]
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Phase 3: Rate Intelligence Data
-// ══════════════════════════════════════════════════════════════════════════════
-
-export interface RateTrendPoint {
-  month: string
-  contractRate: number
-  spotRate: number
-  agentNegotiated: number
+export interface DemoStepDetail {
+  duration: number // ms for thinking animation
+  thinkingLabel: string
+  completionLabel: string
+  subItems: string[]
+  aiReasoning: string
+  aiConfidence: number
+  aiSources: string[]
+  processingTime: string
 }
 
-export interface LaneRateTrend {
-  lane: string
-  mode: TransportMode
-  carrier: string
-  dataPoints: RateTrendPoint[]
-}
+export const DEMO_STEP_DETAILS: DemoStepDetail[] = [
+  {
+    duration: 2500,
+    thinkingLabel: "Reading shipment from SAP TM...",
+    completionLabel: "Shipment parsed. 12 fields extracted, all validated.",
+    subItems: ["SAP TM Gateway connected", "Order SAP-TM-87234 loaded", "OTM routing rules pulled", "Commodity & HS code verified"],
+    aiReasoning: "Parsed SAP TM order SAP-TM-87234. Cross-referenced with OTM routing rules. All 12 required fields present and validated against carrier requirements.",
+    aiConfidence: 99,
+    aiSources: ["SAP TM", "OTM"],
+    processingTime: "1.2s",
+  },
+  {
+    duration: 3000,
+    thinkingLabel: "Evaluating carriers on SHA→LAX lane...",
+    completionLabel: "Maersk selected — best rate, SLA & capacity combination.",
+    subItems: ["Queried 4 carrier portals", "Rate comparison complete", "SLA scores evaluated", "Capacity confirmed available"],
+    aiReasoning: "Evaluated 4 carriers on SHA→LAX. Maersk ranked #1: rate $2,850 (within 2% of contract $2,800), 92% SLA, available capacity, 94% lane performance. MSC was $130 cheaper but 2 extra transit days exceed SLA target.",
+    aiConfidence: 94,
+    aiSources: ["Rate Engine", "Maersk Portal", "MSC Portal", "Hapag-Lloyd Portal"],
+    processingTime: "2.4s",
+  },
+  {
+    duration: 2000,
+    thinkingLabel: "Connecting to Maersk carrier portal...",
+    completionLabel: "Portal authenticated. Session established.",
+    subItems: ["API Gateway initialized", "Credentials validated", "Session token received", "Booking form loaded"],
+    aiReasoning: "Connected to Maersk portal via API Gateway. Response time 240ms. Session authenticated with stored credentials (last rotated 3 days ago). Booking form endpoint available.",
+    aiConfidence: 98,
+    aiSources: ["API Gateway", "Maersk Portal"],
+    processingTime: "0.8s",
+  },
+  {
+    duration: 2500,
+    thinkingLabel: "Submitting booking request...",
+    completionLabel: "Booking submitted. Awaiting carrier confirmation.",
+    subItems: ["Vessel AE-1234 selected (Mar 22)", "Container 2×40' HC allocated", "Rate $2,850 confirmed", "Booking parameters validated"],
+    aiReasoning: "Selected vessel AE-1234 departing Mar 22 — optimal match for target ship date Mar 23 (1 day buffer). Rate $2,850 matches carrier quote, within 2% of contract rate. Container type 40' HC available.",
+    aiConfidence: 96,
+    aiSources: ["Maersk Portal", "Rate Engine"],
+    processingTime: "1.8s",
+  },
+  {
+    duration: 2000,
+    thinkingLabel: "Uploading shipping documents...",
+    completionLabel: "3 of 3 documents uploaded and verified.",
+    subItems: ["Shipper's Letter of Instruction ✓", "Commercial Packing List ✓", "Customs Declaration Form ✓"],
+    aiReasoning: "Uploaded 3 required documents to carrier portal. SLI auto-generated from SAP data. Packing list cross-referenced with order quantities. Customs declaration pre-filled from HS codes.",
+    aiConfidence: 99,
+    aiSources: ["Document System", "SAP TM"],
+    processingTime: "1.4s",
+  },
+  {
+    duration: 2500,
+    thinkingLabel: "Retrieving booking confirmation...",
+    completionLabel: "Confirmed — Booking ref MAEU-2024-SHA-78432.",
+    subItems: ["Carrier acknowledgement received", "Booking ref MAEU-2024-SHA-78432", "Vessel AE-1234 / Mar 22 sailing", "Container release order issued"],
+    aiReasoning: "Booking confirmed by Maersk in 45 seconds. Reference MAEU-2024-SHA-78432 cross-validated with carrier API response. Vessel schedule and container allocation match submitted parameters.",
+    aiConfidence: 100,
+    aiSources: ["Maersk Portal", "API Gateway"],
+    processingTime: "0.6s",
+  },
+  {
+    duration: 1800,
+    thinkingLabel: "Updating SAP TM & notifying stakeholders...",
+    completionLabel: "SAP updated. Plant team & SCM notified via email.",
+    subItems: ["SAP TM order updated", "OTM booking record synced", "Plant Suzhou notified", "SCM team email sent"],
+    aiReasoning: "Updated SAP TM order SAP-TM-87234 with booking confirmation. OTM record synced. Sent notification emails to plant logistics team (Suzhou) and SCM planner. All systems reflect confirmed status.",
+    aiConfidence: 99,
+    aiSources: ["SAP TM", "OTM", "Email"],
+    processingTime: "1.1s",
+  },
+  {
+    duration: 1500,
+    thinkingLabel: "Activating booking monitor...",
+    completionLabel: "Monitoring active. Next check in 30 minutes.",
+    subItems: ["Tracking feed subscribed", "ETA monitor configured", "Exception alerts armed", "Status: Zero Touch Complete"],
+    aiReasoning: "Booking monitor activated for MAEU-2024-SHA-78432. Subscribed to Maersk tracking API, AIS vessel data, and port congestion feeds. No anomalies detected. Next automated check in 30 minutes.",
+    aiConfidence: 100,
+    aiSources: ["Agent", "API Gateway"],
+    processingTime: "0.3s",
+  },
+]
 
-export interface ContractAlert {
-  id: string
-  lane: string
-  carrier: string
-  contractEnd: string
-  daysRemaining: number
-  currentRate: number
-  marketRate: number
-  recommendation: string
-  severity: "urgent" | "warning" | "info"
-}
-
-export interface AIRateRecommendation {
-  id: string
-  lane: string
-  carrier: string
-  type: "renegotiate" | "switch" | "lock-in" | "monitor"
+// Exception resolution data shown during demo exception flows
+export interface DemoExceptionResolution {
+  scenarioId: string
   title: string
   description: string
-  potentialSavings: string
-  confidence: number
+  impact: string
+  aiRecommendation: string
+  alternatives: Array<{ label: string; description: string }>
+  resolveLabel: string
 }
 
-export const RATE_TRENDS: LaneRateTrend[] = [
-  {
-    lane: "SHA→LAX", mode: "Ocean", carrier: "Maersk",
-    dataPoints: [
-      { month: "Oct", contractRate: 2800, spotRate: 2900, agentNegotiated: 2820 },
-      { month: "Nov", contractRate: 2800, spotRate: 2950, agentNegotiated: 2810 },
-      { month: "Dec", contractRate: 2800, spotRate: 3100, agentNegotiated: 2850 },
-      { month: "Jan", contractRate: 2800, spotRate: 3050, agentNegotiated: 2830 },
-      { month: "Feb", contractRate: 2800, spotRate: 2850, agentNegotiated: 2800 },
-      { month: "Mar", contractRate: 2800, spotRate: 2850, agentNegotiated: 2810 },
+export const DEMO_EXCEPTION_RESOLUTIONS: Record<string, DemoExceptionResolution> = {
+  "missing-data": {
+    scenarioId: "missing-data",
+    title: "Missing Booking Fields",
+    description: "SAP TM order SAP-TM-87234 is missing 3 required fields for carrier booking submission.",
+    impact: "Booking cannot proceed without: Commodity HS Code, Package Dimensions, Shipper Contact.",
+    aiRecommendation: "Auto-fill from SAP master data. HS code 8471.30 (laptop parts) matches commodity description. Dimensions from last 3 shipments on this lane. Shipper contact from plant directory.",
+    alternatives: [
+      { label: "Request from Planner", description: "Send email to planner requesting missing data" },
+      { label: "Use Defaults", description: "Apply lane-standard defaults from historical bookings" },
     ],
+    resolveLabel: "Auto-Fill from SAP",
   },
-  {
-    lane: "SZX→ORD", mode: "Ocean", carrier: "MSC",
-    dataPoints: [
-      { month: "Oct", contractRate: 3150, spotRate: 3200, agentNegotiated: 3160 },
-      { month: "Nov", contractRate: 3150, spotRate: 3350, agentNegotiated: 3180 },
-      { month: "Dec", contractRate: 3150, spotRate: 3500, agentNegotiated: 3200 },
-      { month: "Jan", contractRate: 3150, spotRate: 3400, agentNegotiated: 3170 },
-      { month: "Feb", contractRate: 3150, spotRate: 3250, agentNegotiated: 3150 },
-      { month: "Mar", contractRate: 3150, spotRate: 3200, agentNegotiated: 3155 },
+  "no-capacity": {
+    scenarioId: "no-capacity",
+    title: "No Carrier Capacity",
+    description: "All 4 preferred carriers report full allocation on SHA→LAX for target ship date Mar 23.",
+    impact: "Maersk, MSC, Hapag-Lloyd, CMA-CGM — all fully booked. Next available sailing is Mar 28 (+5 days).",
+    aiRecommendation: "Reroute via SHA→Long Beach (LGB). Maersk has capacity on vessel AE-1240, sailing Mar 23. Transit adds 1 day but meets SLA. Rate $2,920 (+2.5%).",
+    alternatives: [
+      { label: "Wait for Mar 28", description: "Book next available sailing on original lane (+5 days)" },
+      { label: "Check Spot Market", description: "Query spot rates from non-contracted carriers" },
     ],
+    resolveLabel: "Reroute via Long Beach",
   },
-  {
-    lane: "BOM→RTM", mode: "Ocean", carrier: "Hapag-Lloyd",
-    dataPoints: [
-      { month: "Oct", contractRate: 2300, spotRate: 2400, agentNegotiated: 2320 },
-      { month: "Nov", contractRate: 2300, spotRate: 2500, agentNegotiated: 2350 },
-      { month: "Dec", contractRate: 2300, spotRate: 2650, agentNegotiated: 2380 },
-      { month: "Jan", contractRate: 2300, spotRate: 2550, agentNegotiated: 2340 },
-      { month: "Feb", contractRate: 2300, spotRate: 2450, agentNegotiated: 2310 },
-      { month: "Mar", contractRate: 2300, spotRate: 2550, agentNegotiated: 2330 },
+  "portal-failure": {
+    scenarioId: "portal-failure",
+    title: "Carrier Portal Unavailable",
+    description: "Maersk carrier portal returned HTTP 503 — service temporarily unavailable.",
+    impact: "Booking submission blocked. Portal health check shows Maersk API down since 14:23 UTC.",
+    aiRecommendation: "Switch to MSC — second-ranked carrier. Rate $2,720 (5% lower), 2 extra transit days but within SLA window. Portal health: operational.",
+    alternatives: [
+      { label: "Retry in 5 min", description: "Wait for Maersk portal recovery (avg downtime: 12 min)" },
+      { label: "Manual Escalation", description: "Escalate to carrier relationship manager" },
     ],
+    resolveLabel: "Switch to MSC",
   },
-  {
-    lane: "BOM→LAX", mode: "Ocean", carrier: "CMA-CGM",
-    dataPoints: [
-      { month: "Oct", contractRate: 3000, spotRate: 3300, agentNegotiated: 3100 },
-      { month: "Nov", contractRate: 3000, spotRate: 3450, agentNegotiated: 3150 },
-      { month: "Dec", contractRate: 3000, spotRate: 3600, agentNegotiated: 3200 },
-      { month: "Jan", contractRate: 3000, spotRate: 3550, agentNegotiated: 3180 },
-      { month: "Feb", contractRate: 3000, spotRate: 3400, agentNegotiated: 3100 },
-      { month: "Mar", contractRate: 3000, spotRate: 3570, agentNegotiated: 3150 },
+  "rate-mismatch": {
+    scenarioId: "rate-mismatch",
+    title: "Rate Discrepancy Detected",
+    description: "Maersk quoted $3,340 for this booking — 19% above contract rate of $2,800.",
+    impact: "Estimated overspend: $540 per container, $1,080 total for 2×40' HC. Exceeds auto-approval threshold of 5%.",
+    aiRecommendation: "Flag for negotiation. Historical data shows Maersk typically adjusts within 24h when contract rate is referenced. Alternatively, MSC offers $2,720 on this lane.",
+    alternatives: [
+      { label: "Accept Quoted Rate", description: "Proceed with $3,340 (requires manager approval)" },
+      { label: "Book with MSC", description: "Switch to MSC at $2,720 — under contract rate" },
     ],
+    resolveLabel: "Flag for Negotiation",
   },
-]
+  "carrier-rejection": {
+    scenarioId: "carrier-rejection",
+    title: "Booking Rejected by Carrier",
+    description: "Maersk rejected booking MAEU-2024-SHA-78432 — equipment type 40' HC not available on vessel AE-1234.",
+    impact: "Booking cancelled. Vessel AE-1234 sailing Mar 22 is no longer an option for high-cube containers.",
+    aiRecommendation: "Re-book with MSC on vessel MSC-ANNA, sailing Mar 23. 40' HC confirmed available. Rate $2,720, transit 16 days. Auto-rebook to minimize delay.",
+    alternatives: [
+      { label: "Try Standard 40'", description: "Rebook with Maersk using standard 40' container" },
+      { label: "Escalate to Manager", description: "Alert routing manager for manual intervention" },
+    ],
+    resolveLabel: "Re-book with MSC",
+  },
+}
 
-export const CONTRACT_ALERTS: ContractAlert[] = [
-  { id: "CA-01", lane: "BOM→RTM", carrier: "Hapag-Lloyd", contractEnd: "Apr 15, 2025", daysRemaining: 33, currentRate: 2300, marketRate: 2550, recommendation: "Renew early — market rates trending 11% higher", severity: "warning" },
-  { id: "CA-02", lane: "SZX→ORD", carrier: "MSC", contractEnd: "Mar 31, 2025", daysRemaining: 18, currentRate: 3150, marketRate: 3200, recommendation: "Current rate competitive — renew at same terms", severity: "urgent" },
-  { id: "CA-03", lane: "YYZ→DTW", carrier: "DHL Freight", contractEnd: "Jun 30, 2025", daysRemaining: 109, currentRate: 1750, marketRate: 1900, recommendation: "Lock in current rate before Q3 seasonal increase", severity: "info" },
-  { id: "CA-04", lane: "MAA→IAH", carrier: "Maersk", contractEnd: "May 01, 2025", daysRemaining: 49, currentRate: 2550, marketRate: 2600, recommendation: "Consider multi-year deal for rate stability", severity: "warning" },
-]
-
-export const AI_RATE_RECOMMENDATIONS: AIRateRecommendation[] = [
-  { id: "RR-01", lane: "BOM→RTM", carrier: "Hapag-Lloyd", type: "renegotiate", title: "Renegotiate BOM→RTM contract", description: "Current contract expires in 33 days. Market rates are 11% higher, giving strong leverage to lock in current rate for 12 months.", potentialSavings: "$3,000/mo", confidence: 89 },
-  { id: "RR-02", lane: "SZX→ORD", carrier: "MSC", type: "lock-in", title: "Lock in SZX→ORD rate before expiry", description: "Contract expires in 18 days. Spot rates stable at +1.6%. Recommend immediate renewal to avoid rate reset.", potentialSavings: "$900/mo", confidence: 92 },
-  { id: "RR-03", lane: "BOM→LAX", carrier: "CMA-CGM", type: "switch", title: "Switch BOM→LAX to Maersk", description: "CMA-CGM spot rates consistently 15-19% above contract. Maersk offers better rate stability on this lane with 91% SLA.", potentialSavings: "$5,200/mo", confidence: 85 },
-  { id: "RR-04", lane: "MEM→ORD", carrier: "FedEx Freight", type: "monitor", title: "Monitor MEM→ORD rate stability", description: "FedEx contract rate at $800 is 6% below market. 96% zero-touch rate. No action needed — continue monitoring quarterly.", potentialSavings: "N/A", confidence: 95 },
-]
+// The demo shipment — fresh from SAP, not yet booked
+export const DEMO_SHIPMENT: BookingRequest = {
+  id: "BKG-NEW-001",
+  mode: "Ocean",
+  carrier: "—",
+  containerType: "2×40' HC",
+  origin: "Shanghai (SHA)",
+  destination: "Los Angeles (LAX)",
+  plant: "Suzhou Plant",
+  bookingStatus: "Pending",
+  requestedDate: "Mar 20, 2024",
+  targetShipDate: "Mar 23, 2024",
+  severity: "Low",
+  exceptionType: "None",
+  approvalType: "None",
+  lane: "SHA → LAX",
+  sapOrderRef: "SAP-TM-87234",
+  agentSummary: "New shipment requirement detected from SAP TM. Ready for automated booking.",
+  workflowSteps: makeWorkflowSteps(0), // all pending
+  carrierOptions: CARRIER_OPTIONS_SHA_LAX,
+  reasonChips: [],
+  timeline: [
+    { timestamp: "Mar 20, 09:14", event: "Shipment requirement received from SAP TM", location: "Shanghai", source: "SAP TM", status: "info" },
+    { timestamp: "Mar 20, 09:14", event: "Agent ingested order SAP-TM-87234", location: "System", source: "Agent", status: "agent" },
+  ],
+  sources: [
+    { source: "SAP TM", status: "Order received", timestamp: "Mar 20, 09:14", freshness: "Just now", aligned: true, fresh: true },
+    { source: "OTM", status: "Routing rules loaded", timestamp: "Mar 20, 09:14", freshness: "Just now", aligned: true, fresh: true },
+  ],
+  lat: 31.2304,
+  lng: 121.4737,
+  currentStatus: "New — awaiting automated booking",
+  recommendedAction: "Execute zero-touch booking flow",
+  notificationStatus: "Not Yet Sent",
+  otmStatus: "Pending Update",
+  etaConfidence: 0,
+  delayHours: 0,
+  trackingRef: "—",
+  plannedETA: "Apr 06, 2024",
+  revisedETA: "Apr 06, 2024",
+  lastSignal: "SAP TM order received",
+  lastSignalSource: "SAP TM",
+}

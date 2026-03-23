@@ -14,29 +14,11 @@ import { EmailInboxPage } from "./email-inbox-page"
 import { EmailSentPage, type SentEmailItem } from "./email-sent-page"
 import { CarrierScorecardPage } from "./carrier-scorecard-page"
 import { TrackingSearchPage } from "./tracking-search-page"
-import { BookingPipeline } from "./booking-pipeline"
-import { AutomationRulesPage } from "./automation-rules"
-import { RateIntelligencePage } from "./rate-intelligence"
 import { SearchResultsPage } from "./search-results-page"
 import { AIChatPanel } from "./ai-chat-panel"
-import { BOOKING_REQUESTS, INBOX_EMAILS } from "@/lib/mock-data"
+import { BOOKING_REQUESTS, INBOX_EMAILS, DEMO_SHIPMENT, DEMO_SCENARIOS, type BookingRequest } from "@/lib/mock-data"
+import { SapSimulationPage } from "./sap-simulation-page"
 import { type Persona } from "./login-page"
-
-export type SimulationPhase =
-  | "idle"
-  | "email-analyzing"
-  | "email-order-detected"
-  | "email-finding-routes"
-  | "email-routes-ready"
-  | "email-ready"
-  | "transitioning"
-  | "pipeline-ingested"
-  | "pipeline-carrier"
-  | "pipeline-portal"
-  | "pipeline-submitted"
-  | "pipeline-docs"
-  | "pipeline-confirmed"
-  | "complete"
 
 export function AppShell({ persona }: { persona?: Persona }) {
   const [view, setView] = useState<SidebarView>("dashboard")
@@ -51,7 +33,71 @@ export function AppShell({ persona }: { persona?: Persona }) {
   const [readEmailIds, setReadEmailIds] = useState<Set<string>>(new Set())
   const [resolvedExceptionIds, setResolvedExceptionIds] = useState<Set<string>>(new Set())
   const [dynamicActivities, setDynamicActivities] = useState<DynamicActivity[]>([])
-  const [simPhase, setSimPhase] = useState<SimulationPhase>("idle")
+
+  // ── Demo mode state ──
+  const [demoActive, setDemoActive] = useState(false)
+  const [demoStep, setDemoStep] = useState(0) // 0 = not started, 1-8 = current step, 9 = complete
+  const [demoPaused, setDemoPaused] = useState(false)
+  const [demoScenario, setDemoScenario] = useState("happy-path")
+  const [demoShipmentVisible, setDemoShipmentVisible] = useState(false)
+  const [demoExceptionActive, setDemoExceptionActive] = useState(false)
+  const [demoZoomActive, setDemoZoomActive] = useState(false)
+  const [showCompletionModal, setShowCompletionModal] = useState(false)
+  const [demoElapsedTime, setDemoElapsedTime] = useState("0s")
+  const [dynamicInboxEmails, setDynamicInboxEmails] = useState<Array<{ id: string; from: string; fromName: string; subject: string; body: string; timestamp: string; read: boolean; tag: string; tags: string[]; shipmentId: string; shipmentRef: string }>>([])
+  const [sapAutoOpenOrderId, setSapAutoOpenOrderId] = useState<string | null>(null)
+  const [emailAutoSelectId, setEmailAutoSelectId] = useState<string | null>(null)
+
+  const handleAddInboxEmail = (email: typeof dynamicInboxEmails[0]) => {
+    setDynamicInboxEmails((prev) => [email, ...prev])
+  }
+
+  const handleDemoComplete = (elapsedTime: string) => {
+    setDemoElapsedTime(elapsedTime)
+    // Trigger dashboard zoom + completion modal
+    setView("dashboard")
+    setDemoZoomActive(true)
+    setTimeout(() => {
+      setDemoZoomActive(false)
+      setShowCompletionModal(true)
+    }, 3500) // 1s zoom in + 1.5s hold + 1s zoom out
+  }
+
+  const handleStartDemo = (scenarioId: string) => {
+    setDemoScenario(scenarioId)
+    setDemoActive(true)
+    setDemoStep(0)
+    setDemoPaused(false)
+    setDemoShipmentVisible(true)
+    setDemoExceptionActive(false)
+    setView("dashboard")
+    setSearchQuery("")
+    addActivity("Demo mode started — new shipment detected from SAP TM", "ingested", "BKG-NEW-001")
+  }
+
+  const handleStopDemo = () => {
+    setDemoActive(false)
+    setDemoStep(0)
+    setDemoPaused(false)
+    setDemoShipmentVisible(false)
+    setDemoExceptionActive(false)
+  }
+
+  const STEP_LABELS = [
+    "", "Read Shipment", "Carrier Selection", "Portal Login", "Booking Submission",
+    "Document Upload", "Confirmation", "System Update", "Monitoring",
+  ]
+
+  const handleDemoStepAdvance = (step: number) => {
+    setDemoStep(step)
+    if (step >= 1 && step <= 8) {
+      addActivity(
+        `Step ${step}: ${STEP_LABELS[step]} — completed for BKG-NEW-001`,
+        step === 1 ? "ingested" : step === 2 ? "carrier_eval" : step === 3 ? "portal_login" : step === 4 ? "booking_submit" : step === 5 ? "doc_upload" : step === 6 ? "confirmed" : step === 7 ? "notified" : "confirmed",
+        "BKG-NEW-001",
+      )
+    }
+  }
 
   const handleEtaApproved = () => setEtaApprovedCount((prev) => prev + 1)
 
@@ -83,50 +129,19 @@ export function AppShell({ persona }: { persona?: Persona }) {
     addActivity(`Workflow resumed for ${shipmentId} — agent proceeding to next step`, "booking_submit", shipmentId)
   }
 
-  const handleStartSimulation = () => {
-    setSimPhase("email-analyzing")
-    setTimeout(() => setSimPhase("email-order-detected"), 2500)
-  }
-
-  const handleFindRoutes = () => {
-    setSimPhase("email-finding-routes")
-    setTimeout(() => setSimPhase("email-routes-ready"), 1500)
-  }
-
-  const handleConfirmRoute = () => {
-    setSimPhase("email-ready")
-  }
-
-  const handleFullAuto = () => {
-    setSimPhase("transitioning")
-    handleViewChange("booking-pipeline")
-    setTimeout(() => setSimPhase("pipeline-ingested"), 500)
-  }
-
-  const handleExecuteSimulation = () => {
-    setSimPhase("transitioning")
-    handleViewChange("booking-pipeline")
-    setTimeout(() => setSimPhase("pipeline-ingested"), 500)
-  }
-
-  const handleSimPhaseChange = (phase: SimulationPhase) => {
-    setSimPhase(phase)
-    if (phase === "pipeline-confirmed") {
-      addActivity("Zero-touch booking BKG-SIM-01 completed (NGB→HAM) — Maersk confirmed", "confirmed", "BKG-SIM-01")
-      setTimeout(() => setSimPhase("complete"), 3000)
-    }
-  }
-
   const exceptionsCount = BOOKING_REQUESTS.filter((s) => s.bookingStatus === "Exception" || s.bookingStatus === "Awaiting Approval").filter((s) => !resolvedExceptionIds.has(s.id)).length
   const unreadInboxCount = INBOX_EMAILS.filter((e) => !e.read && !readEmailIds.has(e.id)).length
 
-  const handleViewChange = (v: SidebarView) => {
+  const handleViewChange = (v: SidebarView, opts?: { sapOrderId?: string; emailId?: string }) => {
     setViewHistory((prev) => [...prev, { view }])
     setView(v)
     setSearchQuery("")
     if (v !== "tracking-search") setTrackingPreselect(null)
     if (v !== "weather-traffic") setWeatherHighlightId(null)
     setBackOpenShipmentId(null)
+    // Set auto-open targets for SAP / Email
+    setSapAutoOpenOrderId(opts?.sapOrderId ?? null)
+    setEmailAutoSelectId(opts?.emailId ?? null)
   }
 
   const handleBack = () => {
@@ -159,6 +174,9 @@ export function AppShell({ persona }: { persona?: Persona }) {
         exceptionsCount={exceptionsCount || undefined}
         unreadInboxCount={unreadInboxCount || undefined}
         persona={persona}
+        demoActive={demoActive}
+        onStartDemo={handleStartDemo}
+        onStopDemo={handleStopDemo}
       />
 
       {/* Main area */}
@@ -169,6 +187,10 @@ export function AppShell({ persona }: { persona?: Persona }) {
           aiChatOpen={aiChatOpen}
           canGoBack={viewHistory.length > 0}
           onBack={handleBack}
+          demoActive={demoActive}
+          demoStep={demoStep}
+          onStopDemo={handleStopDemo}
+          onGoToDashboard={() => { setView("dashboard"); setDemoShipmentVisible(true) }}
         />
 
         {/* Search results overlay — shown when typing in search bar */}
@@ -189,14 +211,30 @@ export function AppShell({ persona }: { persona?: Persona }) {
                 autoOpenShipmentId={backOpenShipmentId ?? undefined}
                 onEtaApproved={handleEtaApproved}
                 etaUpdatedCount={etaApprovedCount}
+                demoActive={demoActive}
+                demoShipmentVisible={demoShipmentVisible}
+                demoStep={demoStep}
+                demoPaused={demoPaused}
+                demoScenario={demoScenario}
+                demoExceptionActive={demoExceptionActive}
+                onDemoStepAdvance={handleDemoStepAdvance}
+                onDemoPause={() => setDemoPaused(true)}
+                onDemoResume={() => setDemoPaused(false)}
+                onDemoExceptionResolved={() => setDemoExceptionActive(false)}
+                onDemoExceptionTriggered={() => setDemoExceptionActive(true)}
+                onDemoShipmentDismiss={() => setDemoShipmentVisible(false)}
+                onDemoComplete={handleDemoComplete}
+                onAddInboxEmail={handleAddInboxEmail}
+                demoZoomActive={demoZoomActive}
+                showCompletionModal={showCompletionModal}
+                onCloseCompletionModal={() => { setShowCompletionModal(false); handleStopDemo() }}
+                demoElapsedTime={demoElapsedTime}
               />
             )}
 
             {view === "analytics" && <AnalyticsPage etaUpdatedCount={etaApprovedCount} />}
 
-            {view === "booking-pipeline" && (
-              <BookingPipeline onSendNotification={handleSendNotification} onViewChange={handleViewChange} simPhase={simPhase} onSimPhaseChange={handleSimPhaseChange} />
-            )}
+            {view === "sap-tm" && <SapSimulationPage autoOpenOrderId={sapAutoOpenOrderId ?? undefined} demoUpdated={demoStep >= 7} />}
 
             {view === "tracking-search" && (
               <TrackingSearchPage
@@ -230,20 +268,10 @@ export function AppShell({ persona }: { persona?: Persona }) {
                   handleViewChange("tracking-search")
                 }}
                 onMarkRead={handleMarkEmailRead}
-                simPhase={simPhase}
-                onStartSimulation={handleStartSimulation}
-                onExecuteSimulation={handleExecuteSimulation}
-                onFindRoutes={handleFindRoutes}
-                onConfirmRoute={handleConfirmRoute}
-                onFullAuto={handleFullAuto}
               />
             )}
 
-            {view === "email-sent" && <EmailSentPage dynamicEmails={sentEmails} />}
-
-            {view === "automation-rules" && <AutomationRulesPage />}
-
-            {view === "rate-intelligence" && <RateIntelligencePage />}
+            {view === "email-sent" && <EmailSentPage dynamicEmails={sentEmails} autoSelectId={emailAutoSelectId ?? undefined} />}
 
             {view === "agent-activity" && (
               <AgentActivityLog
@@ -253,6 +281,7 @@ export function AppShell({ persona }: { persona?: Persona }) {
             )}
           </>
         )}
+
       </div>
 
       {/* AI Chat Panel — fixed right-side overlay */}

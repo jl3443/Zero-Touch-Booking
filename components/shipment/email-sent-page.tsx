@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { STATIC_SENT_EMAILS, type SentEmailItem } from "@/lib/mock-data"
 import { cn } from "@/lib/utils"
 import { Send, Clock, ChevronLeft, MailOpen } from "lucide-react"
@@ -22,11 +22,22 @@ function extractBookingId(text: string): string | null {
 
 interface EmailSentPageProps {
   dynamicEmails?: SentEmailItem[]
+  autoSelectId?: string
 }
 
-export function EmailSentPage({ dynamicEmails = [] }: EmailSentPageProps) {
+export function EmailSentPage({ dynamicEmails = [], autoSelectId }: EmailSentPageProps) {
   const allEmails = [...dynamicEmails, ...STATIC_SENT_EMAILS]
   const [selected, setSelected] = useState<SentEmailItem | null>(null)
+
+  // Auto-select email when navigated from demo step
+  useEffect(() => {
+    if (autoSelectId === "latest" && allEmails.length > 0) {
+      setSelected(allEmails[0])
+    } else if (autoSelectId) {
+      const email = allEmails.find((e) => e.id === autoSelectId)
+      if (email) setSelected(email)
+    }
+  }, [autoSelectId])
 
   return (
     <div className="flex-1 overflow-hidden bg-[#F8F9FA] flex flex-col">

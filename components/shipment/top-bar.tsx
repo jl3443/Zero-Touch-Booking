@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, RefreshCw, Brain, ChevronLeft } from "lucide-react"
+import { Search, RefreshCw, Brain, ChevronLeft, Zap, Square, ArrowRight } from "lucide-react"
+import { DEMO_STEP_DETAILS } from "@/lib/mock-data"
 import { cn } from "@/lib/utils"
 
 interface TopBarProps {
@@ -10,9 +11,13 @@ interface TopBarProps {
   aiChatOpen?: boolean
   canGoBack?: boolean
   onBack?: () => void
+  demoActive?: boolean
+  demoStep?: number
+  onStopDemo?: () => void
+  onGoToDashboard?: () => void
 }
 
-export function TopBar({ onSearch, onToggleAIChat, aiChatOpen, canGoBack, onBack }: TopBarProps) {
+export function TopBar({ onSearch, onToggleAIChat, aiChatOpen, canGoBack, onBack, demoActive, demoStep, onStopDemo, onGoToDashboard }: TopBarProps) {
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
   const [spinning, setSpinning] = useState(false)
   const [query, setQuery] = useState("")
@@ -37,8 +42,43 @@ export function TopBar({ onSearch, onToggleAIChat, aiChatOpen, canGoBack, onBack
     ? lastRefresh.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : "--:--"
 
+  const stepLabel = demoStep && demoStep >= 1 && demoStep <= 8
+    ? DEMO_STEP_DETAILS[demoStep - 1].thinkingLabel.replace("...", "")
+    : demoStep && demoStep > 8 ? "Booking Complete" : "Starting..."
+
   return (
     <header className="bg-[#1E293B] text-white border-b border-slate-700">
+      {demoActive && (
+        <div className="flex items-center justify-between px-5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[11px]">
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
+            </span>
+            <span className="font-bold uppercase tracking-wider">Demo Mode</span>
+            <span className="text-white/70">|</span>
+            {demoStep && demoStep >= 1 ? (
+              <span className="text-white/90">
+                Step {Math.min(demoStep, 8)} of 8: {stepLabel}
+              </span>
+            ) : (
+              <button
+                onClick={onGoToDashboard}
+                className="flex items-center gap-1 text-white/90 hover:text-white transition-colors underline underline-offset-2"
+              >
+                New shipment waiting on Dashboard — click to view
+                <ArrowRight size={11} />
+              </button>
+            )}
+          </div>
+          <button
+            onClick={onStopDemo}
+            className="flex items-center gap-1 px-2 py-0.5 rounded bg-white/20 hover:bg-white/30 transition-colors font-medium"
+          >
+            <Square size={10} /> End Demo
+          </button>
+        </div>
+      )}
       <div className="flex items-center justify-between px-5 py-3">
         {/* Left: back button + search */}
         <div className="flex items-center gap-2 flex-1 max-w-xl">

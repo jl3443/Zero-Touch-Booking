@@ -1423,28 +1423,32 @@ export interface RerouteOption {
   rate: number
   savings: string
   available: boolean
+  transportMode: TransportMode
+  sla: number
+  capacity: "Available" | "Limited" | "Full"
+  recommended?: boolean
 }
 
 export const REROUTE_OPTIONS: Record<string, RerouteOption[]> = {
   "BKG-50219": [
-    { id: "R1", carrier: "MSC", route: "MAA→IAH (direct)", transitDays: 27, rate: 2500, savings: "-4% vs contract", available: true },
-    { id: "R2", carrier: "CMA-CGM", route: "MAA→IAH via Colombo", transitDays: 30, rate: 2750, savings: "+8% vs contract", available: true },
-    { id: "R3", carrier: "Air Freight (FedEx)", route: "MAA→IAH (air expedite)", transitDays: 3, rate: 12500, savings: "Premium — $12.5K", available: true },
+    { id: "R1", carrier: "MSC", route: "MAA→IAH (direct)", transitDays: 27, rate: 2500, savings: "-4% vs contract", available: true, transportMode: "Ocean", sla: 87, capacity: "Available", recommended: true },
+    { id: "R2", carrier: "CMA-CGM", route: "MAA→IAH via Colombo", transitDays: 30, rate: 2750, savings: "+8% vs contract", available: true, transportMode: "Ocean", sla: 85, capacity: "Available" },
+    { id: "R3", carrier: "FedEx Express", route: "MAA→IAH (air expedite)", transitDays: 3, rate: 12500, savings: "Premium — $12.5K", available: true, transportMode: "Air", sla: 98, capacity: "Available" },
   ],
   "BKG-30188": [
-    { id: "R4", carrier: "Spot Market", route: "BOM→RTM (spot vessel)", transitDays: 24, rate: 3200, savings: "+40% above contract", available: true },
-    { id: "R5", carrier: "Maersk", route: "BOM→CMB→RTM (transshipment)", transitDays: 28, rate: 2800, savings: "+27% above contract", available: true },
-    { id: "R6", carrier: "Defer", route: "BOM→RTM (next sailing Mar 24)", transitDays: 21, rate: 2200, savings: "On contract", available: true },
+    { id: "R4", carrier: "Spot Market", route: "BOM→RTM (spot vessel)", transitDays: 24, rate: 3200, savings: "+40% above contract", available: true, transportMode: "Ocean", sla: 82, capacity: "Limited" },
+    { id: "R5", carrier: "Maersk", route: "BOM→CMB→RTM (transshipment)", transitDays: 28, rate: 2800, savings: "+27% above contract", available: true, transportMode: "Ocean", sla: 92, capacity: "Available", recommended: true },
+    { id: "R6", carrier: "Defer", route: "BOM→RTM (next sailing Mar 24)", transitDays: 21, rate: 2200, savings: "On contract", available: true, transportMode: "Ocean", sla: 90, capacity: "Available" },
   ],
   "BKG-60441": [
-    { id: "R7", carrier: "FedEx Freight", route: "MEM→ORD (direct)", transitDays: 1, rate: 850, savings: "-6% vs CMA-CGM quote", available: true },
-    { id: "R8", carrier: "XPO Logistics", route: "MEM→ORD (direct)", transitDays: 1, rate: 920, savings: "Same as CMA-CGM quote", available: true },
-    { id: "R9", carrier: "J.B. Hunt", route: "MEM→ORD (direct)", transitDays: 1, rate: 880, savings: "-4% vs CMA-CGM quote", available: true },
+    { id: "R7", carrier: "FedEx Freight", route: "MEM→ORD (direct)", transitDays: 1, rate: 850, savings: "-6% vs CMA-CGM quote", available: true, transportMode: "Road", sla: 96, capacity: "Available", recommended: true },
+    { id: "R8", carrier: "XPO Logistics", route: "MEM→ORD (direct)", transitDays: 1, rate: 920, savings: "Same as CMA-CGM quote", available: true, transportMode: "Road", sla: 93, capacity: "Available" },
+    { id: "R9", carrier: "J.B. Hunt", route: "MEM→ORD (direct)", transitDays: 1, rate: 880, savings: "-4% vs CMA-CGM quote", available: true, transportMode: "Road", sla: 91, capacity: "Limited" },
   ],
   "BKG-70991": [
-    { id: "R10", carrier: "Maersk", route: "BOM→LAX (direct)", transitDays: 24, rate: 3500, savings: "+3% vs contract", available: true },
-    { id: "R11", carrier: "MSC", route: "BOM→LAX (via Singapore)", transitDays: 26, rate: 3600, savings: "+9% vs contract", available: false },
-    { id: "R12", carrier: "Accept CMA-CGM Spot", route: "BOM→LAX (direct)", transitDays: 22, rate: 3800, savings: "+19% vs contract", available: true },
+    { id: "R10", carrier: "Maersk", route: "BOM→LAX (direct)", transitDays: 24, rate: 3500, savings: "+3% vs contract", available: true, transportMode: "Ocean", sla: 92, capacity: "Available", recommended: true },
+    { id: "R11", carrier: "MSC", route: "BOM→LAX (via Singapore)", transitDays: 26, rate: 3600, savings: "+9% vs contract", available: false, transportMode: "Ocean", sla: 87, capacity: "Full" },
+    { id: "R12", carrier: "Accept CMA-CGM Spot", route: "BOM→LAX (direct)", transitDays: 22, rate: 3800, savings: "+19% vs contract", available: true, transportMode: "Ocean", sla: 88, capacity: "Available" },
   ],
 }
 

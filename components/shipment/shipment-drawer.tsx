@@ -16,7 +16,7 @@ import {
   MapPin, RefreshCw, ChevronRight, Zap, Clock, Calendar,
   Mail, TrendingUp, ArrowUp, ArrowDown,
   Play, Pause, RotateCcw, AlertTriangle, Target, Timer,
-  ChevronDown, Eye, Sparkles,
+  ChevronDown, Eye, Sparkles, Ship, Plane,
 } from "lucide-react"
 import { ModeIcon } from "./shared"
 import { EmailComposer } from "./email-composer"
@@ -1399,9 +1399,9 @@ function DemoExceptionOverlay({ scenarioId, onResolve, onSendNotification, onAdd
   ]
 
   const ALT_CARRIERS = [
-    { carrier: "Maersk (via Long Beach)", mode: "Ocean", rate: "$2,920", transit: "15 days", sla: "91%", reason: "Capacity available on vessel AE-1240. +1 day transit, +2.5% vs contract. SLA within target.", recommended: true },
-    { carrier: "MSC", mode: "Ocean", rate: "$2,720", transit: "16 days", sla: "87%", reason: "Lower rate but 2 extra transit days.", recommended: false },
-    { carrier: "DHL Express", mode: "Air", rate: "$8,400", transit: "3 days", sla: "98%", reason: "Fastest option. Premium rate — use only for urgent shipments.", recommended: false },
+    { carrier: "Maersk", route: "SHA → Long Beach (LGB)", mode: "Ocean" as const, vessel: "AE-1240 / Ever Gentle", sailing: "Mar 23, 2024", rate: "$2,920", rateNote: "+2.5% vs contract", transit: "15 days", eta: "Apr 07, 2024", sla: "91%", container: "2×40' HC", capacity: "Available", reason: "Capacity available via alternate port. +1 day transit, within SLA.", recommended: true },
+    { carrier: "MSC", route: "SHA → Los Angeles (LAX)", mode: "Ocean" as const, vessel: "MSC-ANNA / Mar 24", sailing: "Mar 24, 2024", rate: "$2,720", rateNote: "-3% vs contract", transit: "16 days", eta: "Apr 09, 2024", sla: "87%", container: "40' HC", capacity: "Available", reason: "Lower rate, 2 extra transit days. Next available vessel.", recommended: false },
+    { carrier: "DHL Express", route: "SHA → LAX (Air Freight)", mode: "Air" as const, vessel: "CX-882 / Daily", sailing: "Mar 21, 2024", rate: "$8,400", rateNote: "Premium", transit: "3 days", eta: "Mar 24, 2024", sla: "98%", container: "Air Pallet (PMC)", capacity: "Available", reason: "Fastest option. Use for urgent/time-critical shipments only.", recommended: false },
   ]
 
   // ─── Scenario 1: Missing Data ─────────────────────────────────────────────
@@ -1502,32 +1502,76 @@ function DemoExceptionOverlay({ scenarioId, onResolve, onSendNotification, onAdd
   )
 
   // ─── Carrier Selection Panel (shared by no-capacity and carrier-rejection) ─
+  const ModeIcons = { Ocean: Ship, Air: Plane } as const
+  const modeColors = { Ocean: { bg: "bg-blue-600", light: "bg-blue-50", text: "text-blue-700", border: "border-blue-200" }, Air: { bg: "bg-sky-500", light: "bg-sky-50", text: "text-sky-700", border: "border-sky-200" } }
+
   const carrierSelectContent = (
     <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Select Alternative Carrier</div>
-      <div className="space-y-2">
-        {ALT_CARRIERS.map((c) => (
-          <button
-            key={c.carrier}
-            onClick={() => setSelectedAltCarrier(c.carrier)}
-            className={cn("w-full text-left p-3 rounded-lg border transition-all",
-              selectedAltCarrier === c.carrier ? "border-blue-400 bg-blue-50 ring-1 ring-blue-200" : "border-gray-200 bg-white hover:border-blue-300"
-            )}
-          >
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-2">
-                <span className="text-[13px] font-bold text-gray-800">{c.carrier}</span>
-                <span className={cn("text-[9px] px-1.5 py-0.5 rounded-full font-semibold", c.mode === "Ocean" ? "bg-blue-100 text-blue-700" : "bg-sky-100 text-sky-700")}>{c.mode}</span>
-                {c.recommended && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-bold">AI Recommended</span>}
+      <div className="space-y-3">
+        {ALT_CARRIERS.map((c) => {
+          const isSelected = selectedAltCarrier === c.carrier
+          const MIcon = ModeIcons[c.mode]
+          const mc = modeColors[c.mode]
+          return (
+            <button
+              key={c.carrier}
+              onClick={() => setSelectedAltCarrier(c.carrier)}
+              className={cn("w-full text-left rounded-xl border-2 transition-all overflow-hidden",
+                isSelected ? "border-blue-500 ring-2 ring-blue-200 shadow-md" : "border-gray-200 hover:border-blue-300 hover:shadow-sm"
+              )}
+            >
+              {/* Card header with mode color */}
+              <div className={cn("px-4 py-2.5 flex items-center justify-between", isSelected ? "bg-blue-50" : "bg-gray-50")}>
+                <div className="flex items-center gap-2.5">
+                  <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center", mc.bg)}>
+                    <MIcon size={16} className="text-white" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[14px] font-bold text-gray-900">{c.carrier}</span>
+                      <span className={cn("text-[9px] px-2 py-0.5 rounded-full font-bold", mc.light, mc.text)}>{c.mode === "Ocean" ? "Ocean Freight" : "Air Freight"}</span>
+                    </div>
+                    <div className="text-[11px] text-gray-500">{c.route}</div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[18px] font-bold text-gray-900">{c.rate}</div>
+                  <div className={cn("text-[10px] font-medium", c.rateNote === "Premium" ? "text-amber-600" : c.rateNote.startsWith("-") ? "text-emerald-600" : "text-amber-600")}>{c.rateNote}</div>
+                </div>
               </div>
-              <span className="text-[14px] font-bold text-gray-800">{c.rate}</span>
-            </div>
-            <div className="flex items-center gap-3 text-[10px] text-gray-500">
-              <span>Transit: {c.transit}</span><span>SLA: {c.sla}</span>
-            </div>
-            <div className="text-[10px] text-gray-400 mt-1">{c.reason}</div>
-          </button>
-        ))}
+              {/* Card body with booking details */}
+              <div className="px-4 py-3">
+                <div className="grid grid-cols-4 gap-3 mb-2">
+                  {[
+                    { label: c.mode === "Ocean" ? "Vessel" : "Flight", value: c.vessel.split(" / ")[0] },
+                    { label: "Sailing", value: c.sailing.split(", ")[0] + c.sailing.slice(c.sailing.indexOf(",")) },
+                    { label: "Transit", value: c.transit },
+                    { label: "ETA", value: c.eta.split(", ")[0] + c.eta.slice(c.eta.indexOf(",")) },
+                  ].map((d) => (
+                    <div key={d.label}>
+                      <div className="text-[9px] text-gray-400 uppercase tracking-wider">{d.label}</div>
+                      <div className="text-[11px] font-semibold text-gray-800">{d.value}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center gap-3 text-[10px]">
+                  <span className="flex items-center gap-1 text-gray-500">SLA: <span className="font-bold text-gray-700">{c.sla}</span></span>
+                  <span className="flex items-center gap-1 text-gray-500">Container: <span className="font-bold text-gray-700">{c.container}</span></span>
+                  <span className={cn("px-1.5 py-0.5 rounded-full font-semibold", c.capacity === "Available" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")}>{c.capacity}</span>
+                  {c.recommended && <span className="px-2 py-0.5 rounded-full bg-blue-600 text-white font-bold text-[9px] ml-auto">AI Recommended</span>}
+                </div>
+              </div>
+              {/* Selection indicator */}
+              {isSelected && (
+                <div className="px-4 py-2 bg-blue-50 border-t border-blue-200 flex items-center gap-1.5">
+                  <CheckCircle size={12} className="text-blue-600" />
+                  <span className="text-[11px] font-semibold text-blue-700">Selected</span>
+                </div>
+              )}
+            </button>
+          )
+        })}
       </div>
     </div>
   )

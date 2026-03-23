@@ -1419,14 +1419,11 @@ function DemoExceptionOverlay({ scenarioId, onResolve, onSendNotification, onAdd
 
   const handleSendMissingDataEmail = () => {
     onSendNotification?.({ id: `DEMO-SENT-MD-${Date.now()}`, to: "plant-logistics@suzhou.company.com", subject: "Data Request: Shipper Contact for SAP-TM-87234", body: emailBody, timestamp: makeTs(), type: "plant" })
-    setPhase("waiting-reply")
-    // Simulate carrier reply after 1.5s
+    // Close modal — user will navigate to inbox to see reply
+    setShowModal(false)
+    // Add reply to inbox after 1.5s
     setTimeout(() => {
       onAddInboxEmail?.({ id: `DEMO-INBOX-MD-${Date.now()}`, from: "li.wei@suzhou.company.com", fromName: "Li Wei (Suzhou Plant)", subject: "RE: Data Request: Shipper Contact for SAP-TM-87234", body: "Hi,\n\nShipper contact for SAP-TM-87234:\n\nName: Li Wei\nPhone: +86 512 6688 7799\nRole: Logistics Coordinator, Suzhou Plant\n\nPlease proceed with the booking.\n\nBest regards,\nLi Wei", timestamp: makeTs(), read: false, tag: "carrier", tags: ["carrier", "data-request"], shipmentId: "BKG-NEW-001", shipmentRef: "SAP-TM-87234" })
-      // Auto-fill the 3rd field
-      setFilledFields([0, 1, 2])
-      setPhase("resolved")
-      setTimeout(() => { setShowModal(false); onResolve() }, 1500)
     }, 1500)
   }
 
@@ -1466,27 +1463,12 @@ function DemoExceptionOverlay({ scenarioId, onResolve, onSendNotification, onAdd
 
   const handleSendRateEmail = () => {
     onSendNotification?.({ id: `DEMO-SENT-RM-${Date.now()}`, to: "rates@maersk.com", subject: "Counter-Offer: SAP-TM-87234 — $3,024/container (SHA→LAX)", body: emailBody, timestamp: makeTs(), type: "carrier" })
-    setPhase("resolving")
-    // Run negotiation spinner
-    const steps = [
-      { pct: 15, label: "Counter-offer submitted to Maersk..." },
-      { pct: 40, label: "Validating against market benchmarks..." },
-      { pct: 65, label: "Carrier reviewing terms..." },
-      { pct: 85, label: "Maersk accepted counter-offer..." },
-      { pct: 100, label: "Rate confirmed at $3,024/container." },
-    ]
-    steps.forEach((s, idx) => {
-      setTimeout(() => { setNegoProgress(s.pct); setNegoStatus(s.label) }, idx * 1000)
-    })
+    // Close modal — user will navigate to inbox to see carrier reply with negotiation result
+    setShowModal(false)
+    // Add reply to inbox after 1.5s
     setTimeout(() => {
-      setNegoComplete(true)
-      // Add reply email to inbox
-      onAddInboxEmail?.({ id: `DEMO-INBOX-RM-${Date.now()}`, from: "rates@maersk.com", fromName: "Maersk Rate Desk", subject: "RE: Counter-Offer Accepted — $3,024/container (SHA→LAX)", body: "Dear Customer,\n\nWe accept your counter-offer.\n\nConfirmed Rate: $3,024/container\nRoute: SHA→LAX\nBooking: SAP-TM-87234\n\nPlease proceed with booking submission.\n\nMaersk Rate Desk", timestamp: makeTs(), read: false, tag: "carrier", tags: ["carrier", "rate"], shipmentId: "BKG-NEW-001", shipmentRef: "SAP-TM-87234" })
-      setTimeout(() => {
-        setPhase("resolved")
-        setTimeout(() => { setShowModal(false); onResolve() }, 1200)
-      }, 1500)
-    }, steps.length * 1000 + 500)
+      onAddInboxEmail?.({ id: `DEMO-INBOX-RM-${Date.now()}`, from: "rates@maersk.com", fromName: "Maersk Rate Desk", subject: "RE: Counter-Offer Accepted — $3,024/container (SHA→LAX)", body: "Dear Customer,\n\nWe accept your counter-offer.\n\nConfirmed Rate: $3,024/container\nRoute: SHA→LAX\nBooking: SAP-TM-87234\nSavings: $316/container vs original quote\n\nPlease proceed with booking submission.\n\nMaersk Rate Desk", timestamp: makeTs(), read: false, tag: "carrier", tags: ["carrier", "rate"], shipmentId: "BKG-NEW-001", shipmentRef: "SAP-TM-87234" })
+    }, 1500)
   }
 
   // Main resolve dispatcher

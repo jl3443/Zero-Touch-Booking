@@ -268,6 +268,15 @@ export function AppShell({ persona }: { persona?: Persona }) {
                   handleViewChange("tracking-search")
                 }}
                 onMarkRead={handleMarkEmailRead}
+                dynamicEmails={dynamicInboxEmails}
+                onReturnToFlow={() => {
+                  // Resolve the exception and return to dashboard
+                  setDemoExceptionActive(false)
+                  // Advance demo step past the exception
+                  handleDemoStepAdvance(demoStep + 1)
+                  handleViewChange("dashboard")
+                  setDemoShipmentVisible(true)
+                }}
               />
             )}
 

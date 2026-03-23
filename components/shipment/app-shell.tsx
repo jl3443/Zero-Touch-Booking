@@ -45,6 +45,8 @@ export function AppShell({ persona }: { persona?: Persona }) {
   const [showCompletionModal, setShowCompletionModal] = useState(false)
   const [demoElapsedTime, setDemoElapsedTime] = useState("0s")
   const [dynamicInboxEmails, setDynamicInboxEmails] = useState<Array<{ id: string; from: string; fromName: string; subject: string; body: string; timestamp: string; read: boolean; tag: string; tags: string[]; shipmentId: string; shipmentRef: string }>>([])
+  const [sapAutoOpenOrderId, setSapAutoOpenOrderId] = useState<string | null>(null)
+  const [emailAutoSelectId, setEmailAutoSelectId] = useState<string | null>(null)
 
   const handleAddInboxEmail = (email: typeof dynamicInboxEmails[0]) => {
     setDynamicInboxEmails((prev) => [email, ...prev])
@@ -130,13 +132,16 @@ export function AppShell({ persona }: { persona?: Persona }) {
   const exceptionsCount = BOOKING_REQUESTS.filter((s) => s.bookingStatus === "Exception" || s.bookingStatus === "Awaiting Approval").filter((s) => !resolvedExceptionIds.has(s.id)).length
   const unreadInboxCount = INBOX_EMAILS.filter((e) => !e.read && !readEmailIds.has(e.id)).length
 
-  const handleViewChange = (v: SidebarView) => {
+  const handleViewChange = (v: SidebarView, opts?: { sapOrderId?: string; emailId?: string }) => {
     setViewHistory((prev) => [...prev, { view }])
     setView(v)
     setSearchQuery("")
     if (v !== "tracking-search") setTrackingPreselect(null)
     if (v !== "weather-traffic") setWeatherHighlightId(null)
     setBackOpenShipmentId(null)
+    // Set auto-open targets for SAP / Email
+    setSapAutoOpenOrderId(opts?.sapOrderId ?? null)
+    setEmailAutoSelectId(opts?.emailId ?? null)
   }
 
   const handleBack = () => {
@@ -229,7 +234,7 @@ export function AppShell({ persona }: { persona?: Persona }) {
 
             {view === "analytics" && <AnalyticsPage etaUpdatedCount={etaApprovedCount} />}
 
-            {view === "sap-tm" && <SapSimulationPage />}
+            {view === "sap-tm" && <SapSimulationPage autoOpenOrderId={sapAutoOpenOrderId ?? undefined} demoUpdated={demoStep >= 7} />}
 
             {view === "tracking-search" && (
               <TrackingSearchPage
@@ -266,7 +271,7 @@ export function AppShell({ persona }: { persona?: Persona }) {
               />
             )}
 
-            {view === "email-sent" && <EmailSentPage dynamicEmails={sentEmails} />}
+            {view === "email-sent" && <EmailSentPage dynamicEmails={sentEmails} autoSelectId={emailAutoSelectId ?? undefined} />}
 
             {view === "agent-activity" && (
               <AgentActivityLog
@@ -276,6 +281,7 @@ export function AppShell({ persona }: { persona?: Persona }) {
             )}
           </>
         )}
+
       </div>
 
       {/* AI Chat Panel — fixed right-side overlay */}

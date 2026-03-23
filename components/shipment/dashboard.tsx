@@ -36,7 +36,7 @@ import {
 
 interface DashboardProps {
   searchQuery: string
-  onViewChange?: (view: SidebarView) => void
+  onViewChange?: (view: SidebarView, opts?: { sapOrderId?: string; emailId?: string }) => void
   onOpenWeather?: (shipmentId: string) => void
   onSendNotification?: (email: SentEmailItem) => void
   autoOpenShipmentId?: string
@@ -123,6 +123,14 @@ export function Dashboard({ searchQuery, onViewChange, onOpenWeather, onSendNoti
       if (s) setSelectedShipment(s)
     }
   }, [autoOpenShipmentId])
+
+  // Auto-restore booking drawer when returning to dashboard during active demo
+  useEffect(() => {
+    if (demoActive && (demoStep ?? 0) > 0 && !bookingMode) {
+      setSelectedShipment(DEMO_SHIPMENT)
+      setBookingMode(true)
+    }
+  }, [demoActive, demoStep])
 
   // Adjust data when demo completes
   const demoCompleted = showCompletionModal || false
@@ -533,7 +541,15 @@ export function Dashboard({ searchQuery, onViewChange, onOpenWeather, onSendNoti
           onDemoExceptionTriggered={onDemoExceptionTriggered}
           onDemoComplete={onDemoComplete}
           onAddInboxEmail={onAddInboxEmail}
-          onNavigateView={(v) => onViewChange?.(v as any)}
+          onNavigateView={(v) => {
+            if (v === "sap-tm") {
+              onViewChange?.("sap-tm" as any, { sapOrderId: "SAP-TM-87234" } as any)
+            } else if (v === "email-sent") {
+              onViewChange?.("email-sent" as any, { emailId: "latest" } as any)
+            } else {
+              onViewChange?.(v as any)
+            }
+          }}
         />
       )}
 

@@ -48,7 +48,7 @@ export function DemoModal({ open, onClose, title, subtitle, icon, children, foot
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-6 py-4">
+        <div className="flex-1 overflow-y-auto px-6 py-4 relative">
           {children}
         </div>
 

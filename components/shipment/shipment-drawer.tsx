@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { type BookingRequest, DEMO_STEP_DETAILS, DEMO_SCENARIOS, DEMO_EXCEPTION_RESOLUTIONS, type DemoStepDetail } from "@/lib/mock-data"
 import { DemoModal, CompletionModal } from "./demo-modal"
 import { generateSLI, generatePackingList, generateCustomsDeclaration } from "@/lib/pdf-generator"
@@ -628,13 +628,29 @@ function LiveBookingFlow({
   onSendNotification, onDemoComplete, onAddInboxEmail, onNavigateView,
 }: LiveBookingFlowProps) {
   const [subItemTick, setSubItemTick] = useState(0)
-  const [stepPhase, setStepPhase] = useState<"thinking" | "revealing" | "complete" | "idle">("idle")
+  const [stepPhase, setStepPhase] = useState<"thinking" | "revealing" | "complete" | "idle">(() => {
+    // If restoring mid-demo, start in complete phase (modal shows, waiting for user)
+    if (demoStep >= 1 && demoStep <= 8 && demoPaused) return "complete"
+    return "idle"
+  })
   const [showReasoning, setShowReasoning] = useState(true)
   const [carrierOverride, setCarrierOverride] = useState(false)
   const [selectedCarrier, setSelectedCarrier] = useState<string | null>(null)
   const [elapsedMs, setElapsedMs] = useState(0)
-  const [completedSteps, setCompletedSteps] = useState<number[]>([])
-  const [showStepModal, setShowStepModal] = useState<number | null>(null)
+  // When remounting mid-demo (e.g. user navigated away and back), restore completed steps and current modal
+  const [completedSteps, setCompletedSteps] = useState<number[]>(() => {
+    if (demoStep > 1) return Array.from({ length: demoStep - 1 }, (_, i) => i + 1)
+    return []
+  })
+  const [showStepModal, setShowStepModal] = useState<number | null>(() => {
+    // If remounting mid-demo and step is paused/in-progress, show the current step modal
+    if (demoStep >= 1 && demoStep <= 8 && demoPaused) return demoStep
+    return null
+  })
+  const [showEscalationConfirm, setShowEscalationConfirm] = useState(false)
+  const [uploadedDocs, setUploadedDocs] = useState<Array<{ name: string; size: string }>>([])
+  const [uploadAnalyzing, setUploadAnalyzing] = useState(false)
+  const uploadInputRef = useRef<HTMLInputElement>(null)
 
   const scenario = DEMO_SCENARIOS.find((s) => s.id === demoScenario) ?? DEMO_SCENARIOS[0]
   const currentStepConfig = demoStep >= 1 && demoStep <= 8 ? DEMO_STEP_DETAILS[demoStep - 1] : null
@@ -663,13 +679,21 @@ function LiveBookingFlow({
     }
   }, [demoStep])
 
+  // Determine if current step should fast-forward (no modal, auto-advance)
+  const exceptionStep = scenario.exceptionAtStep
+  const isExceptionScenario = demoScenario !== "happy-path" && exceptionStep != null
+  // Fast-forward: steps before AND after the exception step (but not the exception step itself)
+  const shouldFastForward = isExceptionScenario && demoStep !== exceptionStep
+  // After exception is resolved, all remaining steps should fast-forward
+  const [exceptionResolved, setExceptionResolved] = useState(false)
+
   // Step animation engine
   useEffect(() => {
     if (demoStep < 1 || demoStep > 8 || demoPaused || demoExceptionActive) return
     if (completedSteps.includes(demoStep)) return
 
     // Check if this step should trigger an exception
-    if (scenario.exceptionAtStep === demoStep && !demoExceptionActive) {
+    if (scenario.exceptionAtStep === demoStep && !demoExceptionActive && !exceptionResolved) {
       // Show thinking briefly, then trigger exception
       setStepPhase("thinking")
       setSubItemTick(0)
@@ -685,8 +709,27 @@ function LiveBookingFlow({
 
     const config = DEMO_STEP_DETAILS[demoStep - 1]
 
+    // Fast-forward mode: rapid animation, no modals, auto-advance
+    if (shouldFastForward) {
+      const fastTimer = setTimeout(() => {
+        setStepPhase("revealing")
+        setSubItemTick(config.subItems.length) // reveal all at once
+        setTimeout(() => {
+          setStepPhase("complete")
+          setCompletedSteps((p) => [...p, demoStep])
+          setTimeout(() => {
+            if (demoStep < 8) onStepAdvance?.(demoStep + 1)
+            else {
+              onDemoComplete?.()
+            }
+          }, 300)
+        }, 250)
+      }, 400)
+      return () => clearTimeout(fastTimer)
+    }
+
     // At step 2 with carrier selection, pause after revealing for user interaction
-    const isCarrierStep = demoStep === 2
+    const isCarrierStep = demoStep === 2 && demoScenario === "happy-path"
 
     // After thinking duration, start revealing sub-items
     const revealTimer = setTimeout(() => {
@@ -726,7 +769,7 @@ function LiveBookingFlow({
     }, config.duration * (demoScenario === "happy-path" ? 0.6 : 0.3))
 
     return () => clearTimeout(revealTimer)
-  }, [demoStep, demoPaused, demoExceptionActive, completedSteps])
+  }, [demoStep, demoPaused, demoExceptionActive, completedSteps, exceptionResolved])
 
   const makeTimestamp = () => {
     const now = new Date()
@@ -758,6 +801,33 @@ function LiveBookingFlow({
     }
   }
 
+  // Handle escalation from step 4
+  const handleEscalateBooking = () => {
+    // Send escalation email to VP Supply Chain
+    onSendNotification?.({
+      id: `DEMO-SENT-ESC-${Date.now()}`,
+      to: "j.mitchell@logistics.co",
+      subject: "Escalation: Booking Approval Required — SAP-TM-87234 (SHA→LAX, Maersk)",
+      body: "Dear VP Mitchell,\n\nA booking request requires your approval before submission.\n\nOrder: SAP-TM-87234\nRoute: Shanghai (SHA) → Los Angeles (LAX)\nCarrier: Maersk Line (AI recommended)\nRate: $2,850/container (within 1.8% of contract)\nVessel: AE-1234 / Mar 22 sailing\nContainer: 2×40' HC\nTotal: $5,700\n\nThe AI agent has evaluated 4 carriers and recommends Maersk based on optimal rate-SLA-capacity combination.\n\nPlease review and approve at your earliest convenience.\n\n— Zero Touch Booking Agent",
+      timestamp: makeTimestamp(),
+      type: "escalation",
+    })
+    // Also send a confirmation to SCM planner
+    onSendNotification?.({
+      id: `DEMO-SENT-ESC-CC-${Date.now()}`,
+      to: "a.chen@logistics.co",
+      subject: "FYI: Booking SAP-TM-87234 Escalated to VP Mitchell for Approval",
+      body: "FYI — The booking for SAP-TM-87234 (SHA→LAX) has been escalated to VP Supply Chain J. Mitchell for approval.\n\nCarrier: Maersk Line\nRate: $2,850/container\nStatus: Awaiting VP approval\n\nYou will be notified once the booking is approved.\n\n— Zero Touch Booking Agent",
+      timestamp: makeTimestamp(),
+      type: "sap",
+    })
+    // Close the booking preview modal, show escalation confirmation instead
+    setShowStepModal(null)
+    setShowEscalationConfirm(true)
+    // Auto-pause demo so user can freely navigate to emails etc.
+    onPause?.()
+  }
+
   // Handle carrier selection confirm (step 2)
   const handleCarrierConfirm = () => {
     setShowStepModal(null)
@@ -767,9 +837,10 @@ function LiveBookingFlow({
     setTimeout(() => onStepAdvance?.(3), 400)
   }
 
-  // Handle exception resolution
+  // Handle exception resolution — marks resolved, then fast-forwards remaining steps
   const handleResolveException = () => {
     onExceptionResolved?.()
+    setExceptionResolved(true)
     setStepPhase("complete")
     setCompletedSteps((p) => [...p, demoStep])
     setTimeout(() => {
@@ -1045,36 +1116,65 @@ function LiveBookingFlow({
           </div>
         }
       >
-        <div className="grid grid-cols-2 gap-3">
-          {shipment.carrierOptions.map((c) => (
-            <div
-              key={c.carrier}
-              onClick={() => carrierOverride && setSelectedCarrier(c.carrier)}
-              className={cn(
-                "border rounded-xl p-4 transition-all",
-                (c.recommended && !carrierOverride && !selectedCarrier) || selectedCarrier === c.carrier
-                  ? "border-blue-400 bg-blue-50 shadow-sm ring-1 ring-blue-200"
-                  : carrierOverride ? "border-gray-200 hover:border-blue-300 cursor-pointer" : "border-gray-200",
-              )}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-600">{c.carrier.slice(0, 3).toUpperCase()}</div>
-                  <span className="text-[14px] font-bold text-gray-800">{c.carrier}</span>
-                </div>
-                {((c.recommended && !carrierOverride && !selectedCarrier) || selectedCarrier === c.carrier) && (
-                  <span className="text-[9px] px-2 py-0.5 rounded-full bg-blue-600 text-white font-bold">AI PICK</span>
+        <div className="grid grid-cols-2 gap-4">
+          {shipment.carrierOptions.map((c) => {
+            const isSelected = (c.recommended && !carrierOverride && !selectedCarrier) || selectedCarrier === c.carrier
+            const rateDiff = c.contractRate ? ((c.rate - c.contractRate) / c.contractRate * 100).toFixed(1) : null
+            return (
+              <div
+                key={c.carrier}
+                onClick={() => carrierOverride && setSelectedCarrier(c.carrier)}
+                className={cn(
+                  "border rounded-xl p-5 transition-all",
+                  isSelected
+                    ? "border-blue-400 bg-blue-50 shadow-sm ring-1 ring-blue-200"
+                    : carrierOverride ? "border-gray-200 hover:border-blue-300 cursor-pointer" : "border-gray-200",
                 )}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center text-[11px] font-bold text-gray-600">{c.carrier.slice(0, 3).toUpperCase()}</div>
+                    <span className="text-[16px] font-bold text-gray-800">{c.carrier}</span>
+                  </div>
+                  {isSelected && (
+                    <span className="text-[10px] px-2.5 py-1 rounded-full bg-blue-600 text-white font-bold">AI PICK</span>
+                  )}
+                </div>
+                <div className="grid grid-cols-3 gap-y-3 gap-x-4">
+                  <div>
+                    <span className="text-[11px] text-gray-400">Rate</span>
+                    <div className="text-[16px] font-bold text-gray-800">${c.rate.toLocaleString()}</div>
+                    {rateDiff && (
+                      <span className={cn("text-[10px] font-medium", Number(rateDiff) <= 0 ? "text-emerald-600" : Number(rateDiff) <= 3 ? "text-amber-600" : "text-red-600")}>
+                        {Number(rateDiff) > 0 ? "+" : ""}{rateDiff}% vs contract
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-gray-400">Transit</span>
+                    <div className="text-[16px] font-bold text-gray-800">{c.transitDays} days</div>
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-gray-400">Capacity</span>
+                    <div className={cn("text-[14px] font-bold", c.capacity === "Available" ? "text-emerald-600" : c.capacity === "Limited" ? "text-amber-600" : "text-red-600")}>{c.capacity}</div>
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-gray-400">SLA Score</span>
+                    <div className="text-[16px] font-bold text-gray-800">{c.sla}%</div>
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-gray-400">Lane Performance</span>
+                    <div className="text-[16px] font-bold text-gray-800">{c.lanePerformance}%</div>
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-gray-400">Contract Rate</span>
+                    <div className="text-[14px] font-medium text-gray-600">${c.contractRate.toLocaleString()}</div>
+                  </div>
+                </div>
+                {c.reason && <p className="text-[11px] text-gray-500 mt-3 border-t border-gray-100 pt-2">{c.reason}</p>}
               </div>
-              <div className="grid grid-cols-2 gap-y-2 gap-x-4">
-                <div><span className="text-[10px] text-gray-400">Rate</span><div className="text-[14px] font-bold text-gray-800">${c.rate.toLocaleString()}</div></div>
-                <div><span className="text-[10px] text-gray-400">Transit</span><div className="text-[14px] font-bold text-gray-800">{c.transitDays} days</div></div>
-                <div><span className="text-[10px] text-gray-400">SLA Score</span><div className="text-[14px] font-bold text-gray-800">{c.sla}%</div></div>
-                <div><span className="text-[10px] text-gray-400">Capacity</span><div className={cn("text-[12px] font-bold", c.capacity === "Available" ? "text-emerald-600" : c.capacity === "Limited" ? "text-amber-600" : "text-red-600")}>{c.capacity}</div></div>
-              </div>
-              {c.reason && <p className="text-[10px] text-gray-500 mt-2 border-t border-gray-100 pt-2">{c.reason}</p>}
-            </div>
-          ))}
+            )
+          })}
         </div>
       </DemoModal>
 
@@ -1087,18 +1187,62 @@ function LiveBookingFlow({
         footer={
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-emerald-600 font-medium">Rate within contract threshold (1.8%)</span>
-            <button onClick={() => handleModalContinue(4)} className="px-5 py-2 bg-emerald-600 text-white text-[13px] font-semibold rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-1.5"><Check size={14} /> Approve & Submit</button>
+            <div className="flex items-center gap-2">
+              <button onClick={handleEscalateBooking} className="px-4 py-2 border border-amber-300 bg-amber-50 text-amber-700 text-[13px] font-medium rounded-lg hover:bg-amber-100 transition-colors flex items-center gap-1.5">
+                <ArrowUp size={14} /> Escalate to VP
+              </button>
+              <button onClick={() => handleModalContinue(4)} className="px-5 py-2 bg-emerald-600 text-white text-[13px] font-semibold rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-1.5"><Check size={14} /> Approve & Submit</button>
+            </div>
           </div>
         }
       >
         <StepOutputPanel step={4} shipment={shipment} />
       </DemoModal>
 
+      {/* Escalation confirmation modal — standalone, doesn't block sidebar navigation */}
+      {showEscalationConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-md mx-4 overflow-hidden animate-in zoom-in-95 fade-in duration-300">
+            <div className="pt-8 pb-4 text-center">
+              <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4 animate-in zoom-in-50 duration-500">
+                <Send size={28} className="text-emerald-600" />
+              </div>
+              <h2 className="text-[18px] font-bold text-gray-900">Escalation Sent</h2>
+              <p className="text-[13px] text-gray-500 mt-1">
+                Booking approval request sent to<br />
+                <span className="font-semibold text-gray-700">VP Supply Chain — J. Mitchell</span>
+              </p>
+              <div className="flex items-center justify-center gap-2 mt-3">
+                <span className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold">Email Delivered</span>
+                <span className="text-[10px] px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 font-semibold">Pending Approval</span>
+              </div>
+            </div>
+            <div className="border-t border-gray-100 px-6 py-3 bg-gray-50/50 flex items-center justify-between">
+              <span className="text-[11px] text-gray-400">Demo paused — navigate freely</span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { setShowEscalationConfirm(false); onNavigateView?.("email-sent") }}
+                  className="px-4 py-2 border border-blue-200 bg-blue-50 text-blue-700 text-[12px] font-semibold rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-1.5"
+                >
+                  <Mail size={13} /> View Sent Emails
+                </button>
+                <button
+                  onClick={() => { setShowEscalationConfirm(false); setShowStepModal(4) }}
+                  className="px-4 py-2 bg-emerald-600 text-white text-[12px] font-semibold rounded-lg hover:bg-emerald-700 transition-colors"
+                >
+                  Continue Booking
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Step 5: Documents */}
       <DemoModal
         open={showStepModal === 5}
         title="Documents Uploaded & Verified"
-        subtitle="3 shipping documents generated and uploaded to carrier portal"
+        subtitle={`${3 + uploadedDocs.length} shipping documents generated and uploaded to carrier portal`}
         icon={<div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center"><Upload size={18} className="text-blue-600" /></div>}
         footer={<div className="flex justify-end"><button onClick={() => handleModalContinue(5)} className="px-5 py-2 bg-blue-600 text-white text-[13px] font-semibold rounded-lg hover:bg-blue-700 transition-colors">Continue →</button></div>}
       >
@@ -1118,6 +1262,63 @@ function LiveBookingFlow({
               <button onClick={doc.onView} className="text-[11px] px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-blue-600 font-medium hover:bg-blue-50 transition-colors shrink-0">View PDF</button>
             </div>
           ))}
+
+          {/* Uploaded documents */}
+          {uploadedDocs.map((doc, idx) => (
+            <div key={`uploaded-${idx}`} className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg border border-blue-200 animate-in slide-in-from-bottom-2 fade-in duration-500">
+              <FileText size={20} className="text-blue-600 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-semibold text-gray-800">{doc.name}</div>
+                <div className="text-[11px] text-gray-400">{doc.size} · Uploaded by user</div>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold shrink-0">AI Verified</span>
+            </div>
+          ))}
+
+          {/* AI Analyzing animation */}
+          {uploadAnalyzing && (
+            <div className="flex items-center gap-3 p-3 bg-indigo-50 rounded-lg border border-indigo-200 animate-pulse">
+              <div className="w-5 h-5 shrink-0">
+                <Brain size={20} className="text-indigo-500 animate-pulse" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-semibold text-indigo-700 flex items-center gap-1">
+                  AI analyzing document
+                  <ThinkingDots />
+                </div>
+                <div className="text-[11px] text-indigo-400">Extracting content, validating compliance, cross-referencing with booking data...</div>
+              </div>
+              <Loader2 size={16} className="text-indigo-500 animate-spin shrink-0" />
+            </div>
+          )}
+
+          {/* Upload button */}
+          <input
+            ref={uploadInputRef}
+            type="file"
+            accept=".pdf,.doc,.docx"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (!file) return
+              const sizeKB = Math.round(file.size / 1024)
+              setUploadAnalyzing(true)
+              // AI analysis animation for 1.5s
+              setTimeout(() => {
+                setUploadAnalyzing(false)
+                setUploadedDocs((prev) => [...prev, { name: file.name, size: `${sizeKB} KB` }])
+              }, 1500)
+              // Reset input
+              e.target.value = ""
+            }}
+          />
+          <button
+            onClick={() => uploadInputRef.current?.click()}
+            className="w-full flex items-center justify-center gap-2 p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50/50 transition-colors cursor-pointer"
+          >
+            <Upload size={16} />
+            <span className="text-[12px] font-medium">Upload Supporting Document</span>
+          </button>
         </div>
       </DemoModal>
 
@@ -1161,82 +1362,172 @@ function LiveBookingFlow({
 
 function DemoExceptionOverlay({ scenarioId, onResolve }: { scenarioId: string; onResolve: () => void }) {
   const resolution = DEMO_EXCEPTION_RESOLUTIONS[scenarioId]
-  const [resolving, setResolving] = useState(false)
+  const [phase, setPhase] = useState<"showing" | "resolving" | "resolved">("showing")
   const [showModal, setShowModal] = useState(true)
+  // Animation states for missing-data
+  const [filledFields, setFilledFields] = useState<number[]>([])
+  // Animation states for portal-failure / carrier-rejection (auto-resolve stepper)
+  const [autoStep, setAutoStep] = useState(0)
+  // Rate-mismatch negotiation spinner
+  const [negoProgress, setNegoProgress] = useState(0)
+  const [negoStatus, setNegoStatus] = useState("")
+  const [negoComplete, setNegoComplete] = useState(false)
 
   if (!resolution) return null
 
+  const MISSING_FIELDS = [
+    { field: "Commodity HS Code", source: "SAP Material Master", value: "8471.30 — Laptop Parts", confidence: 99 },
+    { field: "Package Dimensions", source: "Historical Shipments (BKG-09812)", value: "60×40×30 cm / carton", confidence: 87 },
+    { field: "Shipper Contact", source: "Plant Directory", value: "Li Wei, +86 512 6688 7799", confidence: 95 },
+  ]
+
   const handleResolve = () => {
-    setResolving(true)
-    setTimeout(() => {
-      setResolving(false)
-      setShowModal(false)
-      onResolve()
-    }, 1500)
+    if (phase !== "showing") return
+    setPhase("resolving")
+
+    if (scenarioId === "missing-data") {
+      // Progressive field fill animation
+      MISSING_FIELDS.forEach((_, idx) => {
+        setTimeout(() => setFilledFields((p) => [...p, idx]), 600 + idx * 800)
+      })
+      setTimeout(() => {
+        setPhase("resolved")
+        setTimeout(() => { setShowModal(false); onResolve() }, 1200)
+      }, 600 + MISSING_FIELDS.length * 800 + 400)
+    } else if (scenarioId === "portal-failure" || scenarioId === "carrier-rejection") {
+      // Auto-resolve stepper animation (no user click needed)
+      const steps = scenarioId === "portal-failure"
+        ? ["Detecting outage scope...", "Switching to EDI channel...", "Resubmitting booking...", "Confirmed"]
+        : ["Checking equipment availability...", "Evaluating 3 carriers...", "Submitting to MSC...", "Confirmed"]
+      steps.forEach((_, idx) => {
+        setTimeout(() => setAutoStep(idx + 1), 800 + idx * 1200)
+      })
+      setTimeout(() => {
+        setPhase("resolved")
+        setTimeout(() => { setShowModal(false); onResolve() }, 1000)
+      }, 800 + steps.length * 1200 + 400)
+    } else if (scenarioId === "rate-mismatch") {
+      // Negotiation spinner flow (GSSN-style)
+      const steps = [
+        { pct: 10, label: "Analyzing market rate benchmarks..." },
+        { pct: 30, label: "Validating contract terms..." },
+        { pct: 55, label: "Calculating optimal counter-offer..." },
+        { pct: 80, label: "Submitting counter at $3,024..." },
+        { pct: 100, label: "Carrier response received." },
+      ]
+      steps.forEach((s, idx) => {
+        setTimeout(() => { setNegoProgress(s.pct); setNegoStatus(s.label) }, idx * 1000)
+      })
+      setTimeout(() => {
+        setNegoComplete(true)
+        setTimeout(() => {
+          setPhase("resolved")
+          setTimeout(() => { setShowModal(false); onResolve() }, 1200)
+        }, 1500)
+      }, steps.length * 1000 + 500)
+    } else {
+      // Standard resolve animation (no-capacity)
+      setTimeout(() => {
+        setPhase("resolved")
+        setTimeout(() => { setShowModal(false); onResolve() }, 800)
+      }, 1500)
+    }
   }
 
-  // Scenario-specific rich content
+  // Auto-trigger resolve for portal-failure and carrier-rejection (zero touch)
+  useEffect(() => {
+    if ((scenarioId === "portal-failure" || scenarioId === "carrier-rejection") && phase === "showing") {
+      const t = setTimeout(() => handleResolve(), 2000) // Auto-start after 2s
+      return () => clearTimeout(t)
+    }
+  }, [scenarioId, phase])
+
   const scenarioContent: Record<string, React.ReactNode> = {
     "missing-data": (
       <div className="space-y-3">
         <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Missing Fields Detected</div>
         <div className="space-y-2">
-          {[
-            { field: "Commodity HS Code", source: "SAP Material Master", autoValue: "8471.30 — Laptop Parts", status: "Auto-filled" },
-            { field: "Package Dimensions", source: "Historical Shipments (3 records)", autoValue: "60×40×30 cm / carton", status: "Auto-filled" },
-            { field: "Shipper Contact", source: "Plant Directory", autoValue: "Li Wei, +86 512 6688 7799", status: "Auto-filled" },
-          ].map((f) => (
-            <div key={f.field} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200">
-              <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                <AlertTriangle size={14} className="text-amber-600" />
+          {MISSING_FIELDS.map((f, idx) => {
+            const isFilled = filledFields.includes(idx)
+            const isScanning = phase === "resolving" && !isFilled
+            return (
+              <div key={f.field} className={cn(
+                "flex items-center gap-3 p-3 rounded-lg border transition-all duration-500",
+                isFilled ? "bg-emerald-50 border-emerald-300" : isScanning ? "bg-blue-50 border-blue-300 animate-pulse" : "bg-white border-gray-200"
+              )}>
+                <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors duration-500",
+                  isFilled ? "bg-emerald-100" : "bg-amber-100"
+                )}>
+                  {isFilled ? <CheckCircle size={14} className="text-emerald-600" /> : isScanning ? <Loader2 size={14} className="text-blue-500 animate-spin" /> : <AlertTriangle size={14} className="text-amber-600" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[12px] font-semibold text-gray-800">{f.field}</div>
+                  <div className="text-[10px] text-gray-400">Source: {f.source}</div>
+                </div>
+                <div className="text-right shrink-0">
+                  {isFilled ? (
+                    <div className="animate-in fade-in slide-in-from-right-2 duration-300">
+                      <div className="text-[11px] font-semibold text-emerald-700">{f.value}</div>
+                      <div className="text-[9px] text-emerald-500 font-medium">{f.confidence}% match</div>
+                    </div>
+                  ) : isScanning ? (
+                    <div className="text-[10px] text-blue-500 font-medium">Searching...</div>
+                  ) : (
+                    <div className="text-[10px] text-red-500 font-medium">Missing</div>
+                  )}
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[12px] font-semibold text-gray-800">{f.field}</div>
-                <div className="text-[10px] text-gray-400">Source: {f.source}</div>
-              </div>
-              <div className="text-right shrink-0">
-                <div className="text-[11px] font-medium text-blue-700">{f.autoValue}</div>
-                <div className="text-[9px] text-emerald-600 font-semibold">{f.status}</div>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
+        {phase === "resolved" && (
+          <div className="bg-emerald-50 rounded-lg px-4 py-3 border border-emerald-200 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="flex items-center gap-2">
+              <CheckCircle size={16} className="text-emerald-600" />
+              <span className="text-[13px] font-bold text-emerald-700">3/3 Fields Resolved in 2.4s</span>
+            </div>
+          </div>
+        )}
       </div>
     ),
     "no-capacity": (
       <div className="space-y-3">
-        <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Carrier Capacity Status — SHA→LAX</div>
+        <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Carrier Capacity Sweep — SHA→LAX</div>
         <div className="grid grid-cols-2 gap-2">
           {[
-            { carrier: "Maersk", status: "Full", next: "Mar 28 (+5d)", color: "bg-red-100 text-red-700" },
-            { carrier: "MSC", status: "Full", next: "Mar 29 (+6d)", color: "bg-red-100 text-red-700" },
-            { carrier: "CMA-CGM", status: "Full", next: "Mar 27 (+4d)", color: "bg-red-100 text-red-700" },
-            { carrier: "Hapag-Lloyd", status: "Full", next: "Mar 30 (+7d)", color: "bg-red-100 text-red-700" },
+            { carrier: "Maersk", status: "Full", next: "Mar 28 (+5d)" },
+            { carrier: "MSC", status: "Full", next: "Mar 29 (+6d)" },
+            { carrier: "CMA-CGM", status: "Full", next: "Mar 27 (+4d)" },
+            { carrier: "Hapag-Lloyd", status: "Full", next: "Mar 30 (+7d)" },
           ].map((c) => (
             <div key={c.carrier} className="p-2.5 bg-white rounded-lg border border-gray-200 text-center">
               <div className="text-[12px] font-bold text-gray-800">{c.carrier}</div>
-              <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full mt-1 inline-block", c.color)}>{c.status}</span>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full mt-1 inline-block bg-red-100 text-red-700">{c.status}</span>
               <div className="text-[10px] text-gray-400 mt-1">Next: {c.next}</div>
             </div>
           ))}
         </div>
         <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mt-2">AI Alternative Route</div>
-        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+        <div className={cn("p-3 rounded-lg border transition-all", phase === "resolved" ? "bg-emerald-50 border-emerald-300 ring-1 ring-emerald-200" : "bg-blue-50 border-blue-200")}>
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-[13px] font-bold text-blue-800">SHA → Long Beach (LGB)</div>
-              <div className="text-[11px] text-blue-600">via Maersk, vessel AE-1240, sailing Mar 23</div>
+              <div className={cn("text-[13px] font-bold", phase === "resolved" ? "text-emerald-800" : "text-blue-800")}>SHA → Long Beach (LGB)</div>
+              <div className={cn("text-[11px]", phase === "resolved" ? "text-emerald-600" : "text-blue-600")}>via Maersk, vessel AE-1240, sailing Mar 23</div>
             </div>
             <div className="text-right">
-              <div className="text-[14px] font-bold text-blue-800">$2,920</div>
+              <div className={cn("text-[14px] font-bold", phase === "resolved" ? "text-emerald-800" : "text-blue-800")}>$2,920</div>
               <div className="text-[10px] text-blue-500">+2.5% vs contract</div>
             </div>
           </div>
           <div className="flex items-center gap-4 mt-2 text-[10px] text-blue-600">
-            <span>Transit: +1 day</span>
-            <span>Capacity: Available</span>
-            <span>SLA: within target</span>
+            <span>Transit: +1 day</span><span>Capacity: Available</span><span>SLA: within target</span>
           </div>
+          {phase === "resolved" && (
+            <div className="mt-2 pt-2 border-t border-emerald-200 flex items-center gap-2 animate-in fade-in duration-300">
+              <CheckCircle size={13} className="text-emerald-600" />
+              <span className="text-[11px] font-bold text-emerald-700">Reroute approved. Booking submitted.</span>
+            </div>
+          )}
         </div>
       </div>
     ),
@@ -1245,26 +1536,34 @@ function DemoExceptionOverlay({ scenarioId, onResolve }: { scenarioId: string; o
         <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Portal Health Dashboard</div>
         <div className="grid grid-cols-2 gap-2">
           {[
-            { portal: "Maersk Portal", status: "Offline", uptime: "HTTP 503", since: "14:23 UTC", color: "bg-red-100 text-red-700 border-red-200" },
-            { portal: "MSC Portal", status: "Online", uptime: "99.8%", since: "Healthy", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-            { portal: "CMA-CGM Portal", status: "Online", uptime: "99.2%", since: "Healthy", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-            { portal: "Hapag-Lloyd Portal", status: "Degraded", uptime: "94.1%", since: "Slow response", color: "bg-amber-100 text-amber-700 border-amber-200" },
+            { portal: "Maersk Portal", status: "Offline", detail: "HTTP 503 · 14:23 UTC", color: "bg-red-100 text-red-700 border-red-200" },
+            { portal: "MSC Portal", status: "Online", detail: "99.8% · Healthy", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+            { portal: "CMA-CGM Portal", status: "Online", detail: "99.2% · Healthy", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+            { portal: "Hapag-Lloyd Portal", status: "Degraded", detail: "94.1% · Slow response", color: "bg-amber-100 text-amber-700 border-amber-200" },
           ].map((p) => (
             <div key={p.portal} className={cn("p-2.5 rounded-lg border", p.color)}>
               <div className="text-[11px] font-bold">{p.portal}</div>
               <div className="text-[13px] font-bold mt-0.5">{p.status}</div>
-              <div className="text-[10px] opacity-70">{p.uptime} · {p.since}</div>
+              <div className="text-[10px] opacity-70">{p.detail}</div>
             </div>
           ))}
         </div>
-        <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mt-2">Fallback Carrier</div>
-        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200 flex items-center justify-between">
-          <div>
-            <div className="text-[13px] font-bold text-blue-800">MSC — Portal Online</div>
-            <div className="text-[11px] text-blue-600">Rate $2,720 (5% lower) · 16d transit · SLA within window</div>
+        {/* Auto-resolve stepper */}
+        {phase !== "showing" && (
+          <div className="space-y-2 mt-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">AI Failover Sequence</div>
+            {["Detecting outage scope — 47 shippers affected", "Switching to INTTRA EDI channel", "Resubmitting booking via EDI", "Confirmed — INTTRA-88421"].map((step, idx) => (
+              <div key={idx} className={cn("flex items-center gap-3 p-2.5 rounded-lg border transition-all duration-300",
+                autoStep > idx ? "bg-emerald-50 border-emerald-200" : autoStep === idx ? "bg-blue-50 border-blue-200 animate-pulse" : "bg-gray-50 border-gray-100"
+              )}>
+                {autoStep > idx ? <CheckCircle size={14} className="text-emerald-600 shrink-0" /> :
+                 autoStep === idx ? <Loader2 size={14} className="text-blue-500 animate-spin shrink-0" /> :
+                 <div className="w-3.5 h-3.5 rounded-full border-2 border-gray-300 shrink-0" />}
+                <span className={cn("text-[12px] font-medium", autoStep > idx ? "text-emerald-700" : autoStep === idx ? "text-blue-700" : "text-gray-400")}>{step}</span>
+              </div>
+            ))}
           </div>
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">Available</span>
-        </div>
+        )}
       </div>
     ),
     "rate-mismatch": (
@@ -1288,18 +1587,54 @@ function DemoExceptionOverlay({ scenarioId, onResolve }: { scenarioId: string; o
             <span className="text-[14px] font-bold text-red-700">$1,080</span>
           </div>
           <div className="flex items-center justify-between mt-1">
-            <span className="text-[11px] text-amber-600">Auto-approval threshold</span>
-            <span className="text-[11px] font-semibold text-amber-700">5% (exceeded: 19%)</span>
+            <span className="text-[11px] text-amber-600">Auto-approval threshold: 5%</span>
+            <span className="text-[11px] font-semibold text-red-600">Exceeded (19%)</span>
           </div>
         </div>
-        <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mt-2">Alternative</div>
-        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200 flex items-center justify-between">
-          <div>
-            <div className="text-[13px] font-bold text-blue-800">MSC — $2,720</div>
-            <div className="text-[11px] text-blue-600">Below contract rate · 16d transit · 87% SLA</div>
+        {/* Negotiation spinner — GSSN-style dark themed */}
+        {phase !== "showing" && (
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+            <div className="p-4 bg-[#0f1623] rounded-xl border border-slate-700 mt-3">
+              <div className="flex items-center gap-2 mb-3">
+                {negoComplete ? <CheckCircle size={16} className="text-emerald-400" /> : <Brain size={16} className="text-violet-400 animate-pulse" />}
+                <span className="text-[13px] font-bold text-white">{negoComplete ? "Negotiation Complete" : "AI Negotiating Rate"}</span>
+              </div>
+              {/* Progress bar */}
+              <div className="h-2 bg-slate-800 rounded-full overflow-hidden mb-2">
+                <div className={cn("h-full rounded-full transition-all duration-700 ease-out", negoComplete ? "bg-emerald-500" : "bg-violet-500")} style={{ width: `${negoProgress}%` }} />
+              </div>
+              <div className="text-[11px] text-slate-400 mb-3">{negoStatus}</div>
+
+              {/* Result rows — fade in after complete */}
+              {negoComplete && (
+                <div className="space-y-1.5 animate-in fade-in duration-300">
+                  {[
+                    { label: "Market Rate (SHA→LAX, 30d avg)", value: "$3,480", badge: "Benchmark", color: "text-slate-300" },
+                    { label: "Carrier Quote", value: "$3,340", badge: "-4% vs market", color: "text-amber-300" },
+                    { label: "AI Counter-Offer", value: "$3,024", badge: "Sent", color: "text-violet-300" },
+                    { label: "Carrier Accepted", value: "$3,024", badge: "Accepted", color: "text-emerald-300" },
+                  ].map((r, idx) => (
+                    <div key={idx} className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-slate-800/50" style={{ animationDelay: `${idx * 150}ms` }}>
+                      <div className="flex items-center gap-2">
+                        {r.badge === "Accepted" ? <CheckCircle size={12} className="text-emerald-400" /> : <div className="w-3 h-3 rounded-full border border-slate-600" />}
+                        <span className={cn("text-[11px] font-medium", r.color)}>{r.label}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[12px] font-bold text-white">{r.value}</span>
+                        <span className={cn("text-[9px] px-1.5 py-0.5 rounded-full font-semibold",
+                          r.badge === "Accepted" ? "bg-emerald-900/50 text-emerald-300" : r.badge === "Sent" ? "bg-violet-900/50 text-violet-300" : "bg-slate-700 text-slate-400"
+                        )}>{r.badge}</span>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="mt-2 px-2 py-1.5 bg-emerald-900/30 rounded-lg border border-emerald-800/50">
+                    <span className="text-[11px] text-emerald-300 font-medium">Savings: <span className="font-bold">$316/container</span> ($632 total) vs original quote</span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">Under contract</span>
-        </div>
+        )}
       </div>
     ),
     "carrier-rejection": (
@@ -1307,35 +1642,46 @@ function DemoExceptionOverlay({ scenarioId, onResolve }: { scenarioId: string; o
         <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Rejection Details</div>
         <div className="p-3 bg-red-50 rounded-lg border border-red-200">
           <div className="grid grid-cols-2 gap-y-2 gap-x-4">
-            {[
-              ["Booking Ref", "MAEU-2024-SHA-78432"],
-              ["Rejection Code", "EQ-UNAVAIL-HC40"],
-              ["Reason", "40' HC not available"],
-              ["Vessel", "AE-1234 (Mar 22)"],
-            ].map(([l, v]) => (
+            {[["Booking Ref", "MAEU-2024-SHA-78432"], ["Rejection Code", "EQ-UNAVAIL-HC40"], ["Reason", "40' HC not available"], ["Vessel", "AE-1234 (Mar 22)"]].map(([l, v]) => (
               <div key={l}><span className="text-[10px] text-red-400">{l}</span><div className="text-[11px] font-semibold text-red-800">{v}</div></div>
             ))}
           </div>
         </div>
-        <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mt-2">AI Re-booking Option</div>
-        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-[13px] font-bold text-blue-800">MSC — vessel MSC-ANNA</div>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">40' HC Available</span>
-          </div>
-          <div className="grid grid-cols-3 gap-2 text-center">
-            {[
-              ["Sailing", "Mar 23 (+1d)"],
-              ["Rate", "$2,720"],
-              ["Transit", "16 days"],
-            ].map(([l, v]) => (
-              <div key={l}><span className="text-[10px] text-blue-400">{l}</span><div className="text-[12px] font-bold text-blue-800">{v}</div></div>
+        {/* Auto-rebook stepper */}
+        {phase !== "showing" && (
+          <div className="space-y-2 mt-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">AI Auto-Rebook</div>
+            {["Checking 40' HC availability across 4 carriers", "MSC: 40' HC available on MSC-ANNA (Mar 23)", "Submitting booking to MSC", "Confirmed — MSC-BK-44219"].map((step, idx) => (
+              <div key={idx} className={cn("flex items-center gap-3 p-2.5 rounded-lg border transition-all duration-300",
+                autoStep > idx ? "bg-emerald-50 border-emerald-200" : autoStep === idx ? "bg-blue-50 border-blue-200 animate-pulse" : "bg-gray-50 border-gray-100"
+              )}>
+                {autoStep > idx ? <CheckCircle size={14} className="text-emerald-600 shrink-0" /> :
+                 autoStep === idx ? <Loader2 size={14} className="text-blue-500 animate-spin shrink-0" /> :
+                 <div className="w-3.5 h-3.5 rounded-full border-2 border-gray-300 shrink-0" />}
+                <span className={cn("text-[12px] font-medium", autoStep > idx ? "text-emerald-700" : autoStep === idx ? "text-blue-700" : "text-gray-400")}>{step}</span>
+              </div>
             ))}
+            {phase === "resolved" && (
+              <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200 animate-in fade-in duration-300">
+                <div className="flex items-center gap-2 mb-1">
+                  <CheckCircle size={14} className="text-emerald-600" />
+                  <span className="text-[12px] font-bold text-emerald-700">Re-booked in 12s — No human intervention required</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center mt-2">
+                  {[["New Carrier", "MSC"], ["Rate", "$2,720"], ["Equipment", "40' HC ✓"]].map(([l, v]) => (
+                    <div key={l}><span className="text-[10px] text-emerald-500">{l}</span><div className="text-[12px] font-bold text-emerald-800">{v}</div></div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
+        )}
       </div>
     ),
   }
+
+  // For portal-failure and carrier-rejection, the footer shows auto-resolve status instead of buttons
+  const isAutoResolve = scenarioId === "portal-failure" || scenarioId === "carrier-rejection"
 
   return (
     <DemoModal
@@ -1346,7 +1692,27 @@ function DemoExceptionOverlay({ scenarioId, onResolve }: { scenarioId: string; o
       width="2xl"
       showClose={false}
       footer={
-        !resolving ? (
+        isAutoResolve ? (
+          <div className="flex items-center gap-2 justify-center py-1">
+            {phase === "resolved" ? (
+              <span className="text-[12px] font-semibold text-emerald-600 flex items-center gap-1.5"><CheckCircle size={14} /> Exception resolved autonomously</span>
+            ) : phase === "resolving" ? (
+              <span className="text-[12px] font-medium text-blue-600 flex items-center gap-1.5"><Brain size={14} className="animate-pulse" /> AI agent resolving autonomously<ThinkingDots /></span>
+            ) : (
+              <span className="text-[12px] text-gray-500 flex items-center gap-1.5"><Brain size={14} className="animate-pulse" /> AI agent analyzing<ThinkingDots /></span>
+            )}
+          </div>
+        ) : phase === "resolved" ? (
+          <div className="flex items-center gap-2 justify-center py-1">
+            <CheckCircle size={14} className="text-emerald-600" />
+            <span className="text-[12px] font-semibold text-emerald-600">Exception resolved — continuing booking flow</span>
+          </div>
+        ) : phase === "resolving" ? (
+          <div className="flex items-center gap-2 justify-center py-1">
+            <Loader2 size={14} className="text-blue-500 animate-spin" />
+            <span className="text-[12px] font-medium text-blue-600">AI resolving<ThinkingDots /></span>
+          </div>
+        ) : (
           <div className="flex items-center gap-2 justify-between">
             <div className="flex items-center gap-2">
               {resolution.alternatives.map((alt, idx) => (
@@ -1354,11 +1720,6 @@ function DemoExceptionOverlay({ scenarioId, onResolve }: { scenarioId: string; o
               ))}
             </div>
             <button onClick={handleResolve} className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white text-[13px] font-semibold rounded-lg hover:bg-blue-700 transition-colors"><Sparkles size={13} /> {resolution.resolveLabel}</button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 justify-center py-1">
-            <Loader2 size={14} className="text-blue-500 animate-spin" />
-            <span className="text-[12px] font-medium text-blue-600">Resolving exception<ThinkingDots /></span>
           </div>
         )
       }
@@ -1369,17 +1730,19 @@ function DemoExceptionOverlay({ scenarioId, onResolve }: { scenarioId: string; o
         <div className="text-[12px] text-amber-800">{resolution.impact}</div>
       </div>
 
-      {/* Scenario-specific rich content */}
+      {/* Scenario-specific rich content with animations */}
       {scenarioContent[scenarioId]}
 
-      {/* AI Recommendation */}
-      <div className="bg-blue-50 rounded-lg px-4 py-3 border border-blue-200 mt-4">
-        <div className="flex items-center gap-1.5 mb-1">
-          <Brain size={13} className="text-blue-600" />
-          <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">AI Recommendation</span>
+      {/* AI Recommendation — only show in "showing" phase */}
+      {phase === "showing" && (
+        <div className="bg-blue-50 rounded-lg px-4 py-3 border border-blue-200 mt-4">
+          <div className="flex items-center gap-1.5 mb-1">
+            <Brain size={13} className="text-blue-600" />
+            <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">AI Recommendation</span>
+          </div>
+          <div className="text-[12px] text-blue-800">{resolution.aiRecommendation}</div>
         </div>
-        <div className="text-[12px] text-blue-800">{resolution.aiRecommendation}</div>
-      </div>
+      )}
     </DemoModal>
   )
 }

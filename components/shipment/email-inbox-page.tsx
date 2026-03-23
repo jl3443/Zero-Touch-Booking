@@ -23,20 +23,31 @@ function extractBookingId(body: string): string | null {
 interface EmailInboxPageProps {
   onOpenTracking?: (shipmentId: string) => void
   onMarkRead?: (emailId: string) => void
+  dynamicEmails?: Array<{ id: string; from: string; fromName: string; subject: string; body: string; timestamp: string; read: boolean; tag: string; tags: string[]; shipmentId: string; shipmentRef: string }>
+  onReturnToFlow?: () => void
 }
 
-export function EmailInboxPage({ onOpenTracking, onMarkRead }: EmailInboxPageProps) {
+export function EmailInboxPage({ onOpenTracking, onMarkRead, dynamicEmails = [], onReturnToFlow }: EmailInboxPageProps) {
+  const dynamicAsInbox: InboxEmail[] = dynamicEmails.map((e) => ({
+    id: e.id, from: e.from, fromName: e.fromName, subject: e.subject, body: e.body,
+    timestamp: e.timestamp, read: e.read, tag: e.tag as EmailTag, tags: e.tags as EmailTag[],
+    shipmentId: e.shipmentId, shipmentRef: e.shipmentRef,
+  }))
   const [emails, setEmails] = useState<InboxEmail[]>(INBOX_EMAILS)
+  const allEmails = [...dynamicAsInbox, ...emails]
   const [selected, setSelected] = useState<InboxEmail | null>(null)
   const [activeTagFilter, setActiveTagFilter] = useState<EmailTag | null>(null)
   const [analyzingEmail, setAnalyzingEmail] = useState<string | null>(null)
   const [analyzedEmails, setAnalyzedEmails] = useState<Record<string, string>>({})
 
   const filteredEmails = activeTagFilter
-    ? emails.filter((e) => e.tag === activeTagFilter || e.tags.includes(activeTagFilter))
-    : emails
+    ? allEmails.filter((e) => e.tag === activeTagFilter || e.tags.includes(activeTagFilter))
+    : allEmails
 
-  const unreadCount = emails.filter((e) => !e.read).length
+  const unreadCount = allEmails.filter((e) => !e.read).length
+
+  // Check if selected email is a demo reply that should show AI analysis + return button
+  const isDemoReply = selected?.id.startsWith("DEMO-INBOX-")
 
   const handleSelect = (email: InboxEmail) => {
     setSelected(email)
@@ -299,6 +310,29 @@ export function EmailInboxPage({ onOpenTracking, onMarkRead }: EmailInboxPagePro
               <pre className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap font-sans">
                 {selected.body}
               </pre>
+
+              {/* AI Analysis + Return to Flow for demo reply emails */}
+              {isDemoReply && (
+                <div className="mt-4 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                  <div className="bg-indigo-50 rounded-lg px-4 py-3 border border-indigo-200">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Brain size={14} className="text-indigo-600" />
+                      <span className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider">AI Analysis</span>
+                    </div>
+                    <div className="text-[12px] text-indigo-800 leading-relaxed">
+                      {selected.id.includes("-MD-") && "Shipper contact information confirmed by Suzhou Plant team. Data cross-validated with Plant Directory — Li Wei is the designated logistics coordinator. Confidence: 95%. Ready to proceed with booking."}
+                      {selected.id.includes("-RM-") && "Maersk has accepted the counter-offer at $3,024/container. This represents a $316 savings per container vs the original quote ($3,340). Rate is within 8% of contract ($2,800), aligned with current market conditions. Booking can proceed."}
+                      {selected.id.includes("DEMO-INBOX") && !selected.id.includes("-MD-") && !selected.id.includes("-RM-") && "Carrier response received and validated. Booking reference confirmed. All data consistent with SAP TM order."}
+                    </div>
+                  </div>
+                  <button
+                    onClick={onReturnToFlow}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-[13px] font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <ArrowRight size={14} /> Return to Booking Flow
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         ) : (

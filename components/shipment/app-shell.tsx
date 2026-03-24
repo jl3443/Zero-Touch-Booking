@@ -273,19 +273,11 @@ export function AppShell({ persona }: { persona?: Persona }) {
                 onMarkRead={handleMarkEmailRead}
                 dynamicEmails={dynamicInboxEmails}
                 onReturnToFlow={() => {
-                  if (demoScenario === "rate-mismatch") {
-                    // Rate mismatch: return to dashboard to show negotiation spinner
-                    // Do NOT resolve exception yet — spinner will resolve it
-                    setDemoReturnedFromInbox(true)
-                    handleViewChange("dashboard")
-                    setDemoShipmentVisible(true)
-                  } else {
-                    // All other scenarios: resolve and advance
-                    setDemoExceptionActive(false)
-                    handleDemoStepAdvance(demoStep + 1)
-                    handleViewChange("dashboard")
-                    setDemoShipmentVisible(true)
-                  }
+                  // Resolve exception and advance — flow will fast-forward remaining steps
+                  setDemoExceptionActive(false)
+                  handleDemoStepAdvance(demoStep + 1)
+                  handleViewChange("dashboard")
+                  setDemoShipmentVisible(true)
                 }}
               />
             )}

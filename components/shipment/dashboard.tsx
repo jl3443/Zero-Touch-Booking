@@ -59,7 +59,6 @@ interface DashboardProps {
   onAddInboxEmail?: (email: { id: string; from: string; fromName: string; subject: string; body: string; timestamp: string; read: boolean; tag: string; tags: string[]; shipmentId: string; shipmentRef: string }) => void
   demoReturnedFromInbox?: boolean
   onDemoReturnedFromInboxConsumed?: () => void
-  demoZoomActive?: boolean
   showCompletionModal?: boolean
   onCloseCompletionModal?: () => void
   demoElapsedTime?: string
@@ -106,7 +105,7 @@ const SEV_BADGE: Record<string, string> = {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
-export function Dashboard({ searchQuery, onViewChange, onOpenWeather, onSendNotification, autoOpenShipmentId, onEtaApproved, etaUpdatedCount, demoActive, demoShipmentVisible, demoStep, demoPaused, demoScenario, demoExceptionActive, onDemoStepAdvance, onDemoPause, onDemoResume, onDemoExceptionResolved, onDemoExceptionTriggered, onDemoShipmentDismiss, onDemoComplete, onAddInboxEmail, demoReturnedFromInbox, onDemoReturnedFromInboxConsumed, demoZoomActive, showCompletionModal, onCloseCompletionModal, demoElapsedTime }: DashboardProps) {
+export function Dashboard({ searchQuery, onViewChange, onOpenWeather, onSendNotification, autoOpenShipmentId, onEtaApproved, etaUpdatedCount, demoActive, demoShipmentVisible, demoStep, demoPaused, demoScenario, demoExceptionActive, onDemoStepAdvance, onDemoPause, onDemoResume, onDemoExceptionResolved, onDemoExceptionTriggered, onDemoShipmentDismiss, onDemoComplete, onAddInboxEmail, demoReturnedFromInbox, onDemoReturnedFromInboxConsumed, showCompletionModal, onCloseCompletionModal, demoElapsedTime }: DashboardProps) {
   const [activeFilter, setActiveFilter] = useState<string | null>(null)
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null)
   const [bookingMode, setBookingMode] = useState(false)
@@ -156,8 +155,7 @@ export function Dashboard({ searchQuery, onViewChange, onOpenWeather, onSendNoti
   return (
     <div className="flex-1 overflow-y-auto bg-[#F8F9FA]">
       <div
-        className="p-5 space-y-4 max-w-[1600px] mx-auto transition-transform duration-1000 ease-in-out"
-        style={demoZoomActive ? { transform: "scale(1.6)", transformOrigin: "center 70%" } : { transform: "scale(1)" }}
+        className="p-5 space-y-4 max-w-[1600px] mx-auto"
       >
 
         {/* ── Demo: New Shipment Notification Banner ────────────────────── */}

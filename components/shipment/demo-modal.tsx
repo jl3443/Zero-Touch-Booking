@@ -1,6 +1,6 @@
 "use client"
 
-import { X } from "lucide-react"
+import { X, Zap, Clock, TrendingUp, ShieldCheck, Target, DollarSign } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface DemoModalProps {
@@ -104,6 +104,24 @@ export function CompletionModal({ open, onClose, elapsedTime }: CompletionModalP
                 <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
                   <div className={cn("h-full rounded-full transition-all duration-1000 ease-out", item.color)} style={{ width: item.width }} />
                 </div>
+              </div>
+            ))}
+          </div>
+
+          {/* KPI Metrics Grid */}
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { icon: <Zap size={14} />, value: "84%", label: "Zero-Touch Rate", bg: "bg-emerald-50", iconColor: "text-emerald-600", valueColor: "text-emerald-700" },
+              { icon: <Clock size={14} />, value: "2.4h", label: "Avg Resolution", bg: "bg-blue-50", iconColor: "text-blue-600", valueColor: "text-blue-700" },
+              { icon: <Target size={14} />, value: "87%", label: "On-Time Booking", bg: "bg-indigo-50", iconColor: "text-indigo-600", valueColor: "text-indigo-700" },
+              { icon: <ShieldCheck size={14} />, value: "3/3", label: "Exceptions Resolved", bg: "bg-violet-50", iconColor: "text-violet-600", valueColor: "text-violet-700" },
+              { icon: <TrendingUp size={14} />, value: "8", label: "Bookings Processed", bg: "bg-sky-50", iconColor: "text-sky-600", valueColor: "text-sky-700" },
+              { icon: <DollarSign size={14} />, value: "-6%", label: "vs Spot Rate", bg: "bg-amber-50", iconColor: "text-amber-600", valueColor: "text-amber-700" },
+            ].map((kpi) => (
+              <div key={kpi.label} className={cn("rounded-lg px-3 py-2.5 text-center", kpi.bg)}>
+                <div className={cn("flex items-center justify-center mb-1", kpi.iconColor)}>{kpi.icon}</div>
+                <p className={cn("text-[16px] font-bold leading-tight", kpi.valueColor)}>{kpi.value}</p>
+                <p className="text-[10px] text-gray-500 mt-0.5">{kpi.label}</p>
               </div>
             ))}
           </div>

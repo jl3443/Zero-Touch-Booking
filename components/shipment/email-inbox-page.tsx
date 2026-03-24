@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { INBOX_EMAILS, type InboxEmail, type EmailTag } from "@/lib/mock-data"
 import { cn } from "@/lib/utils"
-import { Mail, MailOpen, Tag, Clock, Package, ChevronLeft, Brain, AlertTriangle, CheckCircle2, ArrowRight } from "lucide-react"
+import { Mail, MailOpen, Tag, Clock, Package, ChevronLeft, Brain, AlertTriangle, CheckCircle2, ArrowRight, CheckCircle, Loader2 } from "lucide-react"
 
 const TAG_CONFIG: Record<EmailTag, { label: string; color: string }> = {
   sap:       { label: "SAP",       color: "bg-blue-50 border-blue-200 text-blue-700" },
@@ -40,6 +40,49 @@ export function EmailInboxPage({ onOpenTracking, onMarkRead, dynamicEmails = [],
   const [analyzingEmail, setAnalyzingEmail] = useState<string | null>(null)
   const [analyzedEmails, setAnalyzedEmails] = useState<Record<string, string>>({})
 
+  // Task 5a: AI thinking animation on email click
+  const [emailThinking, setEmailThinking] = useState(false)
+  const [pendingEmail, setPendingEmail] = useState<InboxEmail | null>(null)
+
+  // Task 4: Negotiation spinner in inbox for rate-mismatch replies
+  const [negoInboxActive, setNegoInboxActive] = useState(false)
+  const [negoInboxProgress, setNegoInboxProgress] = useState(0)
+  const [negoInboxStatus, setNegoInboxStatus] = useState("")
+  const [negoInboxComplete, setNegoInboxComplete] = useState(false)
+  const negoTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
+
+  // Start negotiation spinner when rate-mismatch reply email is selected
+  useEffect(() => {
+    if (!selected?.id.includes("-RM-") || !selected?.id.startsWith("DEMO-INBOX-")) return
+    if (negoInboxActive || negoInboxComplete) return
+
+    setNegoInboxActive(true)
+    const statuses = [
+      "Connecting to Maersk rate desk...",
+      "Validating counter-offer against market data...",
+      "Carrier reviewing proposal...",
+      "Rate accepted — updating booking parameters...",
+    ]
+    const timers: ReturnType<typeof setTimeout>[] = []
+    statuses.forEach((status, i) => {
+      timers.push(setTimeout(() => {
+        setNegoInboxProgress((i + 1) * 25)
+        setNegoInboxStatus(status)
+      }, i * 1200))
+    })
+    timers.push(setTimeout(() => {
+      setNegoInboxComplete(true)
+      setNegoInboxStatus("Negotiation complete — rate locked in")
+    }, statuses.length * 1200))
+    // Auto-return to flow after completion
+    timers.push(setTimeout(() => {
+      onReturnToFlow?.()
+    }, statuses.length * 1200 + 2000))
+    negoTimersRef.current = timers
+
+    return () => timers.forEach(clearTimeout)
+  }, [selected?.id])
+
   const filteredEmails = activeTagFilter
     ? allEmails.filter((e) => e.tag === activeTagFilter || e.tags.includes(activeTagFilter))
     : allEmails
@@ -50,9 +93,17 @@ export function EmailInboxPage({ onOpenTracking, onMarkRead, dynamicEmails = [],
   const isDemoReply = selected?.id.startsWith("DEMO-INBOX-")
 
   const handleSelect = (email: InboxEmail) => {
-    setSelected(email)
+    // Task 5a: Show AI thinking animation for 500ms before revealing email
+    setEmailThinking(true)
+    setPendingEmail(email)
+    setSelected(null)
     if (!email.read) onMarkRead?.(email.id)
     setEmails((prev) => prev.map((e) => e.id === email.id ? { ...e, read: true } : e))
+    setTimeout(() => {
+      setSelected(email)
+      setEmailThinking(false)
+      setPendingEmail(null)
+    }, 500)
   }
 
   const handleAnalyze = (email: InboxEmail) => {
@@ -144,7 +195,7 @@ export function EmailInboxPage({ onOpenTracking, onMarkRead, dynamicEmails = [],
           <div className="overflow-y-auto flex-1">
             {filteredEmails.map((email) => {
               const tagCfg = TAG_CONFIG[email.tag] ?? { label: email.tag || "Other", color: "bg-gray-50 border-gray-200 text-gray-700" }
-              const isSelected = selected?.id === email.id
+              const isSelected = selected?.id === email.id || pendingEmail?.id === email.id
               return (
                 <button
                   key={email.id}
@@ -196,8 +247,27 @@ export function EmailInboxPage({ onOpenTracking, onMarkRead, dynamicEmails = [],
           </div>
         </div>
 
+        {/* AI Thinking Skeleton */}
+        {emailThinking && pendingEmail && (
+          <div className="flex-1 bg-white rounded-xl border border-gray-200 overflow-hidden flex items-center justify-center">
+            <div className="text-center space-y-3 animate-in fade-in duration-200">
+              <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center mx-auto">
+                <Brain size={22} className="text-blue-500 animate-pulse" />
+              </div>
+              <div>
+                <p className="text-[13px] font-semibold text-gray-700">AI analyzing email</p>
+                <div className="flex items-center justify-center gap-[3px] mt-1.5">
+                  {[0, 150, 300].map((d) => (
+                    <span key={d} className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: `${d}ms`, animationDuration: "900ms" }} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Email detail */}
-        {selected ? (
+        {!emailThinking && selected ? (
           <div className="flex-1 bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col">
             {/* Detail header */}
             <div className="px-5 py-4 border-b border-gray-100">
@@ -312,7 +382,53 @@ export function EmailInboxPage({ onOpenTracking, onMarkRead, dynamicEmails = [],
               </pre>
 
               {/* AI Analysis + Return to Flow for demo reply emails */}
-              {isDemoReply && (
+              {isDemoReply && selected.id.includes("-RM-") && (
+                <div className="mt-4 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                  {/* Negotiation spinner for rate-mismatch */}
+                  <div className="p-4 bg-[#0f1623] rounded-xl border border-slate-700">
+                    <div className="flex items-center gap-2 mb-3">
+                      {negoInboxComplete ? <CheckCircle size={16} className="text-emerald-400" /> : <Brain size={16} className="text-violet-400 animate-pulse" />}
+                      <span className="text-[13px] font-bold text-white">{negoInboxComplete ? "Negotiation Complete" : "AI Negotiating Rate"}</span>
+                    </div>
+                    <div className="h-2 bg-slate-800 rounded-full overflow-hidden mb-2">
+                      <div className={cn("h-full rounded-full transition-all duration-700 ease-out", negoInboxComplete ? "bg-emerald-500" : "bg-violet-500")} style={{ width: `${negoInboxProgress}%` }} />
+                    </div>
+                    <div className="text-[11px] text-slate-400 mb-3">{negoInboxStatus || "Initializing..."}</div>
+                    {negoInboxComplete && (
+                      <div className="space-y-1.5 animate-in fade-in duration-300">
+                        {[
+                          { label: "Market Rate (30d avg)", value: "$3,480", badge: "Benchmark", color: "text-slate-300" },
+                          { label: "Carrier Quote", value: "$3,340", badge: "-4% vs market", color: "text-amber-300" },
+                          { label: "Counter-Offer", value: "$3,024", badge: "Sent", color: "text-violet-300" },
+                          { label: "Carrier Accepted", value: "$3,024", badge: "Accepted", color: "text-emerald-300" },
+                        ].map((r, idx) => (
+                          <div key={idx} className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-slate-800/50">
+                            <div className="flex items-center gap-2">
+                              {r.badge === "Accepted" ? <CheckCircle size={12} className="text-emerald-400" /> : <div className="w-3 h-3 rounded-full border border-slate-600" />}
+                              <span className={cn("text-[11px] font-medium", r.color)}>{r.label}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[12px] font-bold text-white">{r.value}</span>
+                              <span className={cn("text-[9px] px-1.5 py-0.5 rounded-full font-semibold",
+                                r.badge === "Accepted" ? "bg-emerald-900/50 text-emerald-300" : r.badge === "Sent" ? "bg-violet-900/50 text-violet-300" : "bg-slate-700 text-slate-400"
+                              )}>{r.badge}</span>
+                            </div>
+                          </div>
+                        ))}
+                        <div className="mt-2 px-2 py-1.5 bg-emerald-900/30 rounded-lg border border-emerald-800/50">
+                          <span className="text-[11px] text-emerald-300 font-medium">Savings: <span className="font-bold">$316/container</span> ($632 total)</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {negoInboxComplete && (
+                    <div className="flex items-center gap-2 justify-center py-1 text-[11px] text-emerald-600 font-medium animate-pulse">
+                      <Loader2 size={12} className="animate-spin" /> Returning to booking flow...
+                    </div>
+                  )}
+                </div>
+              )}
+              {isDemoReply && !selected.id.includes("-RM-") && (
                 <div className="mt-4 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
                   <div className="bg-indigo-50 rounded-lg px-4 py-3 border border-indigo-200">
                     <div className="flex items-center gap-1.5 mb-2">
@@ -321,8 +437,7 @@ export function EmailInboxPage({ onOpenTracking, onMarkRead, dynamicEmails = [],
                     </div>
                     <div className="text-[12px] text-indigo-800 leading-relaxed">
                       {selected.id.includes("-MD-") && "Shipper contact information confirmed by Suzhou Plant team. Data cross-validated with Plant Directory — Li Wei is the designated logistics coordinator. Confidence: 95%. Ready to proceed with booking."}
-                      {selected.id.includes("-RM-") && "Maersk has accepted the counter-offer at $3,024/container. This represents a $316 savings per container vs the original quote ($3,340). Rate is within 8% of contract ($2,800), aligned with current market conditions. Booking can proceed."}
-                      {selected.id.includes("DEMO-INBOX") && !selected.id.includes("-MD-") && !selected.id.includes("-RM-") && "Carrier response received and validated. Booking reference confirmed. All data consistent with SAP TM order."}
+                      {selected.id.includes("DEMO-INBOX") && !selected.id.includes("-MD-") && "Carrier response received and validated. Booking reference confirmed. All data consistent with SAP TM order."}
                     </div>
                   </div>
                   <button

@@ -1128,7 +1128,7 @@ function LiveBookingFlow({
           </div>
         }
       >
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4 items-stretch">
           {shipment.carrierOptions.map((c) => {
             const isSelected = (c.recommended && !carrierOverride && !selectedCarrier) || selectedCarrier === c.carrier
             const rateDiff = c.contractRate ? ((c.rate - c.contractRate) / c.contractRate * 100).toFixed(1) : null
@@ -1137,53 +1137,77 @@ function LiveBookingFlow({
                 key={c.carrier}
                 onClick={() => carrierOverride && setSelectedCarrier(c.carrier)}
                 className={cn(
-                  "border rounded-xl p-5 transition-all",
+                  "border rounded-2xl transition-all overflow-hidden flex flex-col",
                   isSelected
-                    ? "border-blue-400 bg-blue-50 shadow-sm ring-1 ring-blue-200"
-                    : carrierOverride ? "border-gray-200 hover:border-blue-300 cursor-pointer" : "border-gray-200",
+                    ? "border-blue-400 bg-white shadow-md ring-1 ring-blue-200"
+                    : carrierOverride ? "border-gray-200 hover:border-blue-300 cursor-pointer bg-white" : "border-gray-200 bg-white",
                 )}
               >
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center text-[11px] font-bold text-gray-600">{c.carrier.slice(0, 3).toUpperCase()}</div>
-                    <span className="text-[16px] font-bold text-gray-800">{c.carrier}</span>
+                {/* Card header */}
+                <div className={cn("px-5 py-4 flex items-center justify-between border-b", isSelected ? "bg-blue-50/50 border-blue-100" : "bg-gray-50/50 border-gray-100")}>
+                  <div className="flex items-center gap-3">
+                    <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center text-[11px] font-bold border", isSelected ? "bg-blue-100 text-blue-700 border-blue-200" : "bg-gray-100 text-gray-600 border-gray-200")}>{c.carrier.slice(0, 3).toUpperCase()}</div>
+                    <span className="text-[15px] font-bold text-gray-900">{c.carrier}</span>
                   </div>
                   {isSelected && (
-                    <span className="text-[10px] px-2.5 py-1 rounded-full bg-blue-600 text-white font-bold">AI PICK</span>
+                    <span className="text-[9px] px-3 py-1 rounded-full bg-blue-600 text-white font-bold uppercase tracking-wider">AI Pick</span>
                   )}
                 </div>
-                <div className="grid grid-cols-3 gap-y-3 gap-x-4">
-                  <div>
-                    <span className="text-[11px] text-gray-400">Rate</span>
-                    <div className="text-[16px] font-bold text-gray-800">${c.rate.toLocaleString()}</div>
+
+                {/* Metrics */}
+                <div className="flex-1 px-5 py-4 space-y-3">
+                  {/* Rate row */}
+                  <div className="flex items-end justify-between">
+                    <div>
+                      <span className="text-[11px] text-gray-400 font-medium uppercase tracking-wider">Rate</span>
+                      <div className="text-[20px] font-extrabold text-gray-900">${c.rate.toLocaleString()}</div>
+                    </div>
                     {rateDiff && (
-                      <span className={cn("text-[10px] font-medium", Number(rateDiff) <= 0 ? "text-emerald-600" : Number(rateDiff) <= 3 ? "text-amber-600" : "text-red-600")}>
+                      <span className={cn("text-[11px] font-semibold px-2 py-0.5 rounded-full mb-1",
+                        Number(rateDiff) <= 0 ? "bg-emerald-50 text-emerald-700" : Number(rateDiff) <= 3 ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"
+                      )}>
                         {Number(rateDiff) > 0 ? "+" : ""}{rateDiff}% vs contract
                       </span>
                     )}
                   </div>
-                  <div>
-                    <span className="text-[11px] text-gray-400">Transit</span>
-                    <div className="text-[16px] font-bold text-gray-800">{c.transitDays} days</div>
+
+                  <div className="h-px bg-gray-100" />
+
+                  {/* Detail grid */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-2.5 bg-gray-50 rounded-lg">
+                      <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Transit</span>
+                      <div className="text-[15px] font-bold text-gray-900">{c.transitDays} days</div>
+                    </div>
+                    <div className="p-2.5 bg-gray-50 rounded-lg">
+                      <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Capacity</span>
+                      <div className={cn("text-[15px] font-bold", c.capacity === "Available" ? "text-emerald-600" : c.capacity === "Limited" ? "text-amber-600" : "text-red-600")}>{c.capacity}</div>
+                    </div>
+                    <div className="p-2.5 bg-gray-50 rounded-lg">
+                      <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">SLA Score</span>
+                      <div className="text-[15px] font-bold text-gray-900">{c.sla}%</div>
+                    </div>
+                    <div className="p-2.5 bg-gray-50 rounded-lg">
+                      <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Lane Performance</span>
+                      <div className="text-[15px] font-bold text-gray-900">{c.lanePerformance}%</div>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[11px] text-gray-400">Capacity</span>
-                    <div className={cn("text-[14px] font-bold", c.capacity === "Available" ? "text-emerald-600" : c.capacity === "Limited" ? "text-amber-600" : "text-red-600")}>{c.capacity}</div>
-                  </div>
-                  <div>
-                    <span className="text-[11px] text-gray-400">SLA Score</span>
-                    <div className="text-[16px] font-bold text-gray-800">{c.sla}%</div>
-                  </div>
-                  <div>
-                    <span className="text-[11px] text-gray-400">Lane Performance</span>
-                    <div className="text-[16px] font-bold text-gray-800">{c.lanePerformance}%</div>
-                  </div>
-                  <div>
-                    <span className="text-[11px] text-gray-400">Contract Rate</span>
-                    <div className="text-[14px] font-medium text-gray-600">${c.contractRate.toLocaleString()}</div>
+
+                  <div className="h-px bg-gray-100" />
+
+                  {/* Contract rate */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-gray-400 font-medium">Contract Rate</span>
+                    <span className="text-[13px] font-semibold text-gray-600">${c.contractRate.toLocaleString()}</span>
                   </div>
                 </div>
-                {c.reason && <p className="text-[11px] text-gray-500 mt-3 border-t border-gray-100 pt-2">{c.reason}</p>}
+
+                {/* Reason footer */}
+                {c.reason && (
+                  <div className="px-5 py-3 bg-gray-50/80 border-t border-gray-100">
+                    <p className="text-[11px] text-gray-500 leading-relaxed">{c.reason}</p>
+                  </div>
+                )}
               </div>
             )
           })}
@@ -1402,29 +1426,13 @@ function DemoExceptionOverlay({ scenarioId, onResolve, onSendNotification, onAdd
     onReturnedFromInboxConsumed?.()
 
     if (scenarioId === "rate-mismatch") {
-      // Re-open modal with negotiation spinner
+      // Negotiation spinner already ran in inbox — show resolved state briefly then continue
       setShowModal(true)
-      setPhase("negotiating")
-      const statuses = [
-        "Connecting to Maersk rate desk...",
-        "Validating counter-offer against market data...",
-        "Carrier reviewing proposal...",
-        "Rate accepted — updating booking parameters...",
-      ]
-      statuses.forEach((status, i) => {
-        setTimeout(() => {
-          setNegoProgress((i + 1) * 25)
-          setNegoStatus(status)
-        }, i * 1200)
-      })
-      setTimeout(() => {
-        setNegoComplete(true)
-        setNegoStatus("Negotiation complete — rate locked in")
-      }, statuses.length * 1200)
-      setTimeout(() => {
-        setPhase("resolved")
-        setTimeout(() => { setShowModal(false); onResolve() }, 1500)
-      }, statuses.length * 1200 + 1500)
+      setNegoProgress(100)
+      setNegoComplete(true)
+      setNegoStatus("Negotiation complete — rate locked in")
+      setPhase("resolved")
+      setTimeout(() => { setShowModal(false); onResolve() }, 1200)
     } else if (scenarioId === "missing-data") {
       // Re-open modal, fill the 3rd field (Shipper Contact), then auto-resolve
       setShowModal(true)
@@ -1538,22 +1546,91 @@ function DemoExceptionOverlay({ scenarioId, onResolve, onSendNotification, onAdd
   }
 
 
-  // ─── Email Compose Modal (shared by missing-data and rate-mismatch) ──────
+  // ─── Email Compose Card (Gmail-style, shared by missing-data and rate-mismatch) ──
+  const [showCcBcc, setShowCcBcc] = useState(false)
+  const [followUpDate, setFollowUpDate] = useState("")
+  const emailTo = scenarioId === "rate-mismatch" ? "rates@maersk.com" : "plant-logistics@suzhou.company.com"
+  const emailSubject = scenarioId === "rate-mismatch" ? "Counter-Offer: SAP-TM-87234 — $3,024/container" : "Data Request: Shipper Contact for SAP-TM-87234"
+
   const emailComposeContent = (
-    <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Compose Email</div>
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 text-[11px] text-gray-500">
-          To: <span className="text-gray-700 font-medium">{scenarioId === "rate-mismatch" ? "rates@maersk.com" : "plant-logistics@suzhou.company.com"}</span>
+    <div className="animate-in fade-in slide-in-from-bottom-3 duration-300">
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden">
+        {/* Header bar */}
+        <div className="bg-gray-800 px-4 py-2.5 flex items-center justify-between">
+          <span className="text-[13px] font-semibold text-white">New Message</span>
+          <div className="flex items-center gap-1">
+            <button className="p-1 rounded hover:bg-gray-700 transition-colors"><ArrowDown size={12} className="text-gray-400" /></button>
+            <button className="p-1 rounded hover:bg-gray-700 transition-colors"><X size={12} className="text-gray-400" /></button>
+          </div>
         </div>
-        <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 text-[11px] text-gray-500">
-          Subject: <span className="text-gray-700 font-medium">{scenarioId === "rate-mismatch" ? "Counter-Offer: SAP-TM-87234 — $3,024/container" : "Data Request: Shipper Contact for SAP-TM-87234"}</span>
+
+        {/* Email fields */}
+        <div className="divide-y divide-gray-100">
+          <div className="flex items-center px-4 py-2">
+            <span className="text-[12px] text-gray-400 w-14 shrink-0">From</span>
+            <span className="text-[12px] text-gray-700 font-medium">Zero Touch Agent &lt;agent@logistics.co&gt;</span>
+          </div>
+          <div className="flex items-center px-4 py-2">
+            <span className="text-[12px] text-gray-400 w-14 shrink-0">To</span>
+            <div className="flex-1 flex items-center gap-2">
+              <span className="text-[12px] bg-blue-50 text-blue-700 font-medium px-2.5 py-0.5 rounded-full border border-blue-200">{emailTo}</span>
+            </div>
+            <button onClick={() => setShowCcBcc(!showCcBcc)} className="text-[11px] text-gray-400 hover:text-gray-600 font-medium ml-2">Cc Bcc</button>
+          </div>
+          {showCcBcc && (
+            <>
+              <div className="flex items-center px-4 py-2">
+                <span className="text-[12px] text-gray-400 w-14 shrink-0">Cc</span>
+                <input className="flex-1 text-[12px] text-gray-700 outline-none placeholder:text-gray-300" placeholder="Add recipients" />
+              </div>
+              <div className="flex items-center px-4 py-2">
+                <span className="text-[12px] text-gray-400 w-14 shrink-0">Bcc</span>
+                <input className="flex-1 text-[12px] text-gray-700 outline-none placeholder:text-gray-300" placeholder="Add recipients" />
+              </div>
+            </>
+          )}
+          <div className="flex items-center px-4 py-2">
+            <span className="text-[12px] text-gray-400 w-14 shrink-0">Subject</span>
+            <span className="text-[12px] text-gray-800 font-semibold">{emailSubject}</span>
+          </div>
         </div>
-        <textarea
-          value={emailBody}
-          onChange={(e) => setEmailBody(e.target.value)}
-          className="w-full px-3 py-2.5 text-[12px] text-gray-700 leading-relaxed min-h-[140px] focus:outline-none resize-none"
-        />
+
+        {/* Body */}
+        <div className="px-4 pt-2 pb-0">
+          <textarea
+            value={emailBody}
+            onChange={(e) => setEmailBody(e.target.value)}
+            className="w-full text-[13px] text-gray-700 leading-relaxed min-h-[200px] focus:outline-none resize-none"
+          />
+        </div>
+
+        {/* Bottom toolbar */}
+        <div className="px-4 py-2.5 border-t border-gray-100 flex items-center justify-between bg-gray-50/50">
+          <div className="flex items-center gap-0.5">
+            <button className="p-1.5 rounded hover:bg-gray-200 transition-colors text-gray-400"><FileText size={14} /></button>
+            <button className="p-1.5 rounded hover:bg-gray-200 transition-colors text-gray-400"><MapPin size={14} /></button>
+            <div className="w-px h-4 bg-gray-200 mx-1" />
+            <div className="relative flex items-center">
+              <button onClick={() => { const el = document.getElementById('email-date-picker'); el?.showPicker?.() }} className="p-1.5 rounded hover:bg-gray-200 transition-colors text-gray-400 flex items-center gap-1">
+                <Calendar size={14} />
+                {followUpDate && <span className="text-[10px] text-blue-600 font-medium">{followUpDate}</span>}
+              </button>
+              <input
+                id="email-date-picker"
+                type="date"
+                value={followUpDate}
+                onChange={(e) => setFollowUpDate(e.target.value)}
+                className="absolute inset-0 opacity-0 w-6 cursor-pointer"
+              />
+            </div>
+          </div>
+          <button
+            onClick={scenarioId === "rate-mismatch" ? handleSendRateEmail : handleSendMissingDataEmail}
+            className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white text-[13px] font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+          >
+            <Send size={13} /> Send
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -1566,113 +1643,107 @@ function DemoExceptionOverlay({ scenarioId, onResolve, onSendNotification, onAdd
   }
 
   const carrierSelectContent = (
-    <div className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Select Alternative Carrier</div>
-      {ALT_CARRIERS.map((c) => {
-        const isSelected = selectedAltCarrier === c.carrier
-        const mc = MODE_CARD[c.mode] ?? MODE_CARD.Ocean
-        const MIcon = mc.Icon
-        return (
-          <button
-            key={c.carrier}
-            onClick={() => setSelectedAltCarrier(c.carrier)}
-            className={cn(
-              "w-full text-left rounded-2xl transition-all overflow-hidden border",
-              isSelected
-                ? "border-blue-400 ring-2 ring-blue-200 shadow-[0_8px_30px_rgba(59,130,246,0.15)]"
-                : "border-gray-200 shadow-[0_4px_20px_rgba(0,0,0,0.08)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)] hover:border-blue-300"
-            )}
-          >
-            {/* ── Colored top strip ── */}
-            <div className={cn("h-1.5", mc.strip)} />
+    <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden">
+        {/* Section header */}
+        <div className="px-5 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Ship size={14} className="text-gray-500" />
+            <span className="text-[12px] font-bold text-gray-700 uppercase tracking-wider">Select Alternative Carrier</span>
+          </div>
+          <span className="text-[10px] text-gray-400">{ALT_CARRIERS.length} options available</span>
+        </div>
 
-            {/* ── Header: carrier identity + price ── */}
-            <div className="bg-white px-5 pt-4 pb-3">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center shadow-sm", mc.bg, mc.border, "border")}>
-                    <MIcon size={22} className={mc.color} />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className="text-[15px] font-bold text-gray-900">{c.carrier}</span>
-                      {c.recommended && (
-                        <span className="text-[8px] font-bold bg-indigo-600 text-white rounded px-1.5 py-0.5 flex items-center gap-0.5 uppercase tracking-wider">
-                          <Brain size={8} /> Recommended
-                        </span>
-                      )}
+        {/* Carrier list */}
+        <div className="divide-y divide-gray-100">
+          {ALT_CARRIERS.map((c) => {
+            const isSelected = selectedAltCarrier === c.carrier
+            const mc = MODE_CARD[c.mode] ?? MODE_CARD.Ocean
+            const MIcon = mc.Icon
+            return (
+              <button
+                key={c.carrier}
+                onClick={() => setSelectedAltCarrier(c.carrier)}
+                className={cn(
+                  "w-full text-left transition-all",
+                  isSelected ? "bg-blue-50/50" : "hover:bg-gray-50/50"
+                )}
+              >
+                {/* Carrier header row */}
+                <div className="px-5 pt-4 pb-2 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center border", mc.bg, mc.border)}>
+                      <MIcon size={18} className={mc.color} />
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className={cn("text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded", mc.bg, mc.color)}>
-                        {mc.label}
-                      </span>
-                      <span className="text-[11px] text-gray-500">{c.route}</span>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[14px] font-bold text-gray-900">{c.carrier}</span>
+                        {c.recommended && (
+                          <span className="text-[8px] font-bold bg-indigo-600 text-white rounded px-1.5 py-0.5 uppercase tracking-wider flex items-center gap-0.5">
+                            <Brain size={8} /> Recommended
+                          </span>
+                        )}
+                        {isSelected && (
+                          <span className="text-[8px] font-bold bg-blue-600 text-white rounded-full px-2 py-0.5 flex items-center gap-0.5">
+                            <CheckCircle size={8} /> Selected
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className={cn("text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded", mc.bg, mc.color)}>{mc.label}</span>
+                        <span className="text-[11px] text-gray-500">{c.route}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="text-right pl-3">
-                  <div className="text-[22px] font-extrabold text-gray-900 leading-tight">{c.rate}</div>
-                  <div className={cn("text-[11px] font-semibold",
-                    c.rateNote === "Premium" ? "text-amber-600" : c.rateNote.startsWith("-") ? "text-emerald-600" : "text-amber-600"
-                  )}>{c.rateNote}</div>
-                </div>
-              </div>
-            </div>
-
-            {/* ── Detail grid with divider ── */}
-            <div className="bg-gray-50/80 border-t border-gray-100 px-5 py-3">
-              <div className="grid grid-cols-4 gap-4">
-                <div>
-                  <div className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">
-                    {c.mode === "Air" ? "Flight" : "Vessel"}
+                  <div className="text-right">
+                    <div className="text-[20px] font-extrabold text-gray-900">{c.rate}</div>
+                    <span className={cn("text-[11px] font-semibold",
+                      c.rateNote === "Premium" ? "text-amber-600" : c.rateNote.startsWith("-") ? "text-emerald-600" : "text-amber-600"
+                    )}>{c.rateNote}</span>
                   </div>
-                  <div className="text-[12px] font-bold text-gray-800">{c.vessel.split(" / ")[0]}</div>
-                  <div className="text-[9px] text-gray-400 mt-0.5">{c.vessel.split(" / ")[1] || ""}</div>
                 </div>
-                <div>
-                  <div className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">Departure</div>
-                  <div className="text-[12px] font-bold text-gray-800">{c.sailing}</div>
-                </div>
-                <div>
-                  <div className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">Transit</div>
-                  <div className="text-[12px] font-bold text-gray-800">{c.transit}</div>
-                </div>
-                <div>
-                  <div className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">ETA</div>
-                  <div className="text-[12px] font-bold text-gray-800">{c.eta}</div>
-                </div>
-              </div>
-            </div>
 
-            {/* ── Footer: metrics ── */}
-            <div className="bg-white border-t border-gray-100 px-5 py-2.5 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-1.5">
-                  <div className={cn("w-2 h-2 rounded-full", parseInt(c.sla) >= 95 ? "bg-emerald-500" : parseInt(c.sla) >= 90 ? "bg-blue-500" : "bg-amber-500")} />
-                  <span className="text-[10px] text-gray-500">SLA <span className="font-bold text-gray-700">{c.sla}</span></span>
+                {/* Data table row */}
+                <div className={cn("mx-5 mb-3 rounded-lg border overflow-hidden", isSelected ? "border-blue-200" : "border-gray-100")}>
+                  <div className="grid grid-cols-4 divide-x divide-gray-100 bg-gray-50/50">
+                    {[
+                      { label: c.mode === "Air" ? "Flight" : "Vessel", value: c.vessel.split(" / ")[0], sub: c.vessel.split(" / ")[1] || "" },
+                      { label: "Departure", value: c.sailing },
+                      { label: "Transit", value: c.transit },
+                      { label: "ETA", value: c.eta },
+                    ].map((col) => (
+                      <div key={col.label} className="px-3 py-2.5">
+                        <div className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">{col.label}</div>
+                        <div className="text-[12px] font-bold text-gray-800">{col.value}</div>
+                        {col.sub && <div className="text-[9px] text-gray-400">{col.sub}</div>}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="text-[10px] text-gray-400">|</div>
-                <div className="flex items-center gap-1">
-                  <Package size={10} className="text-gray-400" />
-                  <span className="text-[10px] text-gray-600 font-medium">{c.container}</span>
+
+                {/* Footer badges */}
+                <div className="px-5 pb-3 flex items-center gap-3">
+                  <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full",
+                    parseInt(c.sla) >= 95 ? "bg-emerald-50 text-emerald-700" : parseInt(c.sla) >= 90 ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"
+                  )}>SLA {c.sla}</span>
+                  <span className="text-[10px] font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{c.container}</span>
+                  <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full",
+                    c.capacity === "Available" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
+                  )}>● {c.capacity}</span>
                 </div>
-                <div className="text-[10px] text-gray-400">|</div>
-                <span className={cn(
-                  "text-[9px] font-bold",
-                  c.capacity === "Available" ? "text-emerald-600" : "text-amber-600"
-                )}>
-                  ● {c.capacity}
-                </span>
-              </div>
-              {isSelected && (
-                <span className="text-[9px] font-bold bg-blue-600 text-white rounded px-2 py-1 flex items-center gap-1">
-                  <CheckCircle size={9} /> Selected
-                </span>
-              )}
-            </div>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Integrated footer */}
+        <div className="px-5 py-3 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+          <span className="text-[11px] text-gray-400">{selectedAltCarrier ? `Selected: ${selectedAltCarrier}` : "Click a carrier to select"}</span>
+          <button onClick={handleConfirmCarrier} disabled={!selectedAltCarrier} className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white text-[13px] font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-40 shadow-sm">
+            <Check size={14} /> Confirm & Book
           </button>
-        )
-      })}
+        </div>
+      </div>
     </div>
   )
 
@@ -1908,13 +1979,7 @@ function DemoExceptionOverlay({ scenarioId, onResolve, onSendNotification, onAdd
       )
     }
     if (phase === "email-compose") {
-      return (
-        <div className="flex justify-end">
-          <button onClick={scenarioId === "rate-mismatch" ? handleSendRateEmail : handleSendMissingDataEmail} className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white text-[13px] font-semibold rounded-lg hover:bg-blue-700 transition-colors">
-            <Send size={13} /> Send Email
-          </button>
-        </div>
-      )
+      return null // Send button is now integrated into the email compose card
     }
     if (phase === "waiting-reply") {
       return (
@@ -1925,14 +1990,7 @@ function DemoExceptionOverlay({ scenarioId, onResolve, onSendNotification, onAdd
       )
     }
     if (phase === "carrier-select") {
-      return (
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] text-gray-400">{selectedAltCarrier ? `Selected: ${selectedAltCarrier}` : "Select a carrier to continue"}</span>
-          <button onClick={handleConfirmCarrier} disabled={!selectedAltCarrier} className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white text-[13px] font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-40">
-            <Check size={14} /> Confirm & Book
-          </button>
-        </div>
-      )
+      return null // Confirm button is now integrated into the carrier select card
     }
     if (phase === "confirm-switch") {
       return (
@@ -1968,6 +2026,208 @@ function DemoExceptionOverlay({ scenarioId, onResolve, onSendNotification, onAdd
           ))}
         </div>
         <button onClick={handleResolve} className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white text-[13px] font-semibold rounded-lg hover:bg-blue-700 transition-colors"><Sparkles size={13} /> {resolution.resolveLabel}</button>
+      </div>
+    )
+  }
+
+  // ─── Independent Email Compose overlay (not inside exception modal) ──────
+  if (phase === "email-compose" && showModal) {
+    return (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-200">
+        <div className="w-full max-w-3xl mx-4 animate-in zoom-in-95 fade-in duration-300">
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl overflow-hidden">
+            {/* Gmail-style header */}
+            <div className="bg-gray-800 px-5 py-3 flex items-center justify-between">
+              <span className="text-[14px] font-semibold text-white">New Message</span>
+              <div className="flex items-center gap-1">
+                <button className="p-1.5 rounded hover:bg-gray-700 transition-colors"><ArrowDown size={13} className="text-gray-400" /></button>
+                <button onClick={() => setPhase("showing")} className="p-1.5 rounded hover:bg-gray-700 transition-colors"><X size={13} className="text-gray-400" /></button>
+              </div>
+            </div>
+
+            {/* Email fields */}
+            <div className="divide-y divide-gray-100">
+              <div className="flex items-center px-5 py-2.5">
+                <span className="text-[13px] text-gray-400 w-16 shrink-0">From</span>
+                <span className="text-[13px] text-gray-700 font-medium">Zero Touch Agent &lt;agent@logistics.co&gt;</span>
+              </div>
+              <div className="flex items-center px-5 py-2.5">
+                <span className="text-[13px] text-gray-400 w-16 shrink-0">To</span>
+                <div className="flex-1 flex items-center gap-2">
+                  <span className="text-[12px] bg-blue-50 text-blue-700 font-medium px-3 py-1 rounded-full border border-blue-200">{emailTo}</span>
+                </div>
+                <button onClick={() => setShowCcBcc(!showCcBcc)} className="text-[12px] text-gray-400 hover:text-gray-600 font-medium ml-2">Cc Bcc</button>
+              </div>
+              {showCcBcc && (
+                <>
+                  <div className="flex items-center px-5 py-2.5">
+                    <span className="text-[13px] text-gray-400 w-16 shrink-0">Cc</span>
+                    <input className="flex-1 text-[13px] text-gray-700 outline-none placeholder:text-gray-300" placeholder="Add recipients" />
+                  </div>
+                  <div className="flex items-center px-5 py-2.5">
+                    <span className="text-[13px] text-gray-400 w-16 shrink-0">Bcc</span>
+                    <input className="flex-1 text-[13px] text-gray-700 outline-none placeholder:text-gray-300" placeholder="Add recipients" />
+                  </div>
+                </>
+              )}
+              <div className="flex items-center px-5 py-2.5">
+                <span className="text-[13px] text-gray-400 w-16 shrink-0">Subject</span>
+                <span className="text-[13px] text-gray-800 font-semibold">{emailSubject}</span>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="px-5 pt-3 pb-1">
+              <textarea
+                value={emailBody}
+                onChange={(e) => setEmailBody(e.target.value)}
+                className="w-full text-[13px] text-gray-700 leading-relaxed min-h-[260px] focus:outline-none resize-none"
+              />
+            </div>
+
+            {/* Bottom toolbar */}
+            <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between bg-gray-50/50">
+              <div className="flex items-center gap-1">
+                <button className="p-2 rounded hover:bg-gray-200 transition-colors text-gray-400"><FileText size={15} /></button>
+                <button className="p-2 rounded hover:bg-gray-200 transition-colors text-gray-400"><MapPin size={15} /></button>
+                <div className="w-px h-5 bg-gray-200 mx-1" />
+                <div className="relative flex items-center">
+                  <button onClick={() => { const el = document.getElementById('email-date-picker'); el?.showPicker?.() }} className="p-2 rounded hover:bg-gray-200 transition-colors text-gray-400 flex items-center gap-1.5">
+                    <Calendar size={15} />
+                    {followUpDate && <span className="text-[11px] text-blue-600 font-medium">{followUpDate}</span>}
+                  </button>
+                  <input
+                    id="email-date-picker"
+                    type="date"
+                    value={followUpDate}
+                    onChange={(e) => setFollowUpDate(e.target.value)}
+                    className="absolute inset-0 opacity-0 w-8 cursor-pointer"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={scenarioId === "rate-mismatch" ? handleSendRateEmail : handleSendMissingDataEmail}
+                className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white text-[13px] font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+              >
+                <Send size={14} /> Send
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ─── Independent Carrier Select overlay (not inside exception modal) ──────
+  if (phase === "carrier-select" && showModal) {
+    return (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-200">
+        <div className="w-full max-w-3xl mx-4 max-h-[85vh] animate-in zoom-in-95 fade-in duration-300">
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            {/* Header */}
+            <div className="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+                  <Ship size={20} className="text-blue-600" />
+                </div>
+                <div>
+                  <h2 className="text-[16px] font-bold text-gray-900">Select Alternative Carrier</h2>
+                  <p className="text-[12px] text-gray-500">{ALT_CARRIERS.length} options available — select a carrier to rebook</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Carrier list */}
+            <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
+              {ALT_CARRIERS.map((c) => {
+                const isSelected = selectedAltCarrier === c.carrier
+                const mc = MODE_CARD[c.mode] ?? MODE_CARD.Ocean
+                const MIcon = mc.Icon
+                return (
+                  <button
+                    key={c.carrier}
+                    onClick={() => setSelectedAltCarrier(c.carrier)}
+                    className={cn(
+                      "w-full text-left transition-all",
+                      isSelected ? "bg-blue-50/60" : "hover:bg-gray-50/50"
+                    )}
+                  >
+                    {/* Carrier header */}
+                    <div className="px-6 pt-5 pb-2 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center border", mc.bg, mc.border)}>
+                          <MIcon size={20} className={mc.color} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[15px] font-bold text-gray-900">{c.carrier}</span>
+                            {c.recommended && (
+                              <span className="text-[9px] font-bold bg-indigo-600 text-white rounded px-2 py-0.5 uppercase tracking-wider flex items-center gap-0.5">
+                                <Brain size={9} /> Recommended
+                              </span>
+                            )}
+                            {isSelected && (
+                              <span className="text-[9px] font-bold bg-blue-600 text-white rounded-full px-2.5 py-0.5 flex items-center gap-0.5">
+                                <CheckCircle size={9} /> Selected
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className={cn("text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded", mc.bg, mc.color)}>{mc.label}</span>
+                            <span className="text-[12px] text-gray-500">{c.route}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[22px] font-extrabold text-gray-900">{c.rate}</div>
+                        <span className={cn("text-[11px] font-semibold",
+                          c.rateNote === "Premium" ? "text-amber-600" : c.rateNote.startsWith("-") ? "text-emerald-600" : "text-amber-600"
+                        )}>{c.rateNote}</span>
+                      </div>
+                    </div>
+
+                    {/* Data table */}
+                    <div className={cn("mx-6 mb-3 rounded-lg border overflow-hidden", isSelected ? "border-blue-200" : "border-gray-100")}>
+                      <div className="grid grid-cols-4 divide-x divide-gray-100 bg-gray-50/50">
+                        {[
+                          { label: c.mode === "Air" ? "Flight" : "Vessel", value: c.vessel.split(" / ")[0], sub: c.vessel.split(" / ")[1] || "" },
+                          { label: "Departure", value: c.sailing },
+                          { label: "Transit", value: c.transit },
+                          { label: "ETA", value: c.eta },
+                        ].map((col) => (
+                          <div key={col.label} className="px-4 py-3">
+                            <div className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">{col.label}</div>
+                            <div className="text-[13px] font-bold text-gray-800">{col.value}</div>
+                            {col.sub && <div className="text-[10px] text-gray-400">{col.sub}</div>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Footer badges */}
+                    <div className="px-6 pb-4 flex items-center gap-3">
+                      <span className={cn("text-[10px] font-semibold px-2.5 py-0.5 rounded-full",
+                        parseInt(c.sla) >= 95 ? "bg-emerald-50 text-emerald-700" : parseInt(c.sla) >= 90 ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"
+                      )}>SLA {c.sla}</span>
+                      <span className="text-[10px] font-medium text-gray-500 bg-gray-100 px-2.5 py-0.5 rounded-full">{c.container}</span>
+                      <span className={cn("text-[10px] font-semibold px-2.5 py-0.5 rounded-full",
+                        c.capacity === "Available" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
+                      )}>● {c.capacity}</span>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between shrink-0">
+              <span className="text-[12px] text-gray-400">{selectedAltCarrier ? `Selected: ${selectedAltCarrier}` : "Click a carrier to select"}</span>
+              <button onClick={handleConfirmCarrier} disabled={!selectedAltCarrier} className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white text-[13px] font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-40 shadow-sm">
+                <Check size={14} /> Confirm & Book
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     )
   }

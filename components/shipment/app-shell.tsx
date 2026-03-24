@@ -41,7 +41,6 @@ export function AppShell({ persona }: { persona?: Persona }) {
   const [demoScenario, setDemoScenario] = useState("happy-path")
   const [demoShipmentVisible, setDemoShipmentVisible] = useState(false)
   const [demoExceptionActive, setDemoExceptionActive] = useState(false)
-  const [demoZoomActive, setDemoZoomActive] = useState(false)
   const [showCompletionModal, setShowCompletionModal] = useState(false)
   const [demoElapsedTime, setDemoElapsedTime] = useState("0s")
   const [dynamicInboxEmails, setDynamicInboxEmails] = useState<Array<{ id: string; from: string; fromName: string; subject: string; body: string; timestamp: string; read: boolean; tag: string; tags: string[]; shipmentId: string; shipmentRef: string }>>([])
@@ -55,13 +54,8 @@ export function AppShell({ persona }: { persona?: Persona }) {
 
   const handleDemoComplete = (elapsedTime: string) => {
     setDemoElapsedTime(elapsedTime)
-    // Trigger dashboard zoom + completion modal
     setView("dashboard")
-    setDemoZoomActive(true)
-    setTimeout(() => {
-      setDemoZoomActive(false)
-      setShowCompletionModal(true)
-    }, 3500) // 1s zoom in + 1.5s hold + 1s zoom out
+    setShowCompletionModal(true)
   }
 
   const handleStartDemo = (scenarioId: string) => {
@@ -228,7 +222,6 @@ export function AppShell({ persona }: { persona?: Persona }) {
                 onAddInboxEmail={handleAddInboxEmail}
                 demoReturnedFromInbox={demoReturnedFromInbox}
                 onDemoReturnedFromInboxConsumed={() => setDemoReturnedFromInbox(false)}
-                demoZoomActive={demoZoomActive}
                 showCompletionModal={showCompletionModal}
                 onCloseCompletionModal={() => { setShowCompletionModal(false); handleStopDemo() }}
                 demoElapsedTime={demoElapsedTime}

@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { PORTAL_STATUSES, BOOKING_REQUESTS, type PortalStatus } from "@/lib/mock-data"
 import { cn } from "@/lib/utils"
 import {
   Globe, Shield, Clock, AlertTriangle, CheckCircle2, XCircle,
   Wifi, WifiOff, Bot, Key, Server, Activity, Brain, Zap, Ban, Package,
+  ArrowRight, Loader2, Link2,
 } from "lucide-react"
 
 // ─── Status config ───────────────────────────────────────────────────────────
@@ -48,9 +49,11 @@ const affectedBookings = BOOKING_REQUESTS.filter((b) =>
 
 interface CarrierPortalStatusPageProps {
   highlightShipmentId?: string
+  showBackupConnection?: boolean
+  onBackupConnectionDone?: () => void
 }
 
-export function WeatherTrafficPage({ highlightShipmentId }: CarrierPortalStatusPageProps) {
+export function WeatherTrafficPage({ highlightShipmentId, showBackupConnection, onBackupConnectionDone }: CarrierPortalStatusPageProps) {
   const highlightRef = useRef<HTMLDivElement | null>(null)
 
   // Determine which portal to highlight based on a booking's carrier
@@ -58,11 +61,31 @@ export function WeatherTrafficPage({ highlightShipmentId }: CarrierPortalStatusP
     ? BOOKING_REQUESTS.find((b) => b.id === highlightShipmentId)?.carrier
     : null
 
+  const backupRef = useRef<HTMLDivElement | null>(null)
+  const [backupPhase, setBackupPhase] = useState<"connecting" | "connected" | null>(showBackupConnection ? "connecting" : null)
+
   useEffect(() => {
     if (highlightCarrier && highlightRef.current) {
       highlightRef.current.scrollIntoView({ behavior: "smooth", block: "center" })
     }
   }, [highlightCarrier])
+
+  // Backup connection animation sequence
+  useEffect(() => {
+    if (!showBackupConnection) return
+    setBackupPhase("connecting")
+    // Scroll to backup card
+    const scrollT = setTimeout(() => {
+      backupRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
+    }, 300)
+    // Mark connected after 1s
+    const connT = setTimeout(() => setBackupPhase("connected"), 1200)
+    // Auto-return after 2s total
+    const returnT = setTimeout(() => {
+      onBackupConnectionDone?.()
+    }, 2500)
+    return () => { clearTimeout(scrollT); clearTimeout(connT); clearTimeout(returnT) }
+  }, [showBackupConnection, onBackupConnectionDone])
 
   return (
     <div className="flex-1 overflow-y-auto bg-[#F8F9FA]">
@@ -222,6 +245,84 @@ export function WeatherTrafficPage({ highlightShipmentId }: CarrierPortalStatusP
             })}
           </div>
         </div>
+
+        {/* Backup Connection Card (shown during portal failure switch) */}
+        {backupPhase && (
+          <div ref={backupRef} className="animate-in fade-in slide-in-from-top-3 duration-500">
+            <div className={cn(
+              "rounded-xl border-2 p-4 transition-all duration-700",
+              backupPhase === "connecting"
+                ? "border-blue-400 bg-blue-50/50 ring-2 ring-blue-200 shadow-lg"
+                : "border-emerald-400 bg-emerald-50/50 ring-2 ring-emerald-200 shadow-lg"
+            )}>
+              <div className="flex items-center gap-3 mb-3">
+                <div className={cn(
+                  "w-10 h-10 rounded-lg flex items-center justify-center transition-colors duration-500",
+                  backupPhase === "connecting" ? "bg-blue-100 border border-blue-300" : "bg-emerald-100 border border-emerald-300"
+                )}>
+                  <Link2 size={18} className={backupPhase === "connecting" ? "text-blue-600" : "text-emerald-600"} />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-gray-800">INTTRA EDI Channel</span>
+                    <span className={cn(
+                      "text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border",
+                      backupPhase === "connecting"
+                        ? "bg-blue-100 text-blue-700 border-blue-300"
+                        : "bg-emerald-100 text-emerald-700 border-emerald-300"
+                    )}>
+                      {backupPhase === "connecting" ? "Connecting..." : "Backup Active"}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-gray-500 mt-0.5">EDI backup channel for Maersk bookings — 99.9% uptime</p>
+                </div>
+                {backupPhase === "connecting" ? (
+                  <Loader2 size={18} className="text-blue-500 animate-spin" />
+                ) : (
+                  <CheckCircle2 size={18} className="text-emerald-500" />
+                )}
+              </div>
+
+              {/* Connection details */}
+              <div className="grid grid-cols-3 gap-3 text-[11px]">
+                <div className="bg-white rounded-lg border border-gray-200 px-3 py-2">
+                  <div className="text-[9px] text-gray-400 uppercase tracking-wider mb-0.5">Protocol</div>
+                  <div className="font-semibold text-gray-700">INTTRA EDI</div>
+                </div>
+                <div className="bg-white rounded-lg border border-gray-200 px-3 py-2">
+                  <div className="text-[9px] text-gray-400 uppercase tracking-wider mb-0.5">Uptime</div>
+                  <div className="font-semibold text-emerald-700">99.9%</div>
+                </div>
+                <div className="bg-white rounded-lg border border-gray-200 px-3 py-2">
+                  <div className="text-[9px] text-gray-400 uppercase tracking-wider mb-0.5">Status</div>
+                  <div className="flex items-center gap-1">
+                    {backupPhase === "connecting" ? (
+                      <>
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                        <span className="font-semibold text-blue-600">Establishing</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        <span className="font-semibold text-emerald-600">Connected</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Flow arrow: Maersk Portal (down) → INTTRA EDI (active) */}
+              {backupPhase === "connected" && (
+                <div className="mt-3 pt-3 border-t border-emerald-200 flex items-center gap-2 text-[11px] animate-in fade-in duration-300">
+                  <span className="text-red-500 font-semibold line-through">Maersk Portal</span>
+                  <ArrowRight size={12} className="text-gray-400" />
+                  <span className="text-emerald-700 font-bold">INTTRA EDI</span>
+                  <span className="text-gray-400 ml-1">· Booking rerouted successfully</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Carrier Portal Cards */}
         <div>

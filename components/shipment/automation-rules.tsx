@@ -86,6 +86,8 @@ export function AutomationRulesPage() {
   const [escalations, setEscalations] = useState(ESCALATION_RULES.map((r) => ({ ...r })))
   const [constraints, setConstraints] = useState(HARD_CONSTRAINTS.map((c) => ({ ...c })))
   const [recommendations, setRecommendations] = useState(AI_POLICY_RECOMMENDATIONS.map((r) => ({ ...r })))
+  const [selectedOrder, setSelectedOrder] = useState<string>("all")
+  const [orderDropdownOpen, setOrderDropdownOpen] = useState(false)
 
   useEffect(() => {
     const t = setTimeout(() => setThinking(false), 1800)
@@ -317,9 +319,55 @@ export function AutomationRulesPage() {
               <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
                 <AlertTriangle size={14} className="text-red-600" />
                 <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Hard Constraints</span>
-                <span className="ml-auto text-[10px] text-gray-400">
-                  {constraints.filter((c) => c.enabled).length}/{constraints.length} enforced
-                </span>
+                <div className="ml-auto flex items-center gap-3">
+                  {/* Order selector dropdown */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setOrderDropdownOpen(!orderDropdownOpen)}
+                      className="flex items-center gap-1.5 text-[11px] font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 hover:bg-gray-100 hover:border-gray-300 transition-colors"
+                    >
+                      <Package size={11} className="text-gray-400" />
+                      <span>{selectedOrder === "all" ? "All Orders" : selectedOrder}</span>
+                      <ChevronDown size={11} className={cn("text-gray-400 transition-transform", orderDropdownOpen && "rotate-180")} />
+                    </button>
+                    {orderDropdownOpen && (
+                      <div className="absolute right-0 top-full mt-1 w-64 bg-white border border-gray-200 rounded-xl shadow-lg z-50 py-1 max-h-72 overflow-y-auto">
+                        <button
+                          onClick={() => { setSelectedOrder("all"); setOrderDropdownOpen(false) }}
+                          className={cn("w-full text-left px-3 py-2 text-[11px] hover:bg-gray-50 flex items-center gap-2", selectedOrder === "all" && "bg-blue-50 text-blue-700")}
+                        >
+                          <Package size={11} className="text-gray-400" />
+                          <span className="font-semibold">All Orders</span>
+                          <span className="ml-auto text-[10px] text-gray-400">{BOOKING_REQUESTS.length}</span>
+                        </button>
+                        <div className="border-t border-gray-100 my-1" />
+                        {BOOKING_REQUESTS.map((b) => (
+                          <button
+                            key={b.id}
+                            onClick={() => { setSelectedOrder(b.id); setOrderDropdownOpen(false) }}
+                            className={cn("w-full text-left px-3 py-2 text-[11px] hover:bg-gray-50 flex items-center gap-2", selectedOrder === b.id && "bg-blue-50 text-blue-700")}
+                          >
+                            <span className="font-mono font-bold text-gray-700">{b.id}</span>
+                            <span className="text-gray-400">{b.carrier}</span>
+                            <span className="text-gray-400">·</span>
+                            <span className="text-gray-400">{b.lane}</span>
+                            <span className={cn(
+                              "ml-auto text-[9px] font-semibold px-1.5 py-0.5 rounded-full",
+                              b.bookingStatus === "Exception" ? "bg-red-50 text-red-600" :
+                              b.bookingStatus === "Confirmed" ? "bg-green-50 text-green-600" :
+                              "bg-amber-50 text-amber-600"
+                            )}>
+                              {b.bookingStatus}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-gray-400">
+                    {constraints.filter((c) => c.enabled).length}/{constraints.length} enforced
+                  </span>
+                </div>
               </div>
               <div className="divide-y divide-gray-50">
                 {constraints.map((c) => (

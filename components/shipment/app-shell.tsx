@@ -48,6 +48,7 @@ export function AppShell({ persona }: { persona?: Persona }) {
   const [sapAutoOpenOrderId, setSapAutoOpenOrderId] = useState<string | null>(null)
   const [emailAutoSelectId, setEmailAutoSelectId] = useState<string | null>(null)
   const [demoReturnedFromInbox, setDemoReturnedFromInbox] = useState(false)
+  const [showBackupConnection, setShowBackupConnection] = useState(false)
 
   const handleAddInboxEmail = (email: typeof dynamicInboxEmails[0]) => {
     setDynamicInboxEmails((prev) => [email, ...prev])
@@ -128,9 +129,17 @@ export function AppShell({ persona }: { persona?: Persona }) {
   const exceptionsCount = BOOKING_REQUESTS.filter((s) => s.bookingStatus === "Exception" || s.bookingStatus === "Awaiting Approval").filter((s) => !resolvedExceptionIds.has(s.id)).length
   const unreadInboxCount = INBOX_EMAILS.filter((e) => !e.read && !readEmailIds.has(e.id)).length + dynamicInboxEmails.filter((e) => !e.read && !readEmailIds.has(e.id)).length
 
-  const handleViewChange = (v: SidebarView, opts?: { sapOrderId?: string; emailId?: string }) => {
+  const handleViewChange = (v: SidebarView | string, opts?: { sapOrderId?: string; emailId?: string }) => {
+    // Special: "weather-traffic-backup" triggers portal status with backup connection card
+    if (v === "weather-traffic-backup") {
+      setViewHistory((prev) => [...prev, { view, openShipmentId: undefined }])
+      setShowBackupConnection(true)
+      setView("weather-traffic")
+      setSearchQuery("")
+      return
+    }
     setViewHistory((prev) => [...prev, { view }])
-    setView(v)
+    setView(v as SidebarView)
     setSearchQuery("")
     if (v !== "tracking-search") setTrackingPreselect(null)
     if (v !== "weather-traffic") setWeatherHighlightId(null)
@@ -255,7 +264,16 @@ export function AppShell({ persona }: { persona?: Persona }) {
             {view === "documents" && <DocumentsPage />}
 
             {view === "weather-traffic" && (
-              <WeatherTrafficPage highlightShipmentId={weatherHighlightId ?? undefined} />
+              <WeatherTrafficPage
+                highlightShipmentId={weatherHighlightId ?? undefined}
+                showBackupConnection={showBackupConnection}
+                onBackupConnectionDone={() => {
+                  setShowBackupConnection(false)
+                  // Return to dashboard and continue demo flow
+                  handleViewChange("dashboard")
+                  setDemoShipmentVisible(true)
+                }}
+              />
             )}
 
             {view === "timeline" && <TimelinePage />}

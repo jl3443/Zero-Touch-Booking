@@ -1509,15 +1509,12 @@ function DemoExceptionOverlay({ scenarioId, onResolve, onSendNotification, onAdd
   }
 
   const handleConfirmSwitch = () => {
-    setPhase("resolving")
-    const steps = ["Detecting outage scope — 47 shippers affected", "Switching to INTTRA EDI channel", "Resubmitting booking via EDI", "Confirmed — INTTRA-88421"]
-    steps.forEach((_, idx) => {
-      setTimeout(() => setAutoStep(idx + 1), 600 + idx * 1000)
-    })
-    setTimeout(() => {
-      setPhase("resolved")
-      setTimeout(() => { setShowModal(false); onResolve() }, 1000)
-    }, 600 + steps.length * 1000 + 400)
+    // Navigate to Portal Status page to show backup connection being established
+    setShowModal(false)
+    onNavigateView?.("weather-traffic-backup")
+    // The portal status page will show the backup card, wait 2s, then call onBackupConnectionDone
+    // which navigates back to dashboard — at that point we resolve the exception
+    setTimeout(() => onResolve(), 3000)
   }
 
   // ─── Scenario 4: Rate Mismatch → email compose → negotiation spinner ──

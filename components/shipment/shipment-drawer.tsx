@@ -1436,7 +1436,7 @@ function DemoExceptionOverlay({ scenarioId, onResolve, onSendNotification, onAdd
   const MISSING_FIELDS = [
     { field: "Commodity HS Code", source: "SAP Material Master", value: "8471.30 — Laptop Parts", confidence: 99, aiResolved: true },
     { field: "Package Dimensions", source: "Historical Shipments (BKG-09812)", value: "60×40×30 cm / carton", confidence: 87, aiResolved: true },
-    { field: "Shipper Contact", source: "Plant Directory — Suzhou", value: "Li Wei · +86 512 6688 7799", confidence: 92, aiResolved: true },
+    { field: "Shipper Contact", source: "Carrier Portal — Not Found", value: "", confidence: 0, aiResolved: false },
   ]
 
   const ALT_CARRIERS = [
@@ -1448,14 +1448,14 @@ function DemoExceptionOverlay({ scenarioId, onResolve, onSendNotification, onAdd
   // ─── Scenario 1: Missing Data ─────────────────────────────────────────────
   const handleResolveMissingData = () => {
     setPhase("resolving")
-    // Fill all 3 fields sequentially with animation, then auto-resolve
+    // Fill first 2 fields (AI resolved), then pause for email flow on 3rd
     setTimeout(() => setFilledFields([0]), 600)
     setTimeout(() => setFilledFields([0, 1]), 1400)
-    setTimeout(() => setFilledFields([0, 1, 2]), 2200)
     setTimeout(() => {
-      setPhase("resolved")
-      setTimeout(() => { setShowModal(false); onResolve() }, 1200)
-    }, 3000)
+      // 3rd field not found — open email compose
+      setPhase("email-compose")
+      setEmailBody("Dear Suzhou Plant Team,\n\nWe are processing booking SAP-TM-87234 (SHA→LAX) and require the shipper contact information for this order.\n\nPlease confirm the primary shipper contact name and phone number for the Suzhou Plant facility.\n\nRegards,\nZero Touch Booking Agent")
+    }, 2200)
   }
 
   const handleSendMissingDataEmail = () => {
@@ -1731,7 +1731,7 @@ function DemoExceptionOverlay({ scenarioId, onResolve, onSendNotification, onAdd
           <div className="bg-emerald-50 rounded-lg px-4 py-3 border border-emerald-200 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <div className="flex items-center gap-2">
               <CheckCircle size={16} className="text-emerald-600" />
-              <span className="text-[13px] font-bold text-emerald-700">3/3 Fields Resolved — Auto-filled from SAP master data</span>
+              <span className="text-[13px] font-bold text-emerald-700">3/3 Fields Resolved — 2 by AI, 1 via email</span>
             </div>
           </div>
         )}

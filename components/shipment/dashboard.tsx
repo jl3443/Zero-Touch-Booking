@@ -132,7 +132,7 @@ export function Dashboard({ searchQuery, onViewChange, onOpenWeather, onSendNoti
       setSelectedShipment(DEMO_SHIPMENT)
       setBookingMode(true)
     }
-  }, [demoActive, demoStep])
+  }, [demoActive, demoStep, demoReturnedFromInbox])
 
   // Adjust data when demo completes
   const demoCompleted = showCompletionModal || false

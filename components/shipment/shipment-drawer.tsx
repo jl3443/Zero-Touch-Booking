@@ -342,9 +342,11 @@ export function ShipmentDrawer({ shipment, onClose, onOpenWeather, onSendNotific
               onExceptionResolved={onDemoExceptionResolved}
               onExceptionTriggered={onDemoExceptionTriggered}
               onSendNotification={onSendNotification}
-              onDemoComplete={(elapsed) => { onClose(); onDemoComplete?.(elapsed) }}
+              onDemoComplete={(elapsed?: string) => { onClose(); onDemoComplete?.(elapsed ?? "0s") }}
               onAddInboxEmail={onAddInboxEmail}
               onNavigateView={onNavigateView}
+              demoReturnedFromInbox={demoReturnedFromInbox}
+              onDemoReturnedFromInboxConsumed={onDemoReturnedFromInboxConsumed}
             />
           </div>
         ) : !isLoading ? (
@@ -619,15 +621,18 @@ interface LiveBookingFlowProps {
   onExceptionResolved?: () => void
   onExceptionTriggered?: () => void
   onSendNotification?: (email: SentEmailItem) => void
-  onDemoComplete?: () => void
+  onDemoComplete?: (elapsedTime?: string) => void
   onNavigateView?: (view: string) => void
   onAddInboxEmail?: (email: { id: string; from: string; fromName: string; subject: string; body: string; timestamp: string; read: boolean; tag: string; tags: string[]; shipmentId: string; shipmentRef: string }) => void
+  demoReturnedFromInbox?: boolean
+  onDemoReturnedFromInboxConsumed?: () => void
 }
 
 function LiveBookingFlow({
   shipment, demoStep, demoPaused, demoScenario, demoExceptionActive,
   onStepAdvance, onPause, onResume, onExceptionResolved, onExceptionTriggered,
   onSendNotification, onDemoComplete, onAddInboxEmail, onNavigateView,
+  demoReturnedFromInbox, onDemoReturnedFromInboxConsumed,
 }: LiveBookingFlowProps) {
   const [subItemTick, setSubItemTick] = useState(0)
   const [stepPhase, setStepPhase] = useState<"thinking" | "revealing" | "complete" | "idle">(() => {

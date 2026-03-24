@@ -407,12 +407,13 @@ export const BOOKING_REQUESTS: BookingRequest[] = [
     origin: "Toronto, CA",
     destination: "Detroit, US",
     plant: "DTW Assembly Plant",
-    bookingStatus: "Awaiting Approval",
+    bookingStatus: "Confirmed",
     requestedDate: "Mar 13, 2025 06:00",
     targetShipDate: "Mar 14, 2025",
-    severity: "Medium",
+    confirmedShipDate: "Mar 14, 2025",
+    severity: "Low",
     exceptionType: "None",
-    approvalType: "Carrier Override",
+    approvalType: "None",
     lane: "YYZ→DTW",
     sapOrderRef: "SAP-TM-44840",
     agentSummary: "AI selected Hapag-Lloyd ($1,650, below contract) but historical preference for DHL Freight on this lane. Awaiting router confirmation to proceed with AI recommendation or override to DHL Freight ($1,800).",
@@ -886,11 +887,11 @@ export const BOOKING_REQUESTS: BookingRequest[] = [
     origin: "Mumbai, IN",
     destination: "Los Angeles, US",
     plant: "LAX Distribution Center",
-    bookingStatus: "Exception" as BookingStatus,
+    bookingStatus: "Confirmed" as BookingStatus,
     requestedDate: "Mar 13, 2025 04:00",
     targetShipDate: "Mar 19, 2025",
-    severity: "High" as Severity,
-    exceptionType: "Credentials Expired" as BookingExceptionType,
+    severity: "Low" as Severity,
+    exceptionType: "None" as BookingExceptionType,
     approvalType: "None" as ApprovalType,
     lane: "BOM→LAX",
     sapOrderRef: "SAP-TM-44870",
@@ -1023,7 +1024,7 @@ export const AGENT_ACTIVITIES: AgentActivity[] = [
 // ── Booking Exception Distribution ───────────────────────────────────────
 
 export const EXCEPTION_DISTRIBUTION = [
-  { type: "Portal Unavailable", count: 2, color: "#8b5cf6" },
+  { type: "Portal Unavailable", count: 1, color: "#8b5cf6" },
   { type: "Missing Allocation", count: 1, color: "#f59e0b" },
   { type: "Rate Mismatch", count: 1, color: "#f97316" },
   { type: "Carrier Rejection", count: 1, color: "#ef4444" },
@@ -1408,7 +1409,6 @@ export interface DDRisk {
 }
 
 export const DD_RISKS: DDRisk[] = [
-  { shipmentId: "BKG-40672", type: "Carrier Override", status: "pending", detail: "Hapag-Lloyd vs DHL Freight — router approval needed", urgency: "Medium" },
   { shipmentId: "BKG-50219", type: "Booking Rejection", status: "pending", detail: "Maersk rejected — re-routing to MSC (+4d) or expedite", urgency: "High" },
   { shipmentId: "BKG-70991", type: "Spot Booking", status: "pending", detail: "CMA-CGM $3,800 vs contract $3,200 — planner approval", urgency: "High" },
 ]
@@ -1646,7 +1646,6 @@ export const CRITICAL_EXCEPTIONS = [
   { id: "BKG-50219", lane: "MAA→IAH", type: "Carrier Rejection", severity: "Critical" as Severity, carrier: "Maersk", summary: "Vessel capacity exceeded — reroute to alternate carrier or split shipment" },
   { id: "BKG-60441", lane: "MEM→ORD", type: "Portal Unavailable", severity: "High" as Severity, carrier: "CMA-CGM", summary: "API timeout after 3 retries — manual booking or fallback carrier needed" },
   { id: "BKG-70991", lane: "BOM→LAX", type: "Rate Mismatch", severity: "High" as Severity, carrier: "CMA-CGM", summary: "Spot rate 19% above contract — requires approval or rate negotiation" },
-  { id: "BKG-92410", lane: "BOM→LAX", type: "Portal Unavailable", severity: "High" as Severity, carrier: "CMA-CGM", summary: "CMA-CGM portal session expired mid-booking — re-auth required to resume submission" },
   { id: "BKG-30188", lane: "BOM→HAM", type: "Missing Allocation", severity: "High" as Severity, carrier: "Hapag-Lloyd", summary: "No capacity available on lane — 3 alternate routes identified, awaiting approval" },
   { id: "BKG-88442", lane: "BOM→FRA", type: "Missing Booking Fields", severity: "Medium" as Severity, carrier: "Maersk", summary: "3 mandatory fields missing from SAP export — booking blocked pending data correction" },
 ]
@@ -1693,6 +1692,15 @@ export interface DemoScenario {
   exceptionAtStep: number | null // which step triggers exception (null = happy path)
   exceptionType: BookingExceptionType
   severity: Severity
+}
+
+// Map demo scenario IDs to their corresponding booking IDs in the workbench
+export const DEMO_SCENARIO_BOOKING_MAP: Record<string, string> = {
+  "carrier-rejection": "BKG-50219",
+  "no-capacity": "BKG-30188",
+  "portal-failure": "BKG-60441",
+  "rate-mismatch": "BKG-70991",
+  "missing-data": "BKG-88442",
 }
 
 export const DEMO_SCENARIOS: DemoScenario[] = [

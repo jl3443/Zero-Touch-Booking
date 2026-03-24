@@ -16,7 +16,7 @@ import { CarrierScorecardPage } from "./carrier-scorecard-page"
 import { TrackingSearchPage } from "./tracking-search-page"
 import { SearchResultsPage } from "./search-results-page"
 import { AIChatPanel } from "./ai-chat-panel"
-import { BOOKING_REQUESTS, INBOX_EMAILS, DEMO_SHIPMENT, DEMO_SCENARIOS, type BookingRequest } from "@/lib/mock-data"
+import { BOOKING_REQUESTS, INBOX_EMAILS, DEMO_SHIPMENT, DEMO_SCENARIOS, DEMO_SCENARIO_BOOKING_MAP, type BookingRequest } from "@/lib/mock-data"
 import { SapSimulationPage } from "./sap-simulation-page"
 import { AutomationRulesPage } from "./automation-rules"
 import { type Persona } from "./login-page"
@@ -225,7 +225,14 @@ export function AppShell({ persona }: { persona?: Persona }) {
                 onDemoStepAdvance={handleDemoStepAdvance}
                 onDemoPause={() => setDemoPaused(true)}
                 onDemoResume={() => setDemoPaused(false)}
-                onDemoExceptionResolved={() => setDemoExceptionActive(false)}
+                onDemoExceptionResolved={() => {
+                  setDemoExceptionActive(false)
+                  // Mark the corresponding workbench exception as resolved
+                  const bookingId = DEMO_SCENARIO_BOOKING_MAP[demoScenario]
+                  if (bookingId) {
+                    setResolvedExceptionIds((prev) => new Set([...prev, bookingId]))
+                  }
+                }}
                 onDemoExceptionTriggered={() => setDemoExceptionActive(true)}
                 onDemoShipmentDismiss={() => setDemoShipmentVisible(false)}
                 onDemoComplete={handleDemoComplete}

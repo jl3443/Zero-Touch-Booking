@@ -394,11 +394,10 @@ export function ExceptionWorkbench({ onSendNotification, onOpenWeather, onExcept
   const highCount = allExceptionBookings.filter(s => s.severity === "High").length
   const pendingApprovalCount = approvalBookings.length + ddRiskBookings.length
 
-  // Per-requirement-type counts (the 5 core exception scenarios)
+  // Per-requirement-type counts (the 5 demo exception scenarios)
   const REQ_TYPES = [
     { key: "Missing Allocation",    label: "Missing Allocation",     sev: "High",     color: "text-amber-700 bg-amber-50 border-amber-200" },
     { key: "Portal Unavailable",    label: "Portal/API Unavail.",    sev: "High",     color: "text-purple-700 bg-purple-50 border-purple-200" },
-    { key: "Credentials Expired",   label: "+ Credentials",          sev: "High",     color: "text-purple-600 bg-purple-50 border-purple-200" },
     { key: "Rate Mismatch",         label: "Rate Mismatch",          sev: "High",     color: "text-orange-700 bg-orange-50 border-orange-200" },
     { key: "Missing Booking Fields",label: "Missing Fields",         sev: "Medium",   color: "text-indigo-700 bg-indigo-50 border-indigo-200" },
     { key: "Carrier Rejection",     label: "Carrier Rejection",      sev: "Critical", color: "text-red-700 bg-red-50 border-red-200" },
@@ -617,7 +616,7 @@ export function ExceptionWorkbench({ onSendNotification, onOpenWeather, onExcept
         <div className="w-px h-4 bg-gray-200" />
         <FilterPills
           label="Exception"
-          options={["All", "Missing Allocation", "Portal Unavailable", "Rate Mismatch", "Missing Booking Fields", "Carrier Rejection", "Credentials Expired"]}
+          options={["All", "Missing Allocation", "Portal Unavailable", "Rate Mismatch", "Missing Booking Fields", "Carrier Rejection"]}
           value={exceptionFilter}
           onChange={setExceptionFilter}
         />

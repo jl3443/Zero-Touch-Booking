@@ -1550,101 +1550,114 @@ function DemoExceptionOverlay({ scenarioId, onResolve, onSendNotification, onAdd
   }
 
   const carrierSelectContent = (
-    <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Select Alternative Carrier</div>
-      <div className="space-y-3">
-        {ALT_CARRIERS.map((c) => {
-          const isSelected = selectedAltCarrier === c.carrier
-          const mc = MODE_CARD[c.mode] ?? MODE_CARD.Ocean
-          const MIcon = mc.Icon
-          return (
-            <button
-              key={c.carrier}
-              onClick={() => setSelectedAltCarrier(c.carrier)}
-              className={cn("w-full text-left rounded-xl border-2 transition-all overflow-hidden relative",
-                isSelected ? "border-blue-400 ring-2 ring-blue-100 shadow-lg" : "border-gray-200 hover:border-blue-300 hover:shadow-lg"
-              )}
-            >
-              {/* Top header bar with mode color */}
-              <div className={cn("flex items-center justify-between px-4 py-2.5", mc.bg)}>
-                <div className="flex items-center gap-2.5">
-                  <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center", mc.strip)}>
-                    <MIcon size={16} className="text-white" />
+      {ALT_CARRIERS.map((c) => {
+        const isSelected = selectedAltCarrier === c.carrier
+        const mc = MODE_CARD[c.mode] ?? MODE_CARD.Ocean
+        const MIcon = mc.Icon
+        return (
+          <button
+            key={c.carrier}
+            onClick={() => setSelectedAltCarrier(c.carrier)}
+            className={cn(
+              "w-full text-left rounded-2xl transition-all overflow-hidden",
+              isSelected
+                ? "ring-2 ring-blue-400 shadow-xl shadow-blue-100/50"
+                : "shadow-md hover:shadow-xl hover:ring-1 hover:ring-blue-200"
+            )}
+            style={{ border: "none" }}
+          >
+            {/* ── Colored top strip ── */}
+            <div className={cn("h-1.5", mc.strip)} />
+
+            {/* ── Header: carrier identity + price ── */}
+            <div className="bg-white px-5 pt-4 pb-3">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center shadow-sm", mc.bg, mc.border, "border")}>
+                    <MIcon size={22} className={mc.color} />
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[14px] font-bold text-gray-900">{c.carrier}</span>
-                      <span className={cn("text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full", mc.strip, "text-white")}>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-[15px] font-bold text-gray-900">{c.carrier}</span>
+                      {c.recommended && (
+                        <span className="text-[8px] font-bold bg-indigo-600 text-white rounded px-1.5 py-0.5 flex items-center gap-0.5 uppercase tracking-wider">
+                          <Brain size={8} /> Recommended
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className={cn("text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded", mc.bg, mc.color)}>
                         {mc.label}
                       </span>
+                      <span className="text-[11px] text-gray-500">{c.route}</span>
                     </div>
-                    <div className="text-[11px] text-gray-600 font-medium mt-0.5">{c.route}</div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-[18px] font-bold text-gray-900">{c.rate}</div>
-                  <div className={cn("text-[10px] font-semibold",
+                <div className="text-right pl-3">
+                  <div className="text-[22px] font-extrabold text-gray-900 leading-tight">{c.rate}</div>
+                  <div className={cn("text-[11px] font-semibold",
                     c.rateNote === "Premium" ? "text-amber-600" : c.rateNote.startsWith("-") ? "text-emerald-600" : "text-amber-600"
                   )}>{c.rateNote}</div>
                 </div>
               </div>
+            </div>
 
-              {/* Details grid */}
-              <div className="bg-white px-4 py-3">
-                <div className="grid grid-cols-4 gap-3 mb-3">
-                  <div>
-                    <div className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">
-                      {c.mode === "Air" ? "Flight" : "Vessel"}
-                    </div>
-                    <div className="text-[11px] font-bold text-gray-800">{c.vessel.split(" / ")[0]}</div>
+            {/* ── Detail grid with divider ── */}
+            <div className="bg-gray-50/80 border-t border-gray-100 px-5 py-3">
+              <div className="grid grid-cols-4 gap-4">
+                <div>
+                  <div className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">
+                    {c.mode === "Air" ? "Flight" : "Vessel"}
                   </div>
-                  <div>
-                    <div className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Departure</div>
-                    <div className="text-[11px] font-bold text-gray-800">{c.sailing}</div>
-                  </div>
-                  <div>
-                    <div className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Transit</div>
-                    <div className="text-[11px] font-bold text-gray-800">{c.transit}</div>
-                  </div>
-                  <div>
-                    <div className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">ETA</div>
-                    <div className="text-[11px] font-bold text-gray-800">{c.eta}</div>
-                  </div>
+                  <div className="text-[12px] font-bold text-gray-800">{c.vessel.split(" / ")[0]}</div>
+                  <div className="text-[9px] text-gray-400 mt-0.5">{c.vessel.split(" / ")[1] || ""}</div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1">
-                      <Target size={10} className="text-gray-400" />
-                      <span className="text-[10px] text-gray-500">SLA</span>
-                      <span className={cn("text-[10px] font-bold", parseInt(c.sla) >= 95 ? "text-emerald-700" : parseInt(c.sla) >= 90 ? "text-blue-700" : "text-amber-700")}>{c.sla}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Package size={10} className="text-gray-400" />
-                      <span className="text-[10px] text-gray-600 font-medium">{c.container}</span>
-                    </div>
-                    <span className={cn(
-                      "text-[9px] font-semibold rounded-full px-2 py-0.5 border",
-                      c.capacity === "Available" ? "bg-emerald-50 border-emerald-300 text-emerald-700" : "bg-amber-50 border-amber-200 text-amber-700"
-                    )}>
-                      ● {c.capacity}
-                    </span>
-                  </div>
-                  {c.recommended && (
-                    <span className="text-[9px] font-bold bg-indigo-600 text-white rounded-full px-2.5 py-1 flex items-center gap-1 shadow-sm">
-                      <Brain size={9} /> AI Recommended
-                    </span>
-                  )}
-                  {isSelected && !c.recommended && (
-                    <span className="text-[9px] font-bold bg-blue-600 text-white rounded-full px-2.5 py-1 flex items-center gap-1">
-                      <CheckCircle size={9} /> Selected
-                    </span>
-                  )}
+                <div>
+                  <div className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">Departure</div>
+                  <div className="text-[12px] font-bold text-gray-800">{c.sailing}</div>
+                </div>
+                <div>
+                  <div className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">Transit</div>
+                  <div className="text-[12px] font-bold text-gray-800">{c.transit}</div>
+                </div>
+                <div>
+                  <div className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">ETA</div>
+                  <div className="text-[12px] font-bold text-gray-800">{c.eta}</div>
                 </div>
               </div>
-            </button>
-          )
-        })}
-      </div>
+            </div>
+
+            {/* ── Footer: metrics ── */}
+            <div className="bg-white border-t border-gray-100 px-5 py-2.5 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-1.5">
+                  <div className={cn("w-2 h-2 rounded-full", parseInt(c.sla) >= 95 ? "bg-emerald-500" : parseInt(c.sla) >= 90 ? "bg-blue-500" : "bg-amber-500")} />
+                  <span className="text-[10px] text-gray-500">SLA <span className="font-bold text-gray-700">{c.sla}</span></span>
+                </div>
+                <div className="text-[10px] text-gray-400">|</div>
+                <div className="flex items-center gap-1">
+                  <Package size={10} className="text-gray-400" />
+                  <span className="text-[10px] text-gray-600 font-medium">{c.container}</span>
+                </div>
+                <div className="text-[10px] text-gray-400">|</div>
+                <span className={cn(
+                  "text-[9px] font-bold",
+                  c.capacity === "Available" ? "text-emerald-600" : "text-amber-600"
+                )}>
+                  ● {c.capacity}
+                </span>
+              </div>
+              {isSelected && (
+                <span className="text-[9px] font-bold bg-blue-600 text-white rounded px-2 py-1 flex items-center gap-1">
+                  <CheckCircle size={9} /> Selected
+                </span>
+              )}
+            </div>
+          </button>
+        )
+      })}
     </div>
   )
 

@@ -93,10 +93,9 @@ export function Sidebar({ view, onViewChange, exceptionsCount = 4, unreadInboxCo
                         onStartDemo?.(s.id)
                         setScenarioPickerOpen(false)
                       }}
-                      className="w-full text-left px-3 py-2 hover:bg-[#27272A] transition-colors"
+                      className="w-full text-left px-3 py-2.5 hover:bg-[#27272A] transition-colors"
                     >
                       <div className="text-[12px] font-medium text-white">{s.label}</div>
-                      <div className="text-[10px] text-gray-500 mt-0.5">{s.description}</div>
                     </button>
                   ))}
                 </div>

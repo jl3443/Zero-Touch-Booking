@@ -273,9 +273,9 @@ export function AppShell({ persona }: { persona?: Persona }) {
                 onMarkRead={handleMarkEmailRead}
                 dynamicEmails={dynamicInboxEmails}
                 onReturnToFlow={() => {
-                  // Resolve exception and advance — flow will fast-forward remaining steps
-                  setDemoExceptionActive(false)
-                  handleDemoStepAdvance(demoStep + 1)
+                  // Signal that user returned from inbox — DemoExceptionOverlay will show
+                  // the completion animation (fill fields / negotiation spinner) then auto-resolve
+                  setDemoReturnedFromInbox(true)
                   handleViewChange("dashboard")
                   setDemoShipmentVisible(true)
                 }}

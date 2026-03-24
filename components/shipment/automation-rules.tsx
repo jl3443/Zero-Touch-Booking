@@ -7,12 +7,15 @@ import {
   LANE_PREFERENCES,
   ESCALATION_RULES,
   BOOKING_REQUESTS,
+  HARD_CONSTRAINTS,
+  AI_POLICY_RECOMMENDATIONS,
 } from "@/lib/mock-data"
 import { SeverityBadge, ModeIcon } from "./shared"
 import {
   Settings2, Sliders, Shield, Scale, AlertTriangle,
   ChevronDown, ChevronRight, CheckCircle2, XCircle,
-  Loader2, Zap, Activity, Package,
+  Loader2, Zap, Activity, Package, Calendar, DollarSign,
+  Clock, Ban, Brain, TrendingUp, ArrowRight, Sparkles,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -78,8 +81,11 @@ function ToggleSwitch({ enabled, onToggle }: { enabled: boolean; onToggle: () =>
 export function AutomationRulesPage() {
   const [thinking, setThinking] = useState(true)
   const [expandedRule, setExpandedRule] = useState<string | null>(null)
+  const [weights, setWeights] = useState(CARRIER_SELECTION_WEIGHTS.map((w) => ({ ...w })))
   const [thresholds, setThresholds] = useState(AUTO_APPROVAL_THRESHOLDS.map((t) => ({ ...t })))
   const [escalations, setEscalations] = useState(ESCALATION_RULES.map((r) => ({ ...r })))
+  const [constraints, setConstraints] = useState(HARD_CONSTRAINTS.map((c) => ({ ...c })))
+  const [recommendations, setRecommendations] = useState(AI_POLICY_RECOMMENDATIONS.map((r) => ({ ...r })))
 
   useEffect(() => {
     const t = setTimeout(() => setThinking(false), 1800)
@@ -90,8 +96,43 @@ export function AutomationRulesPage() {
     setThresholds((prev) => prev.map((t, i) => i === idx ? { ...t, enabled: !t.enabled } : t))
   }
 
+  const updateThreshold = (idx: number, value: string) => {
+    setThresholds((prev) => prev.map((t, i) => i === idx ? { ...t, threshold: value } : t))
+  }
+
   const toggleEscalation = (id: string) => {
     setEscalations((prev) => prev.map((r) => r.id === id ? { ...r, enabled: !r.enabled } : r))
+  }
+
+  const toggleConstraint = (id: string) => {
+    setConstraints((prev) => prev.map((c) => c.id === id ? { ...c, enabled: !c.enabled } : c))
+  }
+
+  const updateConstraintValue = (id: string, value: string | number) => {
+    setConstraints((prev) => prev.map((c) => c.id === id ? { ...c, value } : c))
+  }
+
+  const acceptRecommendation = (id: string) => {
+    setRecommendations((prev) => prev.map((r) => r.id === id ? { ...r, status: "accepted" as const } : r))
+  }
+
+  const dismissRecommendation = (id: string) => {
+    setRecommendations((prev) => prev.map((r) => r.id === id ? { ...r, status: "dismissed" as const } : r))
+  }
+
+  const CONSTRAINT_ICONS: Record<string, React.ReactNode> = {
+    calendar: <Calendar size={14} className="text-blue-600" />,
+    dollar: <DollarSign size={14} className="text-emerald-600" />,
+    shield: <Shield size={14} className="text-indigo-600" />,
+    clock: <Clock size={14} className="text-amber-600" />,
+    ban: <Ban size={14} className="text-red-600" />,
+  }
+
+  const CATEGORY_COLORS: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
+    rate: { bg: "bg-emerald-50", text: "text-emerald-700", icon: <DollarSign size={12} /> },
+    carrier: { bg: "bg-blue-50", text: "text-blue-700", icon: <Package size={12} /> },
+    transit: { bg: "bg-amber-50", text: "text-amber-700", icon: <Clock size={12} /> },
+    compliance: { bg: "bg-red-50", text: "text-red-700", icon: <Shield size={12} /> },
   }
 
   // Map escalation rules to exception types for cross-referencing
@@ -146,16 +187,35 @@ export function AutomationRulesPage() {
               <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
                 <Sliders size={14} className="text-indigo-600" />
                 <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Carrier Selection Weights</span>
-                <span className="ml-auto text-[10px] text-gray-400">Total: 100%</span>
+                <span className={cn("ml-auto text-[10px] font-medium", weights.reduce((s, w) => s + w.weight, 0) === 100 ? "text-gray-400" : "text-red-500")}>
+                  Total: {weights.reduce((s, w) => s + w.weight, 0)}%
+                </span>
               </div>
               <div className="p-4 space-y-4">
-                {CARRIER_SELECTION_WEIGHTS.map((w, i) => (
+                {weights.map((w, i) => (
                   <div key={w.factor} className="flex items-center gap-4">
                     <div className="w-[180px] shrink-0">
                       <div className="text-xs font-semibold text-gray-700">{w.factor}</div>
                       <div className="text-[10px] text-gray-400 mt-0.5">{w.description}</div>
                     </div>
-                    <WeightBar weight={w.weight} color={weightColors[i]} />
+                    <div className="flex items-center gap-3 flex-1">
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={w.weight}
+                        onChange={(e) => setWeights((prev) => prev.map((pw, pi) => pi === i ? { ...pw, weight: Number(e.target.value) } : pw))}
+                        className="flex-1 h-2 appearance-none bg-gray-100 rounded-full cursor-pointer accent-indigo-600 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:bg-indigo-600 [&::-webkit-slider-thumb]:shadow-sm"
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={w.weight}
+                        onChange={(e) => setWeights((prev) => prev.map((pw, pi) => pi === i ? { ...pw, weight: Number(e.target.value) } : pw))}
+                        className="text-sm font-bold text-gray-700 w-14 text-right bg-gray-50 border border-gray-200 rounded-md px-2 py-1 focus:outline-none focus:border-blue-400"
+                      />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -172,11 +232,19 @@ export function AutomationRulesPage() {
               </div>
               <div className="divide-y divide-gray-50">
                 {thresholds.map((t, idx) => (
-                  <div key={t.rule} className="flex items-center gap-4 px-4 py-3">
+                  <div key={t.rule} className="flex items-center gap-4 px-4 py-3.5">
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-semibold text-gray-700">{t.rule}</div>
-                      <div className="flex items-center gap-3 mt-1">
-                        <span className="text-[10px] text-gray-400">Threshold: <span className="font-semibold text-gray-600">{t.threshold}</span></span>
+                      <div className="text-xs font-semibold text-gray-700 mb-1.5">{t.rule}</div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] text-gray-400">Threshold:</span>
+                          <input
+                            type="text"
+                            value={t.threshold}
+                            onChange={(e) => updateThreshold(idx, e.target.value)}
+                            className="text-[11px] font-semibold text-gray-700 bg-gray-50 border border-gray-200 rounded-md px-2 py-1 w-24 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200 hover:border-gray-300 transition-colors"
+                          />
+                        </div>
                         <span className="text-[10px] text-gray-300">|</span>
                         <span className="text-[10px] text-gray-400">Current: <span className="font-semibold text-gray-600">{t.currentValue}</span></span>
                       </div>
@@ -244,7 +312,162 @@ export function AutomationRulesPage() {
               </div>
             </div>
 
-            {/* ── Section 4: Escalation Rules ─────────────────────────────── */}
+            {/* ── Section 4: Hard Policy Constraints ───────────────────────── */}
+            <div className="bg-white rounded-xl border border-gray-200">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
+                <AlertTriangle size={14} className="text-red-600" />
+                <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Hard Constraints</span>
+                <span className="ml-auto text-[10px] text-gray-400">
+                  {constraints.filter((c) => c.enabled).length}/{constraints.length} enforced
+                </span>
+              </div>
+              <div className="divide-y divide-gray-50">
+                {constraints.map((c) => (
+                  <div key={c.id} className="px-4 py-3.5">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center shrink-0 mt-0.5">
+                        {CONSTRAINT_ICONS[c.icon]}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs font-semibold text-gray-700">{c.label}</span>
+                          <span className="text-[9px] font-mono text-gray-400">{c.id}</span>
+                        </div>
+                        <p className="text-[10px] text-gray-400 mb-2">{c.description}</p>
+                        <div className="flex items-center gap-2">
+                          {c.type === "date" ? (
+                            <input
+                              type="date"
+                              value={String(c.value)}
+                              onChange={(e) => updateConstraintValue(c.id, e.target.value)}
+                              className="text-xs font-semibold text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200"
+                            />
+                          ) : c.type === "currency" ? (
+                            <div className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-1.5">
+                              <span className="text-xs text-gray-400">$</span>
+                              <input
+                                type="number"
+                                value={Number(c.value)}
+                                onChange={(e) => updateConstraintValue(c.id, Number(e.target.value))}
+                                className="text-xs font-semibold text-gray-700 w-20 focus:outline-none"
+                              />
+                            </div>
+                          ) : c.type === "percent" ? (
+                            <div className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-1.5">
+                              <input
+                                type="number"
+                                value={Number(c.value)}
+                                onChange={(e) => updateConstraintValue(c.id, Number(e.target.value))}
+                                className="text-xs font-semibold text-gray-700 w-12 focus:outline-none"
+                              />
+                              <span className="text-xs text-gray-400">%</span>
+                            </div>
+                          ) : c.type === "number" ? (
+                            <div className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-1.5">
+                              <input
+                                type="number"
+                                value={Number(c.value)}
+                                onChange={(e) => updateConstraintValue(c.id, Number(e.target.value))}
+                                className="text-xs font-semibold text-gray-700 w-12 focus:outline-none"
+                              />
+                              <span className="text-xs text-gray-400">days</span>
+                            </div>
+                          ) : (
+                            <input
+                              type="text"
+                              value={String(c.value)}
+                              onChange={(e) => updateConstraintValue(c.id, e.target.value)}
+                              className="text-xs font-semibold text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-400 w-48"
+                            />
+                          )}
+                        </div>
+                      </div>
+                      <ToggleSwitch enabled={c.enabled} onToggle={() => toggleConstraint(c.id)} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* ── Section 5: AI Policy Recommendations ─────────────────────── */}
+            <div className="bg-white rounded-xl border border-gray-200">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
+                <Sparkles size={14} className="text-violet-600" />
+                <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">AI Policy Recommendations</span>
+                <span className="ml-auto text-[10px] text-violet-600 font-medium">
+                  {recommendations.filter((r) => r.status === "pending").length} pending review
+                </span>
+              </div>
+              <div className="divide-y divide-gray-50">
+                {recommendations.map((rec) => {
+                  const cat = CATEGORY_COLORS[rec.category] ?? CATEGORY_COLORS.rate
+                  return (
+                    <div key={rec.id} className={cn("px-4 py-4", rec.status === "dismissed" && "opacity-50")}>
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center shrink-0 mt-0.5">
+                          <Brain size={14} className="text-violet-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs font-semibold text-gray-800">{rec.title}</span>
+                            <span className={cn("text-[9px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-0.5", cat.bg, cat.text)}>
+                              {cat.icon} {rec.category}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-gray-500 leading-relaxed mb-2">{rec.reason}</p>
+                          <div className="flex items-center gap-4 mb-2">
+                            <div className="flex items-center gap-1.5">
+                              <TrendingUp size={11} className="text-emerald-500" />
+                              <span className="text-[10px] text-gray-600">{rec.impact}</span>
+                            </div>
+                          </div>
+                          {/* Confidence bar */}
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="text-[10px] text-gray-400">AI Confidence</span>
+                            <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden max-w-[120px]">
+                              <div
+                                className={cn("h-full rounded-full", rec.confidence >= 90 ? "bg-emerald-500" : rec.confidence >= 80 ? "bg-blue-500" : "bg-amber-500")}
+                                style={{ width: `${rec.confidence}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] font-bold text-gray-600">{rec.confidence}%</span>
+                          </div>
+                          {/* Actions */}
+                          {rec.status === "pending" && (
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => acceptRecommendation(rec.id)}
+                                className="flex items-center gap-1 px-3 py-1.5 bg-violet-600 text-white text-[11px] font-semibold rounded-lg hover:bg-violet-700 transition-colors"
+                              >
+                                <CheckCircle2 size={11} /> Apply
+                              </button>
+                              <button
+                                onClick={() => dismissRecommendation(rec.id)}
+                                className="flex items-center gap-1 px-3 py-1.5 border border-gray-200 text-gray-500 text-[11px] font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                              >
+                                <XCircle size={11} /> Dismiss
+                              </button>
+                            </div>
+                          )}
+                          {rec.status === "accepted" && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                              <CheckCircle2 size={10} /> Applied
+                            </span>
+                          )}
+                          {rec.status === "dismissed" && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-gray-400">
+                              <XCircle size={10} /> Dismissed
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* ── Section 6: Escalation Rules ─────────────────────────────── */}
             <div className="bg-white rounded-xl border border-gray-200">
               <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
                 <Zap size={14} className="text-amber-600" />

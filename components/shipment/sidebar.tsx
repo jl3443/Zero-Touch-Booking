@@ -6,7 +6,7 @@ import {
   LayoutDashboard, BarChart2, Anchor, AlertTriangle,
   Monitor, GitBranch, Mail, Inbox, Send, Brain,
   ChevronDown, ChevronRight, FileStack, User, Award, ScanSearch,
-  Route, Zap, Square, Play, Database,
+  Route, Zap, Square, Play, Database, Shield,
 } from "lucide-react"
 import { type Persona } from "./login-page"
 import { DEMO_SCENARIOS } from "@/lib/mock-data"
@@ -24,6 +24,7 @@ export type SidebarView =
   | "agent-activity"
   | "tracking-search"
   | "sap-tm"
+  | "policies"
 
 interface SidebarProps {
   view: SidebarView
@@ -224,6 +225,13 @@ export function Sidebar({ view, onViewChange, exceptionsCount = 4, unreadInboxCo
           icon={<Brain size={15} />}
           active={view === "agent-activity"}
           onClick={() => onViewChange("agent-activity")}
+        />
+
+        <NavItem
+          label="Policy"
+          icon={<Shield size={15} />}
+          active={view === "policies"}
+          onClick={() => onViewChange("policies")}
         />
 
         <div className="pt-2 pb-1" />

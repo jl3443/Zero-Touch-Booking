@@ -18,6 +18,7 @@ import { SearchResultsPage } from "./search-results-page"
 import { AIChatPanel } from "./ai-chat-panel"
 import { BOOKING_REQUESTS, INBOX_EMAILS, DEMO_SHIPMENT, DEMO_SCENARIOS, type BookingRequest } from "@/lib/mock-data"
 import { SapSimulationPage } from "./sap-simulation-page"
+import { AutomationRulesPage } from "./automation-rules"
 import { type Persona } from "./login-page"
 
 export function AppShell({ persona }: { persona?: Persona }) {
@@ -231,6 +232,8 @@ export function AppShell({ persona }: { persona?: Persona }) {
             {view === "analytics" && <AnalyticsPage etaUpdatedCount={etaApprovedCount} />}
 
             {view === "sap-tm" && <SapSimulationPage autoOpenOrderId={sapAutoOpenOrderId ?? undefined} demoUpdated={demoStep >= 7} />}
+
+            {view === "policies" && <AutomationRulesPage />}
 
             {view === "tracking-search" && (
               <TrackingSearchPage

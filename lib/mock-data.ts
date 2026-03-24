@@ -1915,3 +1915,104 @@ export const DEMO_SHIPMENT: BookingRequest = {
   lastSignal: "SAP TM order received",
   lastSignalSource: "SAP TM",
 }
+
+// ── Policy / Automation Rules Constants ─────────────────────────────────────
+
+export const CARRIER_SELECTION_WEIGHTS = [
+  { factor: "Rate Competitiveness", description: "Contract vs spot rate deviation, total cost per container", weight: 35 },
+  { factor: "SLA Compliance", description: "On-time delivery %, claim resolution speed, reliability score", weight: 30 },
+  { factor: "Capacity Availability", description: "Equipment availability, booking acceptance rate, allocation", weight: 20 },
+  { factor: "Transit Efficiency", description: "Door-to-door transit days, transshipment count, routing", weight: 15 },
+]
+
+export const AUTO_APPROVAL_THRESHOLDS = [
+  { rule: "Rate deviation within contract tolerance", threshold: "≤ 5%", currentValue: "3.2% avg", enabled: true },
+  { rule: "Carrier SLA meets minimum benchmark", threshold: "≥ 88%", currentValue: "91% avg", enabled: true },
+  { rule: "Transit time within acceptable range", threshold: "≤ 18 days", currentValue: "14.5 days avg", enabled: true },
+  { rule: "Booking value below auto-approval ceiling", threshold: "≤ $15,000", currentValue: "$6,200 avg", enabled: true },
+  { rule: "Equipment type matches shipment requirements", threshold: "Exact match", currentValue: "96% match rate", enabled: true },
+  { rule: "No hazardous / restricted cargo flags", threshold: "None flagged", currentValue: "Clean", enabled: false },
+]
+
+export type TransportMode = "Ocean" | "Air" | "Road"
+
+export const LANE_PREFERENCES = [
+  { lane: "SHA→LAX", mode: "Ocean" as TransportMode, preferredCarrier: "Maersk", fallbackCarrier: "MSC", maxAcceptableRate: 3200, autoApprove: true },
+  { lane: "SZX→ORD", mode: "Ocean" as TransportMode, preferredCarrier: "MSC", fallbackCarrier: "Hapag-Lloyd", maxAcceptableRate: 3600, autoApprove: true },
+  { lane: "BOM→RTM", mode: "Ocean" as TransportMode, preferredCarrier: "Hapag-Lloyd", fallbackCarrier: "CMA-CGM", maxAcceptableRate: 2800, autoApprove: false },
+  { lane: "HKG→RTM", mode: "Ocean" as TransportMode, preferredCarrier: "Hapag-Lloyd", fallbackCarrier: "Maersk", maxAcceptableRate: 3300, autoApprove: true },
+  { lane: "BOM→LAX", mode: "Ocean" as TransportMode, preferredCarrier: "Maersk", fallbackCarrier: "CMA-CGM", maxAcceptableRate: 3800, autoApprove: false },
+  { lane: "MEM→ORD", mode: "Road" as TransportMode, preferredCarrier: "FedEx Freight", fallbackCarrier: "DHL Freight", maxAcceptableRate: 1200, autoApprove: true },
+  { lane: "YYZ→DTW", mode: "Road" as TransportMode, preferredCarrier: "DHL Freight", fallbackCarrier: "FedEx Freight", maxAcceptableRate: 2200, autoApprove: true },
+]
+
+export const ESCALATION_RULES = [
+  { id: "ESC-01", condition: "Rate deviation exceeds 5% above contract", action: "Auto-generate counter-offer email to carrier rate desk, propose contract + 8% market adjustment", severity: "High" as const, enabled: true, triggerCount30d: 4 },
+  { id: "ESC-02", condition: "Carrier rejects booking (equipment/capacity)", action: "Auto-select next-best alternative carrier from pre-approved list, re-submit booking", severity: "High" as const, enabled: true, triggerCount30d: 2 },
+  { id: "ESC-03", condition: "Missing mandatory booking fields (≥1 field)", action: "Attempt AI auto-fill from SAP master data and historical bookings. Email shipper for unresolved fields", severity: "Medium" as const, enabled: true, triggerCount30d: 3 },
+  { id: "ESC-04", condition: "Carrier portal unreachable after 3 retries", action: "Switch to INTTRA EDI backup channel, resubmit booking via alternate protocol", severity: "Critical" as const, enabled: true, triggerCount30d: 1 },
+  { id: "ESC-05", condition: "No allocation available on preferred vessel", action: "Search alternative sailings within ±3 day window, escalate to procurement if none found", severity: "High" as const, enabled: true, triggerCount30d: 2 },
+  { id: "ESC-06", condition: "Booking not confirmed within 4 hours", action: "Send follow-up to carrier, notify logistics coordinator, flag on exception dashboard", severity: "Medium" as const, enabled: true, triggerCount30d: 1 },
+  { id: "ESC-07", condition: "Carrier portal credentials expired or revoked", action: "Alert IT support, switch to backup credentials or EDI channel", severity: "Critical" as const, enabled: false, triggerCount30d: 0 },
+]
+
+// ── Hard Policy Constraints ─────────────────────────────────────────────────
+
+export const HARD_CONSTRAINTS = [
+  { id: "HC-01", label: "Must-Arrive-By Deadline", type: "date" as const, value: "2024-04-15", description: "Shipment must arrive at destination by this date — carriers failing to meet this are excluded", icon: "calendar", enabled: true },
+  { id: "HC-02", label: "Maximum Budget per Shipment", type: "currency" as const, value: 12000, description: "Total booking cost cannot exceed this amount — auto-reject quotes above ceiling", icon: "dollar", enabled: true },
+  { id: "HC-03", label: "Minimum Carrier SLA", type: "percent" as const, value: 85, description: "Carriers below this SLA score are excluded from selection regardless of price", icon: "shield", enabled: true },
+  { id: "HC-04", label: "Maximum Transit Days", type: "number" as const, value: 21, description: "Bookings exceeding this transit time require manual approval", icon: "clock", enabled: true },
+  { id: "HC-05", label: "Prohibited Carriers", type: "list" as const, value: "Yang Ming, PIL", description: "These carriers are blacklisted — never included in carrier evaluation", icon: "ban", enabled: false },
+  { id: "HC-06", label: "Required Insurance Coverage", type: "currency" as const, value: 50000, description: "All shipments must have minimum cargo insurance coverage", icon: "shield", enabled: true },
+]
+
+// ── AI Policy Recommendations ───────────────────────────────────────────────
+
+export const AI_POLICY_RECOMMENDATIONS = [
+  {
+    id: "REC-01",
+    title: "Increase SHA→LAX auto-approval rate threshold to $3,400",
+    reason: "30-day spot market avg is $3,480. Current max $3,200 triggers manual review on 34% of bookings. Raising to $3,400 would reduce manual interventions by 28% while staying 2.3% below market.",
+    impact: "Projected: +28% zero-touch rate, -$0 cost increase (still below market)",
+    confidence: 94,
+    category: "rate" as const,
+    status: "pending" as const,
+  },
+  {
+    id: "REC-02",
+    title: "Add CMA-CGM as backup carrier for SZX→ORD lane",
+    reason: "MSC capacity on this lane dropped 18% in last 60 days. CMA-CGM has consistent availability at -2% vs MSC rates. Adding as fallback prevents allocation exceptions.",
+    impact: "Projected: -40% allocation exceptions on this lane",
+    confidence: 89,
+    category: "carrier" as const,
+    status: "pending" as const,
+  },
+  {
+    id: "REC-03",
+    title: "Reduce BOM→LAX transit threshold from 21 to 18 days",
+    reason: "Historical data shows 92% of BOM→LAX bookings complete within 17 days. The current 21-day threshold allows underperforming carriers. Tightening improves delivery reliability.",
+    impact: "Projected: +8% on-time delivery, excludes 1 carrier (CMA-CGM slow vessel)",
+    confidence: 87,
+    category: "transit" as const,
+    status: "pending" as const,
+  },
+  {
+    id: "REC-04",
+    title: "Enable hazardous cargo screening rule (HC-06 disabled)",
+    reason: "2 bookings in the last 30 days contained items flagged by customs. Enabling auto-screening prevents compliance violations and potential fines ($5K-$50K per incident).",
+    impact: "Projected: 100% compliance coverage, ~2 min added per booking",
+    confidence: 96,
+    category: "compliance" as const,
+    status: "pending" as const,
+  },
+  {
+    id: "REC-05",
+    title: "Switch YYZ→DTW preferred carrier to FedEx Freight",
+    reason: "DHL Freight SLA on this lane dropped from 91% to 82% over 90 days. FedEx Freight maintains 96% SLA with comparable rates ($1,750 vs $1,800). Performance trend is deteriorating.",
+    impact: "Projected: +14% SLA improvement, +$50 avg cost per booking",
+    confidence: 91,
+    category: "carrier" as const,
+    status: "pending" as const,
+  },
+]

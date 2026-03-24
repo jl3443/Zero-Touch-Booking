@@ -1396,13 +1396,15 @@ function DemoExceptionOverlay({ scenarioId, onResolve, onSendNotification, onAdd
   // Selected carrier for capacity/rejection
   const [selectedAltCarrier, setSelectedAltCarrier] = useState<string | null>(null)
 
-  // Rate-mismatch: when user returns from inbox, re-open modal with negotiation spinner
+  // When user returns from inbox after reading reply email
   useEffect(() => {
-    if (returnedFromInbox && scenarioId === "rate-mismatch") {
+    if (!returnedFromInbox) return
+    onReturnedFromInboxConsumed?.()
+
+    if (scenarioId === "rate-mismatch") {
+      // Re-open modal with negotiation spinner
       setShowModal(true)
       setPhase("negotiating")
-      onReturnedFromInboxConsumed?.()
-      // Run negotiation animation
       const statuses = [
         "Connecting to Maersk rate desk...",
         "Validating counter-offer against market data...",
@@ -1423,6 +1425,20 @@ function DemoExceptionOverlay({ scenarioId, onResolve, onSendNotification, onAdd
         setPhase("resolved")
         setTimeout(() => { setShowModal(false); onResolve() }, 1500)
       }, statuses.length * 1200 + 1500)
+    } else if (scenarioId === "missing-data") {
+      // Re-open modal, fill the 3rd field (Shipper Contact), then auto-resolve
+      setShowModal(true)
+      setPhase("resolving")
+      // Fields 0,1 already filled before email was sent — restore them
+      setFilledFields([0, 1])
+      setTimeout(() => {
+        // Now fill the 3rd field from the email reply
+        setFilledFields([0, 1, 2])
+      }, 800)
+      setTimeout(() => {
+        setPhase("resolved")
+        setTimeout(() => { setShowModal(false); onResolve() }, 1000)
+      }, 2000)
     }
   }, [returnedFromInbox])
 

@@ -16,7 +16,7 @@ import {
   MapPin, RefreshCw, ChevronRight, Zap, Clock, Calendar,
   Mail, TrendingUp, ArrowUp, ArrowDown,
   Play, Pause, RotateCcw, AlertTriangle, Target, Timer,
-  ChevronDown, Eye, Sparkles, Ship, Plane,
+  ChevronDown, Eye, Sparkles, Ship, Plane, Package,
 } from "lucide-react"
 import { ModeIcon } from "./shared"
 import { EmailComposer } from "./email-composer"
@@ -1561,79 +1561,85 @@ function DemoExceptionOverlay({ scenarioId, onResolve, onSendNotification, onAdd
             <button
               key={c.carrier}
               onClick={() => setSelectedAltCarrier(c.carrier)}
-              className={cn("w-full text-left rounded-xl border-2 transition-all overflow-hidden flex",
-                isSelected ? "border-blue-400 bg-white ring-2 ring-blue-100 shadow-md" : "border-gray-200 bg-white hover:border-blue-300 hover:shadow-md"
+              className={cn("w-full text-left rounded-xl border-2 transition-all overflow-hidden relative",
+                isSelected ? "border-blue-400 ring-2 ring-blue-100 shadow-lg" : "border-gray-200 hover:border-blue-300 hover:shadow-lg"
               )}
             >
-              {/* Left mode indicator strip */}
-              <div className={cn("w-14 flex flex-col items-center justify-center gap-1 shrink-0 py-4", mc.bg)}>
-                <MIcon size={20} className={mc.color} />
-                <span className={cn("text-[8px] font-bold uppercase tracking-wider", mc.color)}>
-                  {c.mode}
-                </span>
+              {/* Top header bar with mode color */}
+              <div className={cn("flex items-center justify-between px-4 py-2.5", mc.bg)}>
+                <div className="flex items-center gap-2.5">
+                  <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center", mc.strip)}>
+                    <MIcon size={16} className="text-white" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[14px] font-bold text-gray-900">{c.carrier}</span>
+                      <span className={cn("text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full", mc.strip, "text-white")}>
+                        {mc.label}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-gray-600 font-medium mt-0.5">{c.route}</div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[18px] font-bold text-gray-900">{c.rate}</div>
+                  <div className={cn("text-[10px] font-semibold",
+                    c.rateNote === "Premium" ? "text-amber-600" : c.rateNote.startsWith("-") ? "text-emerald-600" : "text-amber-600"
+                  )}>{c.rateNote}</div>
+                </div>
               </div>
 
-              {/* Main content */}
-              <div className="flex-1 p-3 min-w-0">
-                {/* Carrier name + badges */}
-                <div className="flex items-center gap-2 mb-1">
-                  <span className={cn("text-[13px] font-bold", isSelected ? "text-blue-700" : "text-gray-800")}>
-                    {c.carrier}
-                  </span>
-                  <span className={cn("text-[9px] font-semibold border rounded-full px-1.5 py-0.5", mc.bg, mc.border, mc.color)}>
-                    {mc.label}
-                  </span>
+              {/* Details grid */}
+              <div className="bg-white px-4 py-3">
+                <div className="grid grid-cols-4 gap-3 mb-3">
+                  <div>
+                    <div className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">
+                      {c.mode === "Air" ? "Flight" : "Vessel"}
+                    </div>
+                    <div className="text-[11px] font-bold text-gray-800">{c.vessel.split(" / ")[0]}</div>
+                  </div>
+                  <div>
+                    <div className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Departure</div>
+                    <div className="text-[11px] font-bold text-gray-800">{c.sailing}</div>
+                  </div>
+                  <div>
+                    <div className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Transit</div>
+                    <div className="text-[11px] font-bold text-gray-800">{c.transit}</div>
+                  </div>
+                  <div>
+                    <div className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">ETA</div>
+                    <div className="text-[11px] font-bold text-gray-800">{c.eta}</div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1">
+                      <Target size={10} className="text-gray-400" />
+                      <span className="text-[10px] text-gray-500">SLA</span>
+                      <span className={cn("text-[10px] font-bold", parseInt(c.sla) >= 95 ? "text-emerald-700" : parseInt(c.sla) >= 90 ? "text-blue-700" : "text-amber-700")}>{c.sla}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Package size={10} className="text-gray-400" />
+                      <span className="text-[10px] text-gray-600 font-medium">{c.container}</span>
+                    </div>
+                    <span className={cn(
+                      "text-[9px] font-semibold rounded-full px-2 py-0.5 border",
+                      c.capacity === "Available" ? "bg-emerald-50 border-emerald-300 text-emerald-700" : "bg-amber-50 border-amber-200 text-amber-700"
+                    )}>
+                      ● {c.capacity}
+                    </span>
+                  </div>
                   {c.recommended && (
-                    <span className="text-[9px] font-bold bg-indigo-600 text-white rounded-full px-2 py-0.5 flex items-center gap-0.5">
-                      <Brain size={8} /> AI Recommended
+                    <span className="text-[9px] font-bold bg-indigo-600 text-white rounded-full px-2.5 py-1 flex items-center gap-1 shadow-sm">
+                      <Brain size={9} /> AI Recommended
+                    </span>
+                  )}
+                  {isSelected && !c.recommended && (
+                    <span className="text-[9px] font-bold bg-blue-600 text-white rounded-full px-2.5 py-1 flex items-center gap-1">
+                      <CheckCircle size={9} /> Selected
                     </span>
                   )}
                 </div>
-
-                {/* Route */}
-                <div className="text-[11px] text-gray-500 font-mono mb-1">{c.route}</div>
-
-                {/* Vessel / Flight info */}
-                <div className="text-[10px] text-gray-400 mb-2.5">
-                  {c.mode === "Ocean" ? "Vessel" : "Flight"}: <span className="text-gray-600 font-medium">{c.vessel}</span>
-                  <span className="mx-1.5 text-gray-300">·</span>
-                  Sailing: <span className="text-gray-600 font-medium">{c.sailing}</span>
-                </div>
-
-                {/* Stats grid */}
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1">
-                    <Calendar size={10} className="text-gray-400" />
-                    <span className="text-[10px] text-gray-500">
-                      <span className="font-bold text-gray-700">{c.transit}</span> transit
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Target size={10} className="text-gray-400" />
-                    <span className="text-[10px] text-gray-500">
-                      SLA <span className={cn("font-bold", parseInt(c.sla) >= 95 ? "text-emerald-700" : parseInt(c.sla) >= 90 ? "text-blue-700" : "text-amber-700")}>{c.sla}</span>
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Ship size={10} className="text-gray-400" />
-                    <span className="text-[10px] text-gray-600 font-medium">{c.container}</span>
-                  </div>
-                  <span className={cn(
-                    "text-[9px] font-semibold rounded-full px-1.5 py-0.5 border",
-                    c.capacity === "Available" ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-amber-50 border-amber-200 text-amber-700"
-                  )}>
-                    {c.capacity}
-                  </span>
-                </div>
-              </div>
-
-              {/* Right price column */}
-              <div className="shrink-0 px-3 py-3 flex flex-col items-end justify-center border-l border-gray-100 min-w-[90px]">
-                <div className="text-[16px] font-bold text-gray-800">{c.rate}</div>
-                <div className={cn("text-[10px] font-medium mt-0.5",
-                  c.rateNote === "Premium" ? "text-amber-600" : c.rateNote.startsWith("-") ? "text-emerald-600" : "text-amber-600"
-                )}>{c.rateNote}</div>
-                <div className="text-[9px] text-gray-400 mt-1.5">ETA {c.eta}</div>
               </div>
             </button>
           )

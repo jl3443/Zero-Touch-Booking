@@ -1550,7 +1550,7 @@ function DemoExceptionOverlay({ scenarioId, onResolve, onSendNotification, onAdd
   }
 
   const carrierSelectContent = (
-    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+    <div className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Select Alternative Carrier</div>
       {ALT_CARRIERS.map((c) => {
         const isSelected = selectedAltCarrier === c.carrier
@@ -1561,12 +1561,11 @@ function DemoExceptionOverlay({ scenarioId, onResolve, onSendNotification, onAdd
             key={c.carrier}
             onClick={() => setSelectedAltCarrier(c.carrier)}
             className={cn(
-              "w-full text-left rounded-2xl transition-all overflow-hidden",
+              "w-full text-left rounded-2xl transition-all overflow-hidden border",
               isSelected
-                ? "ring-2 ring-blue-400 shadow-xl shadow-blue-100/50"
-                : "shadow-md hover:shadow-xl hover:ring-1 hover:ring-blue-200"
+                ? "border-blue-400 ring-2 ring-blue-200 shadow-[0_8px_30px_rgba(59,130,246,0.15)]"
+                : "border-gray-200 shadow-[0_4px_20px_rgba(0,0,0,0.08)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)] hover:border-blue-300"
             )}
-            style={{ border: "none" }}
           >
             {/* ── Colored top strip ── */}
             <div className={cn("h-1.5", mc.strip)} />

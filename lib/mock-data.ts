@@ -1697,11 +1697,11 @@ export interface DemoScenario {
 
 export const DEMO_SCENARIOS: DemoScenario[] = [
   { id: "happy-path", label: "Happy Path", description: "Full zero-touch booking — no exceptions", exceptionAtStep: null, exceptionType: "None", severity: "Low" },
-  { id: "missing-data", label: "Missing Data", description: "SAP order missing required fields", exceptionAtStep: 1, exceptionType: "Missing Booking Fields", severity: "Medium" },
-  { id: "no-capacity", label: "No Carrier Capacity", description: "All preferred carriers fully booked", exceptionAtStep: 2, exceptionType: "Missing Allocation", severity: "High" },
-  { id: "portal-failure", label: "Portal Failure", description: "Carrier portal connection timeout", exceptionAtStep: 3, exceptionType: "Portal Unavailable", severity: "High" },
-  { id: "rate-mismatch", label: "Rate Mismatch", description: "Quoted rate exceeds contract by 19%", exceptionAtStep: 4, exceptionType: "Rate Mismatch", severity: "Medium" },
-  { id: "carrier-rejection", label: "Carrier Rejection", description: "Carrier rejects booking due to equipment", exceptionAtStep: 6, exceptionType: "Carrier Rejection", severity: "Critical" },
+  { id: "carrier-rejection", label: "Carrier Rejection", description: "Carrier rejects; re-routing needed", exceptionAtStep: 6, exceptionType: "Carrier Rejection", severity: "Critical" },
+  { id: "no-capacity", label: "No Carrier Capacity", description: "No capacity available on lane", exceptionAtStep: 2, exceptionType: "Missing Allocation", severity: "High" },
+  { id: "portal-failure", label: "Portal Failure", description: "Carrier portal down or credentials expired", exceptionAtStep: 3, exceptionType: "Portal Unavailable", severity: "High" },
+  { id: "rate-mismatch", label: "Rate Mismatch", description: "Quoted rate differs from system rate", exceptionAtStep: 4, exceptionType: "Rate Mismatch", severity: "High" },
+  { id: "missing-data", label: "Missing Data", description: "Incomplete shipment data in SAP/OTM", exceptionAtStep: 1, exceptionType: "Missing Booking Fields", severity: "Medium" },
 ]
 
 export interface DemoStepDetail {

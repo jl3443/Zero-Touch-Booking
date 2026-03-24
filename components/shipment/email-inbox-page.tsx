@@ -143,7 +143,7 @@ export function EmailInboxPage({ onOpenTracking, onMarkRead, dynamicEmails = [],
           </div>
           <div className="overflow-y-auto flex-1">
             {filteredEmails.map((email) => {
-              const tagCfg = TAG_CONFIG[email.tag]
+              const tagCfg = TAG_CONFIG[email.tag] ?? { label: email.tag || "Other", color: "bg-gray-50 border-gray-200 text-gray-700" }
               const isSelected = selected?.id === email.id
               return (
                 <button
@@ -213,12 +213,12 @@ export function EmailInboxPage({ onOpenTracking, onMarkRead, dynamicEmails = [],
                 <span className="flex items-center gap-1"><Clock size={10} /> {selected.timestamp}</span>
               </div>
               <div className="flex items-center gap-2 mt-2">
-                <span className={cn("text-[10px] font-semibold border rounded-full px-2 py-0.5", TAG_CONFIG[selected.tag].color)}>
-                  <Tag size={9} className="inline mr-1" />{TAG_CONFIG[selected.tag].label}
+                <span className={cn("text-[10px] font-semibold border rounded-full px-2 py-0.5", (TAG_CONFIG[selected.tag] ?? { color: "bg-gray-50 border-gray-200 text-gray-700" }).color)}>
+                  <Tag size={9} className="inline mr-1" />{(TAG_CONFIG[selected.tag] ?? { label: selected.tag }).label}
                 </span>
                 {/* Show all secondary tags */}
                 {selected.tags
-                  .filter((t) => t !== selected.tag)
+                  .filter((t) => t !== selected.tag && TAG_CONFIG[t])
                   .map((t) => (
                     <span key={t} className={cn("text-[10px] font-semibold border rounded-full px-2 py-0.5", TAG_CONFIG[t].color)}>
                       {TAG_CONFIG[t].label}

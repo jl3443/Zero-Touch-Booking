@@ -13,7 +13,7 @@ function DemoBadge() {
         <span className="text-[9px] font-black text-white tracking-tight">TCS</span>
       </div>
       <span className="text-[11px] font-semibold text-gray-600">
-        Built by <span className="text-indigo-600 font-bold">TCS MGF</span>
+        Built by <span className="text-indigo-600 font-bold">TCS MFG</span>
       </span>
     </div>
   )

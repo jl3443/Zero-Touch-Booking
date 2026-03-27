@@ -6,7 +6,7 @@ import {
   LayoutDashboard, BarChart2, Anchor, AlertTriangle,
   Monitor, GitBranch, Mail, Inbox, Send, Brain,
   ChevronDown, ChevronRight, FileStack, User, Award, ScanSearch,
-  Route, Zap, Square, Play, Database, Shield,
+  Route, Zap, Square, Database, Shield,
 } from "lucide-react"
 import { type Persona } from "./login-page"
 import { DEMO_SCENARIOS } from "@/lib/mock-data"
@@ -41,7 +41,6 @@ export function Sidebar({ view, onViewChange, exceptionsCount = 4, unreadInboxCo
   const [exceptionOpen, setExceptionOpen] = useState(true)
   const [opsOpen, setOpsOpen] = useState(false)
   const [emailOpen, setEmailOpen] = useState(false)
-  const [scenarioPickerOpen, setScenarioPickerOpen] = useState(false)
 
   return (
     <aside className="w-[260px] bg-[#0A0A0B] text-[#A1A1AA] flex flex-col shrink-0 border-r border-gray-800">
@@ -59,9 +58,9 @@ export function Sidebar({ view, onViewChange, exceptionsCount = 4, unreadInboxCo
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
 
-        {/* Demo Mode */}
-        <div className="mb-3">
-          {demoActive ? (
+        {/* Demo Running indicator */}
+        {demoActive && (
+          <div className="mb-3">
             <button
               onClick={onStopDemo}
               className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-emerald-600/15 border border-emerald-600/30 text-[13px] font-semibold text-emerald-400 hover:bg-emerald-600/25 transition-colors"
@@ -73,36 +72,8 @@ export function Sidebar({ view, onViewChange, exceptionsCount = 4, unreadInboxCo
               <span className="flex-1 text-left">Demo Running</span>
               <Square size={12} className="text-emerald-500" />
             </button>
-          ) : (
-            <div className="relative">
-              <button
-                onClick={() => setScenarioPickerOpen(!scenarioPickerOpen)}
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-blue-600/15 border border-blue-600/30 text-[13px] font-semibold text-blue-400 hover:bg-blue-600/25 transition-colors"
-              >
-                <Zap size={15} className="shrink-0 text-blue-400" />
-                <span className="flex-1 text-left">Start Demo</span>
-                <Play size={12} className="text-blue-400" />
-              </button>
-              {scenarioPickerOpen && (
-                <div className="absolute left-0 right-0 top-full mt-1 bg-[#18181B] border border-gray-700 rounded-lg shadow-xl z-50 py-1 max-h-[260px] overflow-y-auto">
-                  <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Select Scenario</div>
-                  {DEMO_SCENARIOS.map((s) => (
-                    <button
-                      key={s.id}
-                      onClick={() => {
-                        onStartDemo?.(s.id)
-                        setScenarioPickerOpen(false)
-                      }}
-                      className="w-full text-left px-3 py-2.5 hover:bg-[#27272A] transition-colors"
-                    >
-                      <div className="text-[12px] font-medium text-white">{s.label}</div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
         <SectionLabel>Overview</SectionLabel>
 
@@ -132,13 +103,15 @@ export function Sidebar({ view, onViewChange, exceptionsCount = 4, unreadInboxCo
 
         {exceptionOpen && (
           <div className="ml-3 border-l border-gray-800 pl-3 space-y-0.5">
-            <NavSubItem
-              label="Exception Workbench"
-              icon={<AlertTriangle size={13} />}
-              active={view === "exceptions"}
-              onClick={() => onViewChange("exceptions")}
-              badge={exceptionsCount}
-            />
+            {DEMO_SCENARIOS.map((s) => (
+              <NavSubItem
+                key={s.id}
+                label={s.label}
+                icon={<Zap size={13} />}
+                active={false}
+                onClick={() => onStartDemo?.(s.id)}
+              />
+            ))}
             <NavSubItem
               label="Portal Status"
               icon={<Monitor size={13} />}
